@@ -6,7 +6,7 @@
 
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
-import { pageFromHtml, type ScannedPage } from '@ybot/shared'
+import { chooseSitePages, pageFromHtml, type ScannedPage } from '@ybot/shared'
 
 export class PublicSiteError extends Error {
   constructor(message: string, readonly code: 'INVALID_URL' | 'BLOCKED' | 'UNREADABLE') {
@@ -16,7 +16,7 @@ export class PublicSiteError extends Error {
 }
 
 const MAX_BYTES = 1_500_000
-const MAX_PAGES = 4
+const MAX_PAGES = 10
 const MAX_REDIRECTS = 4
 const TIMEOUT_MS = 8_000
 const CACHE_MS = 5 * 60 * 1000
@@ -121,7 +121,7 @@ async function readBody(response: Response): Promise<string> {
   return new TextDecoder().decode(bytes)
 }
 
-async function fetchHtml(start: URL): Promise<{ url: string; html: string }> {
+async function fetchDocument(start: URL, allowType: RegExp): Promise<{ url: string; body: string }> {
   let current = start
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
     current.hash = ''
@@ -130,7 +130,7 @@ async function fetchHtml(start: URL): Promise<{ url: string; html: string }> {
       redirect: 'manual',
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: {
-        Accept: 'text/html,application/xhtml+xml',
+        Accept: 'text/html,application/xhtml+xml,application/xml,text/xml',
         'User-Agent': 'Mozilla/5.0 (compatible; BotStudio/1.0; website scan)',
       },
     }).catch(() => {
@@ -151,35 +151,53 @@ async function fetchHtml(start: URL): Promise<{ url: string; html: string }> {
       throw new PublicSiteError('Could not read that site. Check the address and try again.', 'UNREADABLE')
     }
     const type = response.headers.get('content-type') ?? ''
-    if (type && !/text\/html|application\/xhtml\+xml/i.test(type)) {
+    if (type && !allowType.test(type)) {
       throw new PublicSiteError('Could not read that site. Check the address and try again.', 'UNREADABLE')
     }
-    const html = await readBody(response)
-    return { url: current.href, html }
+    const body = await readBody(response)
+    return { url: current.href, body }
   }
   throw new PublicSiteError('Could not read that site. Check the address and try again.', 'UNREADABLE')
 }
 
-function extraPages(page: ScannedPage): string[] {
-  let origin = ''
-  try { origin = new URL(page.url).origin } catch { return [] }
-  const seen = new Set<string>([page.url])
-  const ranked: Array<{ href: string; score: number }> = []
-  for (const link of page.links) {
-    let url: URL
-    try { url = new URL(link.href, page.url) } catch { continue }
-    if (url.origin !== origin) continue
-    url.hash = ''
-    if (seen.has(url.href)) continue
-    if (/\.(png|jpe?g|gif|svg|css|js|pdf|zip|webp|ico|mp4)(\?|$)/i.test(url.pathname)) continue
-    const blob = `${url.pathname} ${link.text}`.toLowerCase()
-    const score = ['service', 'price', 'hour', 'contact', 'about', 'visit', 'book', 'menu']
-      .reduce((total, word) => total + (blob.includes(word) ? 1 : 0), 0)
-    if (url.pathname === '/' || url.pathname === '') continue
-    seen.add(url.href)
-    ranked.push({ href: url.href, score })
+async function fetchHtml(start: URL): Promise<{ url: string; html: string }> {
+  const document = await fetchDocument(start, /text\/html|application\/xhtml\+xml/i)
+  return { url: document.url, html: document.body }
+}
+
+/** Homepage links miss pages that only appear in the sitemap. Failures stay empty. */
+async function readSitemap(origin: string): Promise<string[]> {
+  const queue = [`${origin}/sitemap.xml`, `${origin}/wp-sitemap.xml`]
+  const seen = new Set<string>()
+  const pages: string[] = []
+  let fetches = 0
+  while (queue.length > 0 && fetches < 5 && pages.length < 40) {
+    const next = queue.shift()
+    if (!next || seen.has(next)) continue
+    seen.add(next)
+    fetches += 1
+    let xml = ''
+    try {
+      xml = (await fetchDocument(new URL(next), /xml|text\/plain|text\/html/i)).body
+    } catch {
+      continue
+    }
+    const locs = [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)]
+      .map((match) => (match[1] ?? '').replace(/&amp;/g, '&'))
+      .filter(Boolean)
+    if (/<sitemapindex/i.test(xml)) {
+      for (const loc of locs) {
+        if (/users|taxonom/i.test(loc)) continue
+        if (!seen.has(loc)) queue.push(loc)
+      }
+      continue
+    }
+    for (const loc of locs) {
+      if (pages.length >= 40) break
+      pages.push(loc)
+    }
   }
-  return ranked.sort((a, b) => b.score - a.score).slice(0, MAX_PAGES - 1).map((item) => item.href)
+  return pages
 }
 
 function cacheKey(url: URL): string {
@@ -187,7 +205,7 @@ function cacheKey(url: URL): string {
   return `${url.origin}${path}`
 }
 
-/** Homepage, then up to three same-origin pages. The result is reused for a few minutes. */
+/** Homepage, sitemap, and the linked pages that look like prices, questions, or a team page. */
 export async function readPublicSite(input: string): Promise<ScannedPage[]> {
   const start = normalizeScanUrl(input)
   const key = cacheKey(start)
@@ -199,8 +217,9 @@ export async function readPublicSite(input: string): Promise<ScannedPage[]> {
   if (home.text.length < 40) {
     throw new PublicSiteError('Could not read that site. Check the address and try again.', 'UNREADABLE')
   }
+  const sitemap = await readSitemap(new URL(home.url).origin).catch(() => [])
   const pages = [home]
-  for (const href of extraPages(home)) {
+  for (const href of chooseSitePages({ homeUrl: home.url, links: home.links, sitemap, limit: MAX_PAGES - 1 })) {
     try {
       const next = await fetchHtml(new URL(href))
       const page = pageFromHtml(next.url, next.html)

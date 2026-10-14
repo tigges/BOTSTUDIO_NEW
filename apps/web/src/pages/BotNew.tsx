@@ -28,7 +28,7 @@ const CHOICES: Array<{ id: StartChoice; title: string; body: string; tag: string
   {
     id: 'website',
     title: 'Scan my website',
-    body: 'We read the public pages and draft a greeting, a few doors, and a knowledge base.',
+    body: 'We read the public pages it links to, then draft a greeting that asks one thing at a time.',
     tag: 'Draft only',
   },
   {
