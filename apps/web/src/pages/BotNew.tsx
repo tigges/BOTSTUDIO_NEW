@@ -3,12 +3,20 @@ import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Input, Card } from '@ybot/ui'
 import { useAppStore } from '../store/app'
-import { apiFetch } from '../lib/api'
+import { apiFetch, type WebsiteScanPreview } from '../lib/api'
 import type { Bot } from '../store/app'
 
 const isDemoMode = () => import.meta.env.VITE_DEMO_MODE === 'true'
 
-type StartChoice = 'hair-studio' | 'corporate' | 'sample' | 'blank'
+function siteHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return 'the site'
+  }
+}
+
+type StartChoice = 'hair-studio' | 'corporate' | 'website' | 'sample' | 'blank'
 
 const CHOICES: Array<{ id: StartChoice; title: string; body: string; tag: string; warm?: boolean }> = [
   {
@@ -16,6 +24,12 @@ const CHOICES: Array<{ id: StartChoice; title: string; body: string; tag: string
     title: 'Hair studio',
     body: 'The same kind of conversation as Bella. A greeting, then a booking, a price, the hours, or where the studio is.',
     tag: 'Template · like Bella',
+  },
+  {
+    id: 'website',
+    title: 'Scan my website',
+    body: 'We read the public pages and draft a greeting, a few doors, and a knowledge base.',
+    tag: 'Draft only',
   },
   {
     id: 'corporate',
@@ -47,6 +61,9 @@ export function BotNewPage() {
   const [description, setDescription] = useState('')
   const [start, setStart] = useState<StartChoice>('hair-studio')
   const [sample, setSample] = useState('')
+  const [websiteUrl, setWebsiteUrl] = useState('')
+  const [scan, setScan] = useState<WebsiteScanPreview | null>(null)
+  const [scanning, setScanning] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const tenant = useQuery({
@@ -56,9 +73,30 @@ export function BotNewPage() {
   })
 
   const voice = personaName.trim() || 'Bella'
-  const company = tenant.data?.name?.trim() || 'the studio'
-  const greeting = `Hi, I'm ${voice} at ${company}. What's your name?`
+  const salon = name.trim() || 'the studio'
+  const place = tenant.data?.name?.trim() || 'the studio'
+  const greeting = `Hi, I'm ${voice} at ${start === 'website' ? salon : place}. What's your name?`
   const needsSample = start === 'sample' && !sample.trim()
+  const needsWebsite = start === 'website' && !scan
+
+  async function readSite() {
+    const url = websiteUrl.trim()
+    if (!url) return
+    setScanning(true)
+    setError(null)
+    setScan(null)
+    try {
+      const result = await apiFetch<{ data: WebsiteScanPreview }>('/bots/scan', {
+        method: 'POST',
+        body: JSON.stringify({ url, personaName: personaName.trim() || undefined, companyName: name.trim() }),
+      })
+      setScan(result.data)
+    } catch (err: unknown) {
+      if (err instanceof Error) setError(err.message)
+    } finally {
+      setScanning(false)
+    }
+  }
 
   async function createBot() {
     setLoading(true)
@@ -90,6 +128,7 @@ export function BotNewPage() {
           personaName: personaName.trim() || undefined,
           start,
           sample: start === 'sample' ? sample.trim() : undefined,
+          websiteUrl: start === 'website' ? websiteUrl.trim() : undefined,
         }),
       })
       const botsRes = await apiFetch<{ data: Bot[] }>('/bots')
@@ -162,15 +201,24 @@ export function BotNewPage() {
             {name.trim()} is a new bot. Charts already on this account stay on their own bots.
           </p>
           <div className="grid items-start gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="grid gap-2">
+            <div className="grid gap-2" role="radiogroup" aria-label="Starting conversation">
               {CHOICES.map((choice) => {
                 const selected = start === choice.id
                 return (
-                  <button
+                  <div
                     key={choice.id}
-                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    tabIndex={0}
                     onClick={() => setStart(choice.id)}
-                    className={`grid grid-cols-[18px_1fr] gap-3 rounded-xl border bg-[var(--bg-surface)] px-4 py-3 text-left ${
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        setStart(choice.id)
+                      }
+                    }}
+                    className={`grid cursor-pointer grid-cols-[18px_1fr] gap-3 rounded-xl border bg-[var(--bg-surface)] px-4 py-3 text-left ${
                       selected ? 'border-[var(--accent)] shadow-[0_0_0_3px_rgba(109,94,252,0.15)]' : 'border-[var(--border)]'
                     }`}
                   >
@@ -185,6 +233,31 @@ export function BotNewPage() {
                       <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[11px] ${choice.warm ? 'bg-amber-50 text-amber-800' : 'bg-[var(--bg-base)] text-[var(--text-secondary)]'}`}>
                         {choice.tag}
                       </span>
+                      {choice.id === 'website' && selected && (
+                        <span className="mt-3 flex gap-2" onClick={(event) => event.stopPropagation()}>
+                          <input
+                            value={websiteUrl}
+                            onChange={(event) => { setWebsiteUrl(event.target.value); setScan(null) }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault()
+                                void readSite()
+                              }
+                            }}
+                            placeholder="https://yuzu.hair"
+                            aria-label="Website address"
+                            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-base)] px-2 py-2 text-xs text-[var(--text-primary)]"
+                          />
+                          <button
+                            type="button"
+                            disabled={scanning || !websiteUrl.trim()}
+                            onClick={() => { void readSite() }}
+                            className="shrink-0 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                          >
+                            {scanning ? 'Reading…' : 'Read site'}
+                          </button>
+                        </span>
+                      )}
                       {choice.id === 'sample' && selected && (
                         <textarea
                           value={sample}
@@ -196,18 +269,22 @@ export function BotNewPage() {
                         />
                       )}
                     </span>
-                  </button>
+                  </div>
                 )
               })}
             </div>
             <Card>
               <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-                {name.trim()}’s map, if you choose {CHOICES.find((choice) => choice.id === start)?.title}
+                {start === 'website' && scan
+                  ? `${name.trim()}’s map, from ${siteHost(scan.pages[0] ?? scan.url)}`
+                  : `${name.trim()}’s map, if you choose ${CHOICES.find((choice) => choice.id === start)?.title}`}
               </h2>
               <p className="mb-3 mt-1 text-xs text-[var(--text-muted)]">
-                {start === 'hair-studio' || start === 'corporate'
-                  ? 'Nothing is published until you use this. Other bots keep their charts.'
-                  : 'This stays a draft. Visitors hear it after you publish it to Sandbox.'}
+                {start === 'website'
+                  ? 'Nothing is saved until you use this draft.'
+                  : start === 'hair-studio' || start === 'corporate'
+                    ? 'Nothing is published until you use this. Other bots keep their charts.'
+                    : 'This stays a draft. Visitors hear it after you publish it to Sandbox.'}
               </p>
               {start === 'hair-studio' && (
                 <>
@@ -229,6 +306,37 @@ export function BotNewPage() {
                     ))}
                   </div>
                 </>
+              )}
+              {start === 'website' && scan && (
+                <>
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
+                    <p className="text-[11px] font-bold text-emerald-800">Visitors start here</p>
+                    <p className="mt-1 text-sm text-emerald-950">{greeting}</p>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {scan.doors.map((door) => (
+                      <div key={door.flowName} className="rounded-lg border border-[var(--border)] px-2 py-2">
+                        <p className="text-xs font-semibold text-[var(--text-primary)]">{door.title}</p>
+                        <p className="text-[11px] text-[var(--text-muted)]">{door.blurb}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3">
+                    <p className="text-xs font-semibold text-[var(--text-primary)]">Knowledge</p>
+                    {scan.facts.map((fact) => (
+                      <div key={`${fact.label}-${fact.text}`} className="mt-1 flex items-start justify-between gap-3 text-[11px]">
+                        <span className="text-[var(--text-secondary)]">{fact.text}</span>
+                        <span className="shrink-0 text-[var(--text-muted)]">{fact.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {scan.note && <p className="mt-3 text-[11px] text-[var(--text-muted)]">{scan.note}</p>}
+                </>
+              )}
+              {start === 'website' && !scan && (
+                <p className="text-sm text-[var(--text-secondary)]">
+                  {scanning ? 'Reading the public pages.' : 'Paste a public site, then read it. The map appears here before anything is saved.'}
+                </p>
               )}
               {start === 'corporate' && (
                 <p className="text-sm text-[var(--text-secondary)]">
@@ -254,8 +362,8 @@ export function BotNewPage() {
                   <Button variant="secondary" type="button" onClick={() => setStep(1)}>
                     Back
                   </Button>
-                  <Button type="button" className="whitespace-nowrap" disabled={loading || needsSample} onClick={() => { void createBot() }}>
-                    {loading ? 'Creating…' : `Use this on ${name.trim()}`}
+                  <Button type="button" className="whitespace-nowrap" disabled={loading || scanning || needsSample || needsWebsite} onClick={() => { void createBot() }}>
+                    {loading ? 'Creating…' : start === 'website' ? `Use this draft on ${name.trim()}` : `Use this on ${name.trim()}`}
                   </Button>
                 </span>
               </div>

@@ -37,11 +37,15 @@ export function ConversationMap({
   const voice = persona?.trim() || botName || 'this bot'
   const doors = welcomeDoors(welcome.graph).map((door) => {
     const target = flows.find((item) => item.flow.name === door.flowName)
+    const steps = target ? spokenLines(target.graph) : []
+    const fromSite = target?.flow.tags?.includes('website') ? steps[0] : ''
+    const copy = doorCopy(door.flowName, target?.flow.description)
     return {
       flowName: door.flowName,
       flowId: target?.flow.id,
-      ...doorCopy(door.flowName, target?.flow.description),
-      steps: target ? spokenLines(target.graph) : [],
+      title: copy.title,
+      blurb: fromSite || copy.blurb,
+      steps,
     }
   })
   const opened = doors.find((door) => door.flowName === open)
@@ -74,7 +78,7 @@ export function ConversationMap({
                 }`}
               >
                 <span className="block text-sm font-semibold text-[var(--text-primary)]">{door.title}</span>
-                <span className="mt-1 block text-xs text-[var(--text-muted)]">{door.blurb}</span>
+                <span className="mt-1 line-clamp-3 block text-xs text-[var(--text-muted)]">{door.blurb}</span>
               </button>
             )
           })}
