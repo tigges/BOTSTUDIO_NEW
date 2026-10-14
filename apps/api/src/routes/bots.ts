@@ -3,8 +3,11 @@ import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { installCorporatePack, installHairStudioPack, removeStarterPack } from '../lib/install-corporate-pack.js'
 import { installDraftWelcome, installStarterFlows } from '../lib/install-starter-flows.js'
+import { installWebsiteScan } from '../lib/install-website-scan.js'
+import { PublicSiteError, readPublicSite } from '../lib/public-site.js'
+import { draftWebsiteChat } from '@ybot/shared'
 
-const BOT_STARTS = ['hair-studio', 'corporate', 'sample', 'blank'] as const
+const BOT_STARTS = ['hair-studio', 'corporate', 'sample', 'blank', 'website'] as const
 type BotStart = (typeof BOT_STARTS)[number]
 
 
@@ -28,6 +31,34 @@ export async function botsRoutes(app: FastifyInstance) {
     return { data: bots }
   })
 
+  app.post('/scan', { preHandler: canBuild }, async (request, reply) => {
+    const body = request.body as { url?: string; personaName?: string; companyName?: string }
+    try {
+      const pages = await readPublicSite(body.url ?? '')
+      const draft = draftWebsiteChat({
+        pages,
+        companyName: body.companyName ?? '',
+        personaName: body.personaName,
+      })
+      return {
+        data: {
+          url: draft.url,
+          pages: draft.pages,
+          greeting: draft.greeting,
+          doors: draft.doors.map(({ title, flowName, blurb, found }) => ({ title, flowName, blurb, found })),
+          facts: draft.facts,
+          note: draft.note,
+        },
+      }
+    } catch (err) {
+      if (err instanceof PublicSiteError) {
+        const status = err.code === 'UNREADABLE' ? 422 : 400
+        return reply.status(status).send({ error: { code: err.code, message: err.message } })
+      }
+      throw err
+    }
+  })
+
   app.get('/:botId', async (request, reply) => {
     const { tenantId } = request.user as JwtPayload
     const { botId } = request.params as { botId: string }
@@ -49,6 +80,7 @@ export async function botsRoutes(app: FastifyInstance) {
       personaName?: string | null
       start?: string
       sample?: string
+      websiteUrl?: string
     }
     const name = (body.name ?? '').trim()
     if (!name) {
@@ -59,6 +91,22 @@ export async function botsRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: 'INVALID_START', message: 'Choose how this bot should start.' } })
     }
     const personaName = (body.personaName ?? '').trim() || null
+    let websitePages: Awaited<ReturnType<typeof readPublicSite>> | null = null
+    if (start === 'website') {
+      const websiteUrl = (body.websiteUrl ?? '').trim()
+      if (!websiteUrl) {
+        return reply.status(400).send({ error: { code: 'INVALID_URL', message: 'Enter a public website address, like https://yuzu.hair.' } })
+      }
+      try {
+        websitePages = await readPublicSite(websiteUrl)
+      } catch (err) {
+        if (err instanceof PublicSiteError) {
+          const status = err.code === 'UNREADABLE' ? 422 : 400
+          return reply.status(status).send({ error: { code: err.code, message: err.message } })
+        }
+        throw err
+      }
+    }
 
     const bot = await prisma.bot.create({
       data: {
@@ -81,10 +129,13 @@ export async function botsRoutes(app: FastifyInstance) {
     const companyName = tenant?.name ?? name
     if (start === 'hair-studio') {
       await installHairStudioPack(tenantId, bot.id, companyName, sandbox?.id ?? null, personaName)
+    } else if (start === 'website' && websitePages) {
+      const draft = draftWebsiteChat({ pages: websitePages, companyName: name, personaName })
+      await installWebsiteScan(tenantId, bot.id, draft)
     } else if (start === 'corporate') {
       await installCorporatePack(tenantId, bot.id, companyName, sandbox?.id ?? null)
       await installStarterFlows(tenantId, bot.id, companyName, sandbox?.id ?? null)
-    } else {
+    } else if (start === 'sample' || start === 'blank') {
       await installDraftWelcome(tenantId, bot.id, start === 'sample' ? (body.sample ?? '') : '')
     }
 
