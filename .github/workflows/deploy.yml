@@ -10,9 +10,11 @@ permissions:
   pages: write
   id-token: write
 
+# One publish at a time. Cancelling a Pages deploy mid-flight is what leaves
+# the next attempt with a 500 from the Pages API.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -64,8 +66,31 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.retry.outputs.page_url || steps.retry_again.outputs.page_url }}
     steps:
+      # Creating the deployment sometimes returns 500 even though Pages is up.
+      # The build artifact is already uploaded, so try again instead of leaving
+      # the previous site in place.
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+
+      - name: Wait before retrying Pages
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 20
+
+      - name: Retry GitHub Pages deployment
+        id: retry
+        if: steps.deployment.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+
+      - name: Wait before retrying Pages again
+        if: steps.deployment.outcome == 'failure' && steps.retry.outcome == 'failure'
+        run: sleep 40
+
+      - name: Retry GitHub Pages deployment again
+        id: retry_again
+        if: steps.deployment.outcome == 'failure' && steps.retry.outcome == 'failure'
+        uses: actions/deploy-pages@v5
