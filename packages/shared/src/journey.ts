@@ -69,6 +69,8 @@ export function journeyLayout(flows: JourneyFlowInput[]): JourneyLayout {
   const welcomeFlow = pickWelcome(flows)
   const built = new Map<string, JourneyChapter>()
 
+  const welcomeJumps = new Set(welcomeFlow ? welcomeDoors(welcomeFlow.graph).map((door) => door.flowName) : [])
+
   function build(flow: JourneyFlowInput, welcome: boolean, suggested: boolean, stack: Set<string>): JourneyChapter {
     const existing = built.get(flow.id)
     if (existing) return existing
@@ -81,6 +83,8 @@ export function journeyLayout(flows: JourneyFlowInput[]): JourneyLayout {
       const target = byName.get(jump)
       if (!target || seenChild.has(target.id)) continue
       if (built.has(target.id) || nextStack.has(target.id)) continue
+      // A welcome door stays on the welcome, even when a chapter can hand off to it.
+      if (!welcome && welcomeJumps.has(target.name)) continue
       seenChild.add(target.id)
       chapter.children.push(build(target, false, false, nextStack))
     }

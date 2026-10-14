@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import { SessionMachine, type FlowGraph } from '@ybot/runtime'
 import type { ExecutionServices, Session } from '@ybot/runtime'
 import {
+  chooseSitePages,
   draftWebsiteChat,
   inspectFlowGraph,
   journeyLayout,
@@ -45,6 +46,18 @@ function session(text: string): Session {
   }
 }
 
+function topicSession(topic: string): Session {
+  const next = session('Ada')
+  next.variables.flow['topic'] = topic
+  return next
+}
+
+function messageTexts(flow: { graph?: { nodes?: Array<{ data?: { kind?: string; config?: { text?: string } } }> } } | undefined): string[] {
+  return (flow?.graph?.nodes ?? []).flatMap((node) => (
+    node.data?.kind === 'send_message' ? [String(node.data.config?.text ?? '')] : []
+  ))
+}
+
 test('yuzu.hair becomes Bella at Yuzu with four doors and no invented cancellation rule', async () => {
   const page = pageFromHtml('https://yuzu.hair/', YUZU)
   const draft = draftWebsiteChat({ pages: [page], companyName: 'Yuzu', personaName: 'Bella' })
@@ -56,12 +69,19 @@ test('yuzu.hair becomes Bella at Yuzu with four doors and no invented cancellati
   assert.match(draft.doors[1]!.answer, /Tuesday to Friday 10am to 8pm/)
   assert.match(draft.doors[1]!.answer, /Saturday 9am to 6pm/)
   assert.match(draft.doors[1]!.answer, /Monday and Sunday closed/)
-  assert.match(draft.doors[2]!.answer, /£58/)
-  assert.match(draft.doors[2]!.answer, /£75/)
-  assert.match(draft.doors[2]!.answer, /£64/)
-  assert.match(draft.doors[2]!.answer, /£33/)
-  assert.match(draft.doors[2]!.answer, /48 hours/)
-  assert.equal(draft.doors[2]!.answer.includes('£29'), false)
+  assert.equal(/£\s*\d/.test(draft.doors[2]!.answer), false)
+  assert.match(draft.doors[2]!.answer, /cut/)
+  assert.match(draft.doors[2]!.answer, /colour/i)
+  const serviceFlow = draft.flows.find((flow) => flow.name === 'Services and prices')
+  const serviceMessages = messageTexts(serviceFlow)
+  assert.ok(serviceMessages.length > 1)
+  assert.ok(serviceMessages.some((text) => /£58/.test(text) && !/£75/.test(text)))
+  assert.ok(serviceMessages.some((text) => /£75/.test(text) && !/£58/.test(text)))
+  assert.ok(serviceMessages.some((text) => /£64/.test(text)))
+  assert.ok(serviceMessages.some((text) => /£33/.test(text)))
+  assert.ok(serviceMessages.some((text) => /£29/.test(text) && !/£58/.test(text)))
+  assert.equal(serviceMessages.some((text) => /£58/.test(text) && /£75/.test(text)), false)
+  assert.ok(serviceMessages.some((text) => /48 hours/.test(text)) || draft.facts.some((fact) => /48 hours/.test(fact.text)))
   assert.match(draft.doors[3]!.answer, /phorest\.com\/salon\/yuzuhairandbeauty/)
   assert.match(draft.note, /cancellation rule/)
   assert.equal(draft.facts.some((fact) => fact.label === 'Offers'), true)
@@ -86,6 +106,17 @@ test('yuzu.hair becomes Bella at Yuzu with four doors and no invented cancellati
   const named = await machine.run(opened.session, graph, 'Ada')
   assert.equal(named.jumpToFlow, 'Location')
 
+  const servicesGraph = serviceFlow!.graph as unknown as FlowGraph
+  const asked = await machine.run(topicSession('how much is a haircut'), servicesGraph, 'Ada')
+  const askedText = asked.newMessages.map((message) => message.content.text).join('\n')
+  assert.match(askedText, /£58/)
+  assert.equal(/£75/.test(askedText), false)
+  assert.match(askedText, /book/i)
+  const menu = await machine.run(topicSession('prices'), servicesGraph, 'Ada')
+  const menuText = menu.newMessages.map((message) => message.content.text).join('\n')
+  assert.match(menuText, /thinking of/i)
+  assert.equal(/£\s*\d/.test(menuText), false)
+
   const layout = journeyLayout(draft.flows.map((flow, index) => ({
     id: `flow-${index}`,
     name: flow.name,
@@ -109,6 +140,132 @@ test('a page with no facts still has four doors and does not invent an address',
   assert.match(draft.doors[0]!.answer, /did not state an address/)
   assert.equal(draft.doors[0]!.answer.includes('Rosewood'), false)
   assert.equal(draft.doors[2]!.answer.includes('£'), false)
+})
+
+const PRICE_LIST = `<title>Price list</title>
+<h2>Cut &amp; style</h2>
+<table>
+<tr><th>Service</th><th>Senior</th><th>Stylist</th></tr>
+<tr><th>Ladies wash, cut &amp; style</th><td data-label="Senior">£87</td><td data-label="Stylist">£58</td></tr>
+<tr><th>Kids (12 &amp; under)</th><td data-label="Senior">£29</td><td data-label="Stylist">£23</td></tr>
+<tr><th>Long hair</th><td data-label="Senior">+£41</td><td data-label="Stylist">+£41</td></tr>
+</table>
+<h2>Colour</h2>
+<table>
+<tr><th>Service</th><th>Senior</th><th>Stylist</th></tr>
+<tr><th>Full head</th><td data-label="Senior">£101</td><td data-label="Stylist">£87</td></tr>
+<tr><th>Roots</th><td data-label="Senior">£88</td><td data-label="Stylist">£75</td></tr>
+</table>
+<p>Please complete a patch test at least 48 hours before your appointment.</p>`
+
+const QUESTIONS = `<title>Questions</title>
+<summary>How much is a haircut at Yuzu in Ealing?</summary>
+<p>A ladies wash, cut and style is £58 with a stylist.</p>
+<summary>Where is the salon?</summary>
+<p>5 Dickens Yard, Longfield Avenue, Ealing, W5 2TD.</p>`
+
+const TEAM = `<title>Join our team</title>
+<p>We are looking for senior stylists, stylists, and models at Dickens Yard.</p>
+<p>Email your CV to info@yuzuhairandbeauty.co.uk.</p>`
+
+const OFFERS = `<title>Offers</title>
+<p>Every Tuesday, 50% off your most expensive colour service.</p>
+<p>Every Tuesday, enjoy a kaleidoscope of shades at a discounted rate of 50%.</p>
+<p>Every Wednesday, 25% off blow-dries.</p>`
+
+test('linked pages become separate conversations instead of one price paragraph', async () => {
+  const home = pageFromHtml('https://yuzu.hair/', `<title>Yuzu</title>
+<p>Yuzu Hair and Beauty works at 5 Dickens Yard, Longfield Avenue, Ealing, W5 2TD.</p>
+<p>Open Tuesday to Friday 10am to 8pm and Saturday 9am to 6pm. Monday and Sunday closed.</p>
+<a href="https://www.phorest.com/salon/yuzuhairandbeauty">Book</a>`)
+  const draft = draftWebsiteChat({
+    pages: [home, pageFromHtml('https://yuzu.hair/prices/', PRICE_LIST), pageFromHtml('https://yuzu.hair/questions/', QUESTIONS), pageFromHtml('https://yuzu.hair/team/', TEAM), pageFromHtml('https://yuzu.hair/offers/', OFFERS)],
+    companyName: 'Yuzu',
+    personaName: 'Bella',
+  })
+  assert.deepEqual(draft.doors.map((door) => door.title), ['Where we are', 'Hours', 'Services', 'Questions', 'Offers', 'Join the team', 'Book'])
+  const services = draft.flows.find((flow) => flow.name === 'Services and prices')
+  const messages = messageTexts(services)
+  assert.match(messages.find((text) => /Ladies/.test(text)) ?? '', /£87 with a senior/)
+  assert.match(messages.find((text) => /Ladies/.test(text)) ?? '', /£58 with a stylist/)
+  assert.equal(/£75/.test(messages.find((text) => /Ladies/.test(text)) ?? ''), false)
+  assert.match(messages.find((text) => /Kids/.test(text)) ?? '', /£29/)
+  assert.match(messages.find((text) => /Long hair/.test(text)) ?? '', /plus £41/)
+  assert.match(messages.find((text) => /Roots/.test(text)) ?? '', /£75/)
+  assert.equal(/£58/.test(messages.find((text) => /Roots/.test(text)) ?? ''), false)
+  assert.equal(messages.some((text) => /£58/.test(text) && /£75/.test(text)), false)
+  const colourQuestion = (services?.graph as { nodes?: Array<{ data?: { kind?: string; config?: { question?: string } } }> }).nodes
+    ?.find((node) => node.data?.kind === 'ask_question' && /which colour/i.test(node.data.config?.question ?? ''))
+  assert.match(colourQuestion?.data?.config?.question ?? '', /patch test/i)
+
+  const haircut = draft.faqs.find((faq) => /haircut at Yuzu/i.test(faq.question))
+  assert.match(haircut?.answer ?? '', /£58/)
+  assert.equal((haircut?.answer ?? '').includes('Where is the salon'), false)
+  assert.match(draft.doors.find((door) => door.flowName === 'Join the team')?.answer ?? '', /info@yuzuhairandbeauty\.co\.uk|Which role/)
+  assert.equal(draft.facts.some((fact) => /info@yuzuhairandbeauty\.co\.uk/.test(fact.text)), true)
+  assert.match(draft.facts.find((fact) => fact.label === 'Pages')?.text ?? '', /prices/)
+  assert.match(draft.facts.find((fact) => fact.label === 'Pages')?.text ?? '', /questions/)
+  assert.match(draft.facts.find((fact) => fact.label === 'Pages')?.text ?? '', /team/)
+  const offerMessages = messageTexts(draft.flows.find((flow) => flow.name === 'Offers'))
+  assert.equal(offerMessages.filter((text) => /Tuesday/.test(text)).length, 1)
+  assert.match(offerMessages.find((text) => /Tuesday/.test(text)) ?? '', /50% off/)
+
+  const names = draft.flows.map((flow) => flow.name)
+  for (const flow of draft.flows) {
+    const issues = inspectFlowGraph(flow.graph as Parameters<typeof inspectFlowGraph>[0], { flowNames: names })
+    assert.deepEqual(issues.filter((issue) => issue.level === 'block' || issue.level === 'repair'), [], `${flow.name}: ${JSON.stringify(issues)}`)
+  }
+  const layout = journeyLayout(draft.flows.map((flow, index) => ({
+    id: `flow-${index}`,
+    name: flow.name,
+    tags: flow.tags,
+    published: false,
+    graph: flow.graph,
+  })))
+  assert.deepEqual(layout.roots[0]?.children.map((chapter) => chapter.name), [
+    'Location', 'Salon hours', 'Services and prices', 'Questions', 'Offers', 'Join the team', 'Book an appointment',
+  ])
+
+  const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
+  const graph = services!.graph as unknown as FlowGraph
+  const kids = await machine.run(topicSession('kids'), graph, 'Ada')
+  const kidsText = kids.newMessages.map((message) => message.content.text).join('\n')
+  assert.match(kidsText, /£29/)
+  assert.equal(/£58/.test(kidsText), false)
+  const named = await machine.run(topicSession('haircut'), graph, 'Ada')
+  const namedText = named.newMessages.map((message) => message.content.text).join('\n')
+  assert.match(namedText, /which cut/i)
+  assert.equal(/£75/.test(namedText), false)
+})
+
+test('chooseSitePages keeps a price list, questions, and the team page once', () => {
+  const chosen = chooseSitePages({
+    homeUrl: 'https://yuzu.hair/',
+    links: [
+      { href: 'https://yuzu.hair/wp-content/themes/yuzu-round/static/prices.html', text: 'Full menu' },
+      { href: 'https://yuzu.hair/wp-content/themes/yuzu-round/static/patch.html', text: 'Patch' },
+      { href: 'https://yuzu.hair/wp-content/themes/yuzu-round/static/offers.html', text: 'Offers' },
+      { href: 'https://yuzu.hair/wp-content/themes/yuzu-round/static/team.html', text: 'Find out more' },
+      { href: 'https://yuzu.hair/wp-content/themes/yuzu-round/static/questions.html', text: 'Questions' },
+      { href: 'https://www.phorest.com/salon/yuzuhairandbeauty', text: 'Book' },
+    ],
+    sitemap: [
+      'https://yuzu.hair/sample-page/',
+      'https://yuzu.hair/',
+      'https://yuzu.hair/prices/',
+      'https://yuzu.hair/offers/',
+      'https://yuzu.hair/team/',
+      'https://yuzu.hair/questions/',
+      'https://yuzu.hair/patch/',
+      'https://yuzu.hair/hello-world/',
+    ],
+    limit: 9,
+  })
+  assert.equal(chosen.filter((href) => href.includes('prices')).length, 1)
+  assert.equal(chosen.some((href) => href.endsWith('/prices/')), true)
+  assert.equal(chosen.some((href) => href.includes('/questions')), true)
+  assert.equal(chosen.some((href) => href.includes('/team')), true)
+  assert.equal(chosen.some((href) => href.includes('sample-page') || href.includes('hello-world') || href.includes('phorest')), false)
 })
 
 test('private and local addresses are refused before a request', () => {
