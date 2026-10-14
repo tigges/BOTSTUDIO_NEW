@@ -10,8 +10,15 @@ interface NavRailProps {
   onToggleCollapse?: () => void
 }
 
+function itemActive(id: string, path: string, pathname: string, fromJourney: boolean) {
+  if (id === 'journey') return pathname === path || (fromJourney && pathname.startsWith('/build/flows/'))
+  if (id === 'flows' && fromJourney && pathname.startsWith('/build/flows/')) return false
+  return pathname === path || pathname.startsWith(path + '/')
+}
+
 export function NavRail({ collapsed = false, onToggleCollapse }: NavRailProps) {
-  const { pathname } = useLocation()
+  const { pathname, href } = useLocation()
+  const fromJourney = href.includes('from=journey')
 
   return (
     <nav
@@ -43,9 +50,7 @@ export function NavRail({ collapsed = false, onToggleCollapse }: NavRailProps) {
               </p>
             )}
             {group.items.map((item) => {
-              const isActive =
-                pathname === item.path ||
-                pathname.startsWith(item.path + '/')
+              const isActive = itemActive(item.id, item.path, pathname, fromJourney)
               const Icon = item.icon
               return (
                 <Link

@@ -2,6 +2,7 @@ import React from 'react'
 import {
   LayoutDashboard,
   Workflow,
+  Route,
   Brain,
   MessageSquare,
   Megaphone,
@@ -45,16 +46,9 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Build',
     items: [
-      {
-        id: 'flows',
-        label: 'Flows',
-        icon: Workflow,
-        path: '/build/flows',
-        subItems: [
-          { id: 'flows-list', label: 'Flows', path: '/build/flows' },
-          { id: 'workflows-list', label: 'Workflows', path: '/build/workflows' },
-        ],
-      },
+      { id: 'journey', label: 'Journey', icon: Route, path: '/build/journey' },
+      { id: 'flows', label: 'Flows', icon: Workflow, path: '/build/flows' },
+      { id: 'workflows', label: 'Workflows', icon: Repeat2, path: '/build/workflows' },
       {
         id: 'knowledge',
         label: 'Knowledge',

@@ -24,12 +24,16 @@ const WELCOME_GRAPH = {
     mkNode('n3',  580, 'ask_question', 'Route',          { question: 'Choose an option:', options: ['Order / Delivery', 'Returns & Refunds', 'Billing', 'Speak to an agent'], variable: 'route' }),
     mkNode('n4',  840, 'condition',    'Route check',    { variable: 'route', operator: 'equals' }),
     mkNode('n5', 1100, 'handover',     'Agent handover', { team: 'support' }),
+    mkNode('n6', 1360, 'execute_flow', 'Order Status',   { flowName: 'Order Status' }),
+    mkNode('n7', 1620, 'execute_flow', 'Return Request', { flowName: 'Return Request' }),
   ],
   edges: [
     mkEdge('e1', 'n1', 'n2'),
     mkEdge('e2', 'n2', 'n3'),
     mkEdge('e3', 'n3', 'n4'),
     mkEdge('e4', 'n4', 'n5', 'agent'),
+    mkEdge('e5', 'n4', 'n6', 'order'),
+    mkEdge('e6', 'n4', 'n7', 'return'),
   ],
 }
 

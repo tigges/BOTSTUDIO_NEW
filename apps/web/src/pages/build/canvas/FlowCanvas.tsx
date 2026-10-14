@@ -16,7 +16,7 @@ import {
   MarkerType,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useNavigate, useParams } from '@tanstack/react-router'
+import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import {
   ArrowLeft, Save, Play, Share2,
   Undo2, Redo2, X,
@@ -30,7 +30,7 @@ import { NodePalette } from '../../../components/canvas/NodePalette'
 import { NodeConfigPanel } from '../../../components/canvas/NodeConfigPanel'
 import { ChatWidget } from '../../../components/ChatWidget'
 import type { FlowNodeData } from '../../../components/canvas/FlowNode'
-import { versionForEnvironment, type NodeKind } from '@ybot/shared'
+import { journeyLayout, journeyTrail, versionForEnvironment, type NodeKind } from '@ybot/shared'
 
 let nodeIdCounter = 1
 function newId() {
@@ -145,6 +145,7 @@ import { PublishCheckDialog, reviewFlow } from '../PublishCheck'
 export function FlowCanvasPage() {
   const navigate = useNavigate()
   const { flowId } = useParams({ from: '/app/build/flows/$flowId' })
+  const { from } = useSearch({ from: '/app/build/flows/$flowId' })
   const selectedBotId = useAppStore((s) => s.selectedBotId) ?? 'demo'
   const selectedEnv = useAppStore((s) => s.selectedEnv)
   const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((e) => e.kind === s.selectedEnv)?.id ?? '')
@@ -163,6 +164,20 @@ export function FlowCanvasPage() {
   const [saving, setSaving] = useState(false)
   const { data: flows } = useFlows()
   const flow = (flows ?? []).find((item) => item.id === flowId)
+  const trail = useMemo(() => {
+    const layout = journeyLayout((flows ?? []).map((item) => {
+      const version = versionForEnvironment(item.versions, environmentId, selectedEnv)
+      return {
+        id: item.id,
+        name: item.name,
+        tags: item.tags,
+        published: version?.status === 'published',
+        graph: version?.graph,
+      }
+    }))
+    return journeyTrail(layout, flowId)
+  }, [flows, environmentId, selectedEnv, flowId])
+  const flowIdByName = useMemo(() => new Map((flows ?? []).map((item) => [item.name, item.id])), [flows])
   const envLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
   const shown = versionForEnvironment(flow?.versions, environmentId, selectedEnv)
   const canvasVersion = shown?.version ?? 0
@@ -412,7 +427,7 @@ export function FlowCanvasPage() {
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={() => navigate({ to: '/build/flows' })}
+            onClick={() => navigate(from === 'journey' ? { to: '/build/journey' } : { to: '/build/flows' })}
           >
             <ArrowLeft size={14} />
           </Button>
@@ -481,6 +496,42 @@ export function FlowCanvasPage() {
           </Button>
         </div>
       </div>
+
+      {trail.path.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-xs">
+          <button type="button" className="text-[var(--accent)]" onClick={() => navigate({ to: '/build/journey' })}>Journey</button>
+          {trail.path.map((chapter, index) => (
+            <span key={chapter.id} className="flex items-center gap-2">
+              <span className="text-[var(--text-muted)]">/</span>
+              {index === trail.path.length - 1 ? (
+                <span className="font-medium text-[var(--text-primary)]">{chapter.name}</span>
+              ) : (
+                <button
+                  type="button"
+                  className="text-[var(--text-secondary)]"
+                  onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: chapter.id }, search: { from: 'journey' } })}
+                >
+                  {chapter.name}
+                </button>
+              )}
+            </span>
+          ))}
+          {trail.next.map((name) => {
+            const nextId = flowIdByName.get(name)
+            if (!nextId) return null
+            return (
+              <button
+                key={name}
+                type="button"
+                className="rounded-full bg-[var(--bg-overlay)] px-2 py-0.5 text-[var(--text-secondary)]"
+                onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: nextId }, search: { from: 'journey' } })}
+              >
+                {name}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Canvas body */}
       <div className="relative flex flex-1 overflow-hidden">

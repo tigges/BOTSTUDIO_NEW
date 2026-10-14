@@ -1,12 +1,10 @@
 import React, { useState } from 'react'
 import { Workflow, Plus, Search, Play, Trash2, Pencil } from 'lucide-react'
 import { Button, Input, Badge, Table, THead, TBody, TR, TH, TD, EmptyState, PageHeader, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
-import { SubNav } from '../../components/SubNav'
 import { useNavigate } from '@tanstack/react-router'
-import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, usePublishFlow, useSaveCanvas, useImportStarterPack, useRemoveStarterPack } from '../../lib/hooks'
+import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, useSaveCanvas, useImportStarterPack, useRemoveStarterPack } from '../../lib/hooks'
 import type { CorporatePackResult, PackRemovalResult } from '../../lib/api'
 import { FlowWizard } from './FlowWizard'
-import { ConversationMap } from './ConversationMap'
 import { LearnFromChats } from './LearnFromChats'
 import { reviewFlow } from './PublishCheck'
 import type { Flow, FlowGraph } from '../../lib/api'
@@ -36,11 +34,6 @@ function PackResult({ result, pack }: { result: CorporatePackResult; pack: 'corp
   )
 }
 
-const SUBNAV = [
-  { label: 'Flows', path: '/build/flows' },
-  { label: 'Workflows', path: '/build/workflows' },
-]
-
 export function FlowsPage() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
@@ -60,18 +53,14 @@ export function FlowsPage() {
   const saveCanvas = useSaveCanvas()
   const updateFlow = useUpdateFlow()
   const deleteFlow = useDeleteFlow()
-  const publishFlow = usePublishFlow()
   const importPack = useImportStarterPack()
   const removePack = useRemoveStarterPack()
   const environments = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments) ?? NO_ENVIRONMENTS
   const botName = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.name ?? '')
-  const personaName = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.personaName ?? '')
   const selectedEnv = useAppStore((s) => s.selectedEnv)
   const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((env) => env.kind === s.selectedEnv)?.id ?? '')
   const envLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
-  const publishEnv = environments.find((env) => env.kind === 'sandbox') ?? environments.find((env) => env.kind === 'production')
   const shown = (flow: Flow) => versionForEnvironment(flow.versions, environmentId, selectedEnv)
-  const suggested = flows.filter((flow) => flow.tags?.includes('proposed') && !flow.versions?.some((version) => version.status === 'published'))
 
   const flowNames = flows.map((flow) => flow.name)
   const checked = flows.flatMap((flow) => {
@@ -113,7 +102,7 @@ export function FlowsPage() {
       })
       await saveCanvas.mutateAsync({ flowId: flow.id, version: flow.versions?.[0]?.version ?? 1, graph: input.graph })
       setShowNew(false)
-      navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id } })
+      navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id }, search: { from: undefined } })
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Could not create this flow.')
     }
@@ -133,7 +122,7 @@ export function FlowsPage() {
     <div className="flex flex-col h-full">
       <PageHeader
         title="Flows"
-        description="Visual conversation flow builder"
+        description="Each flow is one chapter. Publish, rename, and repair them here."
         actions={
           <div className="flex items-center gap-2">
             <Button size="md" variant="secondary" onClick={() => { setPackChoice(null); setPackResult(null); setPackRemoved(null); setConfirmRemove(false); setPackError(''); setShowPack(true) }}>
@@ -144,20 +133,9 @@ export function FlowsPage() {
             </Button>
           </div>
         }
-        tabs={<SubNav items={SUBNAV} />}
       />
 
       <div className="flex-1 overflow-auto p-6">
-        <ConversationMap
-          flows={flows.flatMap((flow) => {
-            const version = shown(flow)
-            if (!version?.graph) return []
-            return [{ flow, graph: version.graph, published: version.status === 'published' }]
-          })}
-          persona={personaName}
-          botName={botName}
-          onEdit={(flowId) => navigate({ to: '/build/flows/$flowId', params: { flowId } })}
-        />
         <LearnFromChats
           botName={botName}
           envLabel={envLabel}
@@ -191,35 +169,6 @@ export function FlowsPage() {
                       <li key={`${issue.code}-${index}`} className="text-xs text-[var(--text-secondary)]">{issue.message}</li>
                     ))}
                   </ul>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {suggested.length > 0 && (
-          <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-4">
-            <p className="text-sm font-medium text-[var(--text-primary)]">Suggested from chats</p>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">
-              These drafts stay unpublished until you publish one. The welcome flow then hands off to it next time.
-            </p>
-            <div className="mt-3 flex flex-col gap-2">
-              {suggested.map((flow) => (
-                <div key={flow.id} className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm text-[var(--text-primary)]">{flow.name}</p>
-                    {flow.description && <p className="text-xs text-[var(--text-muted)]">{flow.description}</p>}
-                  </div>
-                  <Button
-                    size="sm"
-                    disabled={!publishEnv || publishFlow.isPending}
-                    onClick={() => {
-                      const draft = flow.versions?.find((version) => version.status !== 'published')
-                      if (publishEnv) publishFlow.mutate({ flowId: flow.id, environmentId: publishEnv.id, version: draft?.version })
-                    }}
-                  >
-                    {publishEnv?.kind === 'sandbox' ? 'Publish to Sandbox' : 'Publish'}
-                  </Button>
                 </div>
               ))}
             </div>
@@ -268,7 +217,7 @@ export function FlowsPage() {
               {filtered.map((flow) => {
                 const latest = shown(flow)
                 return (
-                  <TR key={flow.id} onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id } })}>
+                  <TR key={flow.id} onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id }, search: { from: undefined } })}>
                     <TD>
                       <div className="flex items-center gap-2">
                         <Workflow size={14} className="text-[var(--text-muted)]" />
@@ -288,7 +237,7 @@ export function FlowsPage() {
                     <TD>
                       <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="icon-sm" title="Rename" onClick={() => setRenaming({ id: flow.id, name: flow.name, description: flow.description ?? '' })}><Pencil size={12} /></Button>
-                        <Button variant="ghost" size="icon-sm" title="Open canvas" onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id } })}><Play size={12} /></Button>
+                        <Button variant="ghost" size="icon-sm" title="Open canvas" onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id }, search: { from: undefined } })}><Play size={12} /></Button>
                         <Button variant="ghost" size="icon-sm" title="Delete" onClick={() => setDeleting({ id: flow.id, name: flow.name })}><Trash2 size={12} /></Button>
                       </div>
                     </TD>

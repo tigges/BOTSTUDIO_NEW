@@ -7,15 +7,9 @@ import {
 import { Badge, Button } from '@ybot/ui'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
-import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
 import { useWorkflows, useCreateWorkflow, useToggleWorkflow, useDeleteWorkflow } from '../../lib/hooks'
 import type { AutomationRule } from '../../lib/api'
-
-const SUBNAV = [
-  { label: 'Flows', path: '/build/flows' },
-  { label: 'Workflows', path: '/build/workflows' },
-]
 
 type TriggerKind = AutomationRule['trigger']
 
@@ -68,12 +62,14 @@ export function WorkflowsPage() {
     <div className="flex flex-col h-full">
       <div className="border-b border-[var(--border)] bg-[var(--bg-surface)]">
         <div className="flex items-center justify-between px-6 py-4">
-          <h1 className="text-base font-semibold text-[var(--text-primary)]">Flows</h1>
+          <div>
+            <h1 className="text-base font-semibold text-[var(--text-primary)]">Workflows</h1>
+            <p className="text-xs text-[var(--text-muted)]">Automations around the conversation. They do not speak to the guest.</p>
+          </div>
           <Button size="sm" className="gap-1.5" onClick={() => setShowNew(true)}>
             <Plus size={14} /> New Workflow
           </Button>
         </div>
-        <SubNav items={SUBNAV} />
       </div>
 
       <div className="flex items-center gap-6 px-6 py-2.5 bg-[var(--bg-overlay)] border-b border-[var(--border)] shrink-0">

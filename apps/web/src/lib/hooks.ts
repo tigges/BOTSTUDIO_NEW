@@ -32,6 +32,15 @@ export function useFlows() {
   })
 }
 
+export function useJourneyTraffic(enabled: boolean) {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['journey-traffic', bid],
+    enabled: enabled && !!bid && !isDemoMode(),
+    queryFn: () => api.flows.traffic(bid).then((r) => r.data),
+  })
+}
+
 export function useLearning(environmentId: string) {
   const bid = botId()
   return useQuery({
