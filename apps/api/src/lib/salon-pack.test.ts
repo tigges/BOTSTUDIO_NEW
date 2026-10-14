@@ -8,6 +8,9 @@ import {
   hairStudioPack,
   inspectFlowGraph,
   planHairStudioImport,
+  spokenLines,
+  welcomeDoors,
+  welcomeGreeting,
 } from '@ybot/shared'
 import { environmentsNeedingGraph } from './bella-salon-sync.js'
 
@@ -127,80 +130,71 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   const welcome = pack.flows.find((flow) => flow.name === SALON_WELCOME_NAME)!
   const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
   const graph = welcome.graph as unknown as FlowGraph
+  const greeting = "Hi, I'm Bella at Bella Hair Studio. What's your name?"
+  const greetings = (welcome.graph as { nodes: Array<{ data?: { config?: Record<string, unknown> } }> }).nodes.filter((node) => {
+    const text = `${node.data?.config?.['text'] ?? ''} ${node.data?.config?.['question'] ?? ''}`
+    return text.includes("Hi, I'm Bella")
+  })
+  assert.equal(greetings.length, 1)
+  assert.deepEqual(welcomeDoors(welcome.graph).map((door) => door.flowName), [
+    'Location',
+    'Salon hours',
+    'Services and prices',
+    'Book an appointment',
+  ])
+  assert.equal(welcomeGreeting(welcome.graph), greeting)
 
-  const hours = await machine.run(session('What are your opening hours?'), graph, 'What are your opening hours?')
+  async function afterName(text: string) {
+    const first = await machine.run(session(text, 'there'), graph, text)
+    assert.equal(first.jumpToFlow, undefined, text)
+    assert.equal(first.session.status, 'waiting_input', text)
+    assert.equal(spoken(first), greeting, text)
+    assert.equal((spoken(first).match(/\?/g) ?? []).length, 1, text)
+    return reply(machine, first, graph, 'Sophie', 'Sophie')
+  }
+
+  const hours = await afterName('What are your opening hours?')
   assert.equal(hours.jumpToFlow, 'Salon hours')
-  assert.match(spoken(hours), /Hi, I'm Bella at Bella Hair Studio/)
-  assert.equal(spoken(hours).includes('What would you like done'), false)
-  assert.equal((spoken(hours).match(/\?/g) ?? []).length, 0)
+  assert.equal(spoken(hours).includes("Hi, I'm Bella"), false)
 
-  const prices = await machine.run(session('How much is a haircut?'), graph, 'How much is a haircut?')
+  const prices = await afterName('How much is a haircut?')
   assert.equal(prices.jumpToFlow, 'Services and prices')
 
-  const book = await machine.run(session('Can I book a colour?'), graph, 'Can I book a colour?')
+  const book = await afterName('Can I book a colour?')
   assert.equal(book.jumpToFlow, 'Book an appointment')
 
-  const cancel = await machine.run(session('Please cancel my booking'), graph, 'Please cancel my booking')
-  assert.equal(cancel.jumpToFlow, 'Cancel appointment')
-
-  const where = await machine.run(session('Where are you?'), graph, 'Where are you?')
+  const where = await afterName('Where are you?')
   assert.equal(where.jumpToFlow, 'Location')
 
-  const move = await machine.run(session('Can I move my appointment to Tuesday?'), graph, 'Can I move my appointment to Tuesday?')
-  assert.equal(move.jumpToFlow, 'Reschedule')
+  const cancel = await afterName('Please cancel my booking')
+  assert.equal(cancel.jumpToFlow, undefined)
+  assert.equal(spoken(cancel), 'What would you like done?')
 
-  const voucher = await machine.run(session('Do you sell gift vouchers?'), graph, 'Do you sell gift vouchers?')
-  assert.equal(voucher.jumpToFlow, 'Gift voucher')
-
-  const correction = await machine.run(session('I need colour correction after a home dye'), graph, 'I need colour correction after a home dye')
-  assert.equal(correction.jumpToFlow, 'Colour correction')
-
-  const consult = await machine.run(session('Can I book a consultation?'), graph, 'Can I book a consultation?')
-  assert.equal(consult.jumpToFlow, 'Consultation')
-
-  const patch = await machine.run(session('Do I need a patch test before colour?'), graph, 'Do I need a patch test before colour?')
-  assert.equal(patch.jumpToFlow, 'Patch test')
-
-  const notice = await machine.run(session('What is your cancellation policy?'), graph, 'What is your cancellation policy?')
-  assert.equal(notice.jumpToFlow, 'Cancellation policy')
-
-  const late = await machine.run(session("I'm running late"), graph, "I'm running late")
-  assert.equal(late.jumpToFlow, 'Running late')
-
-  const stylist = await machine.run(session('Can I request a stylist?'), graph, 'Can I request a stylist?')
-  assert.equal(stylist.jumpToFlow, 'Stylist')
-
-  const hello = await machine.run(session('hello'), graph, 'hello')
-  assert.equal(hello.jumpToFlow, undefined)
-  assert.equal(hello.session.status, 'waiting_input')
-  assert.equal(spoken(hello), 'Hi Ada.')
-  const knownReply = await reply(machine, hello, graph, 'just saying hello')
-  assert.equal(spoken(knownReply), 'Hi Ada. What would you like done? A cut, colour, or something else is fine, and not sure is fine too.')
-
-  const stranger = await machine.run(session('hello', 'there'), graph, 'hello')
-  assert.equal(stranger.jumpToFlow, undefined)
-  assert.equal(stranger.session.status, 'waiting_input')
-  assert.equal(spoken(stranger), "Hi, I'm Bella at Bella Hair Studio.")
-  const askName = await reply(machine, stranger, graph, 'hi')
-  assert.equal(spoken(askName), "What's your name?")
-  assert.equal(askName.session.status, 'waiting_input')
-  const namedGuest = await reply(machine, askName, graph, 'Sophie', 'Sophie')
-  assert.equal(spoken(namedGuest), 'Hi Sophie. What would you like done? A cut, colour, or something else is fine, and not sure is fine too.')
-  const haircut = await reply(machine, namedGuest, graph, 'a haircut')
+  const hello = await machine.run(session('hello', 'Ada'), graph, 'hello')
+  assert.equal(spoken(hello), greeting)
+  const namedHello = await reply(machine, hello, graph, 'Sophie', 'Sophie')
+  assert.equal(spoken(namedHello), 'What would you like done?')
+  const haircut = await reply(machine, namedHello, graph, 'a haircut')
   assert.equal(haircut.jumpToFlow, 'Book an appointment')
   assert.equal(spoken(haircut).includes("Hi, I'm Bella"), false)
 
-  const hoursAfterHello = await reply(machine, { session: (await machine.run(session('hi', 'there'), graph, 'hi')).session }, graph, 'What are your opening hours?')
-  assert.equal(hoursAfterHello.jumpToFlow, 'Salon hours')
-  assert.equal(spoken(hoursAfterHello).includes("Hi, I'm Bella"), false)
+  const helloAgain = await machine.run(session('hello', 'there'), graph, 'hello')
+  const namedAgain = await reply(machine, helloAgain, graph, 'Sophie', 'Sophie')
+  const hoursLater = await reply(machine, namedAgain, graph, 'What are your opening hours?')
+  assert.equal(hoursLater.jumpToFlow, 'Salon hours')
 
-  const lighter = await machine.run(session("I'd like to go lighter", 'there'), graph, "I'd like to go lighter")
+  const lighter = await afterName("I'd like to go lighter")
   assert.equal(lighter.jumpToFlow, 'Book an appointment')
-  assert.match(spoken(lighter), /Hi, I'm Bella at Bella Hair Studio/)
-  assert.equal(spoken(lighter).includes("What's your name?"), false)
 
-  const reaction = await machine.run(session('I had an allergic reaction'), graph, 'I had an allergic reaction')
-  assert.equal(reaction.jumpToFlow, 'Talk to the salon')
+  const reaction = await afterName('I had an allergic reaction')
+  assert.equal(reaction.jumpToFlow, undefined)
+  assert.equal(spoken(reaction), 'What would you like done?')
+
+  const voiced = hairStudioPack('Rose Studio', 'Yuzu')
+  assert.equal(
+    welcomeGreeting(voiced.flows.find((flow) => flow.name === SALON_WELCOME_NAME)?.graph),
+    "Hi, I'm Yuzu at Rose Studio. What's your name?",
+  )
 
   const pricesFlow = pack.flows.find((flow) => flow.name === 'Services and prices')!
   const pricesSpoken = await machine.run(session('prices'), pricesFlow.graph as unknown as FlowGraph, 'prices')
@@ -224,6 +218,7 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   const bookFlow = pack.flows.find((flow) => flow.name === 'Book an appointment')!
   const bookGraph = bookFlow.graph as unknown as FlowGraph
   assert.match(JSON.stringify(bookGraph), /Consultation/)
+  assert.ok(spokenLines(bookGraph, 20).some((line) => line.includes('been to us before')))
 
   const colour = await machine.run(atStart(bookGraph, 'Can I book a colour?', 'there'), bookGraph, 'Can I book a colour?')
   assert.match(spoken(colour), /I can book that/)

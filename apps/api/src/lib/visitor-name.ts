@@ -85,6 +85,14 @@ export function planNameTurn(
 }
 
 /**
+ * Thanks ends the turn when nothing is waiting.
+ * A chart that asked the name is still waiting, so the saved request can continue.
+ */
+export function nameThanksEndsTurn(thanks: string | undefined, flowStatus: string | null | undefined): boolean {
+  return Boolean(thanks) && flowStatus !== 'waiting_input'
+}
+
+/**
  * Drop leftover name tokens. Ask once when we still do not know who this is.
  * A flow that is waiting gets to ask on its own next turn, so the name is not
  * glued onto the line the visitor is already reading.
