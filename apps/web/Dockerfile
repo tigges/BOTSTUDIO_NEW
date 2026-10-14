@@ -20,17 +20,23 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/db/package.json     packages/db/
 COPY packages/ui/package.json     packages/ui/
+COPY packages/llm/package.json    packages/llm/
+COPY apps/runtime/package.json    apps/runtime/
 COPY apps/web/package.json        apps/web/
 
 RUN pnpm install --frozen-lockfile
 
 COPY packages/ packages/
+COPY apps/runtime/ apps/runtime/
 COPY apps/web/ apps/web/
 COPY tsconfig.base.json ./
 
 ENV DATABASE_URL=postgresql://dummy:dummy@localhost/dummy
 RUN pnpm --filter @ybot/db generate
+RUN pnpm --filter @ybot/db build
 RUN pnpm --filter @ybot/shared build
+RUN pnpm --filter @ybot/llm build
+RUN pnpm --filter @ybot/runtime build
 RUN pnpm --filter @ybot/web build
 
 # ── Serve stage ───────────────────────────────────────────────────────────────
