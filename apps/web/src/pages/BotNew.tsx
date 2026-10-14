@@ -78,7 +78,7 @@ export function BotNewPage() {
       setBots([...bots, demoBot])
       selectBot(demoBot.id)
       setEnv('sandbox')
-      navigate({ to: '/build/flows' })
+      navigate({ to: '/build/journey' })
       return
     }
     try {
@@ -96,7 +96,7 @@ export function BotNewPage() {
       setBots(botsRes.data)
       if (created?.data?.id) selectBot(created.data.id)
       setEnv('sandbox')
-      navigate({ to: '/build/flows' })
+      navigate({ to: '/build/journey' })
     } catch (err: unknown) {
       if (err instanceof Error) setError(err.message)
     } finally {

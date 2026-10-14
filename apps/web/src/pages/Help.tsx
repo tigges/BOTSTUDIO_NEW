@@ -90,7 +90,7 @@ export function HelpPage() {
             Rename and delete live on this list, next to each flow. Delete asks you to confirm. You can also rename the flow you have open by clicking its name on the canvas.
           </p>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-            A new bot asks how it should start. Hair studio is the Bella studio template: one greeting that asks the name, then where the studio is, the hours, the prices, or a booking. Corporate services is the orders, shipping, and plans script. An example conversation and a blank welcome stay drafts until you publish them to Sandbox. Charts already on another bot stay on that bot. Starter packs on the Flows page can still add a pack later. Remove pack deletes the flows, intents, and FAQs that pack added. The widget says the words in the published flow. The Flows page opens on the map of that welcome. Publish to Production when the live widget should use it.
+            A new bot asks how it should start. Hair studio is the Bella studio template: one greeting that asks the name, then where the studio is, the hours, the prices, or a booking. Corporate services is the orders, shipping, and plans script. An example conversation and a blank welcome stay drafts until you publish them to Sandbox. Charts already on another bot stay on that bot. Starter packs on the Flows page can still add a pack later. Remove pack deletes the flows, intents, and FAQs that pack added. The widget says the words in the published flow. Journey is the map of every chapter and the line between them. Flows is the list for publish, rename, and repair. Publish to Production when the live widget should use it.
           </p>
           <Figure file="flows.jpg" alt="Flows list" />
           <Figure file="canvas.jpg" alt="Flow canvas with the node list folded" />
@@ -110,10 +110,10 @@ export function HelpPage() {
             Sign in with the Acme demo account and open Acme Support Bot. Choose Production. On the widget test page for the website channel, ask where an order is. When the bot asks for the order number, enter 1001. The reply says that order is on its way. A different number is handed to a person, because the sample shop address is not a real shop.
           </p>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-            Open Inbox in another window. The same chat is there. Open Flows and you will see Welcome & Routing hand off to Order Status, Returns, and Billing. Analytics, then Dashboards, opens Live operations. Those numbers are the same chats as the overview.
+            Open Inbox in another window. The same chat is there. Open Journey and you will see Welcome & Routing hand off to Order Status, Returns, and Billing. Analytics, then Dashboards, opens Live operations. Those numbers are the same chats as the overview.
           </p>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-            Sandbox holds the training chats, including password resets. When three similar chats have no flow, Flows shows a suggested draft. Publish it to Sandbox and the welcome flow learns that handoff. QA Lab keeps a copy of this bot for practice. The scratch bot there is separate.
+            Sandbox holds the training chats, including password resets. When three similar chats have no flow, Journey shows that draft beside the welcome, dashed, until you connect it. Publish it to Sandbox and the welcome flow learns that handoff. QA Lab keeps a copy of this bot for practice. The scratch bot there is separate.
           </p>
         </section>
 

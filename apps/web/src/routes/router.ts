@@ -17,6 +17,7 @@ import { AcceptInvitePage } from '../pages/AcceptInvite'
 import { BotSelectorPage } from '../pages/BotSelector'
 import { OverviewPage } from '../pages/Overview'
 import { FlowsPage } from '../pages/build/Flows'
+import { JourneyPage } from '../pages/build/Journey'
 import { WorkflowsPage } from '../pages/build/Workflows'
 import { FlowCanvasPage } from '../pages/build/canvas/FlowCanvas'
 import { IntentsPage } from '../pages/build/knowledge/Intents'
@@ -117,8 +118,16 @@ const overviewRoute = createRoute({
 })
 
 // ── Build ─────────────────────────────────────────────────────────────────────
+const journeyRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/journey', component: JourneyPage })
 const flowsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/flows', component: FlowsPage })
-const flowCanvasRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/flows/$flowId', component: FlowCanvasPage })
+const flowCanvasRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/build/flows/$flowId',
+  validateSearch: (search: Record<string, unknown>) => ({
+    from: search.from === 'journey' ? 'journey' as const : undefined,
+  }),
+  component: FlowCanvasPage,
+})
 const workflowsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/workflows', component: WorkflowsPage })
 const knowledgeRedirectRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge', beforeLoad: () => { throw redirect({ to: '/build/knowledge/intents' }) }, component: () => null })
 const intentsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/intents', component: IntentsPage })
@@ -171,6 +180,7 @@ const routeTree = rootRoute.addChildren([
     indexRoute,
     overviewRoute,
     botNewRoute,
+    journeyRoute,
     flowsRoute,
     flowCanvasRoute,
     workflowsRoute,

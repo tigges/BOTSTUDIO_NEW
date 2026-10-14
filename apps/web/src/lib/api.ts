@@ -98,6 +98,8 @@ export const flows = {
     apiFetch<{ data: unknown }>(`/bots/${botId}/flows/${flowId}/versions/${version}/canvas`, { method: 'PUT', body: JSON.stringify({ graph }) }),
   publish: (botId: string, flowId: string, environmentId: string, version?: number) =>
     apiFetch<{ data: FlowVersion }>(`/bots/${botId}/flows/${flowId}/publish`, { method: 'POST', body: JSON.stringify({ environmentId, ...(version ? { version } : {}) }) }),
+  traffic: (botId: string) =>
+    apiFetch<{ data: { days: number; chats: Record<string, number> } }>(`/bots/${botId}/journey-traffic`),
 }
 
 export interface LearnCard {

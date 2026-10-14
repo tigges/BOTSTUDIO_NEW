@@ -3,6 +3,7 @@ import { expectNoCrash, qaEmail, qaPassword, signIn } from '../helpers'
 
 const screens = [
   '/overview',
+  '/build/journey',
   '/build/flows',
   '/build/workflows',
   '/build/knowledge/intents',
