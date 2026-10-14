@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { fillNameTokens } from '@ybot/shared'
-import { finishBotLines, planNameTurn, presentChatText } from './visitor-name.js'
+import { finishBotLines, nameThanksEndsTurn, planNameTurn, presentChatText } from './visitor-name.js'
 
 test('a stored welcome with no name reads as there', () => {
   const stored = 'Hi {{contact.name}}! 👋 Welcome to Bella Hair Studio. How can I help you today?'
@@ -130,4 +130,11 @@ test('a new chat does not reuse a name remembered from an earlier chat', () => {
     { conversationId: 'chat-2' },
   )
   assert.deepEqual(asked.lines, ['Cuts start from £35.', "What's your name?"])
+})
+
+test('a waiting chart keeps going after the name', () => {
+  assert.equal(nameThanksEndsTurn('Thanks, Sophie.', 'waiting_input'), false)
+  assert.equal(nameThanksEndsTurn('Thanks, Sophie.', 'running'), true)
+  assert.equal(nameThanksEndsTurn('Thanks, Sophie.', null), true)
+  assert.equal(nameThanksEndsTurn(undefined, 'waiting_input'), false)
 })

@@ -14,7 +14,7 @@ import { prisma } from '@ybot/db'
 import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
 import { pickEntry } from './entry-flow.js'
 import { runFlowTurn } from './flow-turn.js'
-import { finishBotLines, saveContactName, takeNameTurn } from './visitor-name.js'
+import { finishBotLines, nameThanksEndsTurn, saveContactName, takeNameTurn } from './visitor-name.js'
 
 const defaultLlm = createLlmAdapter({
   provider: (process.env['LLM_PROVIDER'] as 'openai' | 'anthropic' | 'groq' | 'ollama' | 'gemini') ?? 'openai',
@@ -68,7 +68,12 @@ export async function runFlowIfPublished(opts: {
 }): Promise<FlowRunResult> {
   const { conversationId, botId, tenantId, userText } = opts
   const named = await takeNameTurn(conversationId, userText)
-  if (named.thanks) return { handled: true, messages: [named.thanks] }
+  const waiting = named.thanks
+    ? await prisma.flowSession.findUnique({ where: { conversationId }, select: { status: true } })
+    : null
+  if (nameThanksEndsTurn(named.thanks, waiting?.status)) {
+    return { handled: true, messages: [named.thanks!] }
+  }
 
   const convo = await prisma.conversation.findFirst({
     where: { id: conversationId },
@@ -203,9 +208,12 @@ export async function runFlowIfPublished(opts: {
     await prisma.conversation.update({ where: { id: conversationId }, data: { status: 'waiting_agent' } }).catch(() => {})
   }
 
+  const messages = named.thanks && !outcome.messages.includes(named.thanks)
+    ? [named.thanks, ...outcome.messages]
+    : outcome.messages
   return {
     handled: true,
-    messages: outcome.messages,
+    messages,
     handover: outcome.handover,
     waitingFor: outcome.session.waitingFor,
     ended: outcome.session.status === 'completed',

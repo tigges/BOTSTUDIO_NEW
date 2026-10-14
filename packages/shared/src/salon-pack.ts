@@ -434,74 +434,79 @@ function taskFlow(topic: Topic): StarterFlow {
   return talkFlow(topic)
 }
 
-function welcomeFlow(companyName: string, topics: Topic[]): StarterFlow {
+const WELCOME_DOORS = ['Location', 'Salon hours', 'Services and prices', 'Book an appointment']
+
+/**
+ * Short words such as "book" also sit inside "cancel my booking".
+ * The welcome only keeps a phrase that does not belong to a chart it does not open.
+ */
+function phrasesForWelcome(topic: Topic, parked: Topic[]): string[] {
+  return topic.phrases.filter((phrase) => {
+    const needle = phrase.toLowerCase()
+    return !parked.some((other) => other.phrases.some((item) => {
+      const hay = item.toLowerCase()
+      return hay !== needle && hay.includes(needle)
+    }))
+  })
+}
+
+function welcomeFlow(companyName: string, topics: Topic[], personaName?: string): StarterFlow {
   const company = companyLabel(companyName)
-  const routes = topics.map((topic) => ({
+  const persona = personaName?.trim() || 'Bella'
+  const greeting = `Hi, I'm ${persona} at ${company}. What's your name?`
+  const doors = WELCOME_DOORS.flatMap((name) => {
+    const topic = topics.find((item) => item.flowName === name)
+    return topic ? [topic] : []
+  })
+  const parked = topics.filter((topic) => !WELCOME_DOORS.includes(topic.flowName))
+  const routes = doors.map((topic) => ({
     handle: handleFor(topic.flowName),
-    phrases: topic.phrases,
+    phrases: phrasesForWelcome(topic, parked),
     flowName: topic.flowName,
   }))
-  const greeting = `Hi, I'm Bella at ${company}.`
   const y = 80
+  const followY = 360
   const nodes: object[] = [
     { id: 'start', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Start', config: {} } },
     { id: 'save', type: 'flow-node', position: { x: 300, y }, data: { kind: 'set_variable', label: 'Keep the request', config: { variable: 'topic', value: '{{_last_user_message}}' } } },
-    { id: 'route', type: 'flow-node', position: { x: 540, y }, data: { kind: 'route_topic', label: 'Route the opening', config: { routes } } },
-    { id: 'named', type: 'flow-node', position: { x: 820, y: 280 }, data: { kind: 'condition', label: 'Name known?', config: { conditions: [{ field: 'contact.name', operator: 'equals', value: 'there' }] } } },
-    ask('greet', 1080, 160, 'Hello', greeting, 'greeting_reply'),
-    ask('greet-known', 1080, 400, 'Hello by name', 'Hi {{contact.name}}.', 'greeting_reply'),
-    { id: 'route2', type: 'flow-node', position: { x: 1340, y: 280 }, data: { kind: 'route_topic', label: 'Route the reply', config: { routes } } },
-    { id: 'named2', type: 'flow-node', position: { x: 1600, y: 480 }, data: { kind: 'condition', label: 'Still unnamed?', config: { conditions: [{ field: 'contact.name', operator: 'equals', value: 'there' }] } } },
-    ask('name', 1840, 360, 'Name', NAME_QUESTION, 'guest_name'),
-    ask('want', 2320, 520, 'Ask', 'Hi {{contact.name}}. What would you like done? A cut, colour, or something else is fine, and not sure is fine too.', 'request'),
-    { id: 'route3', type: 'flow-node', position: { x: 2580, y: 520 }, data: { kind: 'route_topic', label: 'Route what they want', config: { routes } } },
-    say('menu', 2840, 680, 'Offer a next step', 'I can help with a booking, a price, our hours, or a person at the studio. Tell me which you need.'),
-    { id: 'end', type: 'flow-node', position: { x: 3100, y: 680 }, data: { kind: 'end_flow', label: 'End', config: {} } },
+    ask('welcome', 540, y, 'Welcome', greeting, 'guest_name'),
+    { id: 'route', type: 'flow-node', position: { x: 820, y }, data: { kind: 'route_topic', label: 'Route', config: { routes } } },
+    ask('follow', 820, followY, 'Ask', 'What would you like done?', 'request'),
+    { id: 'route2', type: 'flow-node', position: { x: 1100, y: followY }, data: { kind: 'route_topic', label: 'Route the reply', config: { routes } } },
   ]
   const edges: object[] = [
     { id: 'e-start', source: 'start', target: 'save' },
-    { id: 'e-save', source: 'save', target: 'route' },
-    { id: 'e-other', source: 'route', target: 'named', sourceHandle: 'other' },
-    { id: 'e-named-yes', source: 'named', target: 'greet', sourceHandle: 'yes' },
-    { id: 'e-named-no', source: 'named', target: 'greet-known', sourceHandle: 'no' },
-    { id: 'e-greet', source: 'greet', target: 'route2' },
-    { id: 'e-greet-known', source: 'greet-known', target: 'route2' },
-    { id: 'e-other-2', source: 'route2', target: 'named2', sourceHandle: 'other' },
-    { id: 'e-named2-yes', source: 'named2', target: 'name', sourceHandle: 'yes' },
-    { id: 'e-named2-no', source: 'named2', target: 'want', sourceHandle: 'no' },
-    { id: 'e-name', source: 'name', target: 'want' },
-    { id: 'e-want', source: 'want', target: 'route3' },
-    { id: 'e-other-3', source: 'route3', target: 'menu', sourceHandle: 'other' },
-    { id: 'e-end', source: 'menu', target: 'end' },
+    { id: 'e-save', source: 'save', target: 'welcome' },
+    { id: 'e-welcome', source: 'welcome', target: 'route' },
+    { id: 'e-other', source: 'route', target: 'follow', sourceHandle: 'other' },
+    { id: 'e-follow', source: 'follow', target: 'route2' },
+    { id: 'e-other-2', source: 'route2', target: 'follow', sourceHandle: 'other' },
   ]
-  topics.forEach((topic, index) => {
+  doors.forEach((topic, index) => {
     const handle = handleFor(topic.flowName)
-    const greetId = `hi-${handle}`
     const jumpId = `go-${handle}`
-    nodes.push(say(greetId, 820, y + index * 72, 'Greet', greeting))
+    const row = y + index * 120
     nodes.push({
       id: jumpId,
       type: 'flow-node',
-      position: { x: 1100, y: y + index * 72 },
+      position: { x: 1280, y: row },
       data: { kind: 'execute_flow', label: topic.flowName, config: { flowName: topic.flowName } },
     })
-    edges.push({ id: `e-${handle}`, source: 'route', target: greetId, sourceHandle: handle })
-    edges.push({ id: `e-hi-${handle}`, source: greetId, target: jumpId })
+    edges.push({ id: `e-${handle}`, source: 'route', target: jumpId, sourceHandle: handle })
     edges.push({ id: `e2-${handle}`, source: 'route2', target: jumpId, sourceHandle: handle })
-    edges.push({ id: `e3-${handle}`, source: 'route3', target: jumpId, sourceHandle: handle })
   })
   return {
     name: SALON_WELCOME_NAME,
-    description: `Greets guests and answers the usual salon questions for ${company}`,
+    description: `One greeting, then where the studio is, the hours, the prices, or a booking for ${company}`,
     tags: ['welcome', 'routing', 'salon'],
     publish: true,
     graph: { nodes, edges },
   }
 }
 
-export function hairStudioPack(companyName: string): SalonPack {
+export function hairStudioPack(companyName: string, personaName?: string): SalonPack {
   const topics = topicsFor(companyName)
-  const flows: StarterFlow[] = [welcomeFlow(companyName, topics)]
+  const flows: StarterFlow[] = [welcomeFlow(companyName, topics, personaName)]
   for (const topic of topics) {
     flows.push(topic.kind === 'answer' ? answerFlow(topic) : taskFlow(topic))
   }
@@ -530,12 +535,13 @@ export function hairStudioPack(companyName: string): SalonPack {
  */
 export function planHairStudioImport(input: {
   companyName: string
+  personaName?: string
   existingFlowNames: string[]
   existingIntentNames: string[]
   existingQuestions: string[]
   publishedWelcome: boolean
 }): SalonImportPlan {
-  const pack = hairStudioPack(input.companyName)
+  const pack = hairStudioPack(input.companyName, input.personaName)
   const existing = new Set(input.existingFlowNames)
   const flows: PlannedSalonFlow[] = []
   const welcome = pack.flows.find((flow) => flow.name === SALON_WELCOME_NAME)

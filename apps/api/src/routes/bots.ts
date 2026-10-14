@@ -2,7 +2,10 @@ import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { installCorporatePack, installHairStudioPack, removeStarterPack } from '../lib/install-corporate-pack.js'
-import { installStarterFlows } from '../lib/install-starter-flows.js'
+import { installDraftWelcome, installStarterFlows } from '../lib/install-starter-flows.js'
+
+const BOT_STARTS = ['hair-studio', 'corporate', 'sample', 'blank'] as const
+type BotStart = (typeof BOT_STARTS)[number]
 
 
 interface JwtPayload {
@@ -40,13 +43,29 @@ export async function botsRoutes(app: FastifyInstance) {
 
   app.post('/', { preHandler: canBuild }, async (request, reply) => {
     const { tenantId } = request.user as JwtPayload
-    const { name, description } = request.body as { name: string; description?: string }
+    const body = request.body as {
+      name?: string
+      description?: string
+      personaName?: string | null
+      start?: string
+      sample?: string
+    }
+    const name = (body.name ?? '').trim()
+    if (!name) {
+      return reply.status(400).send({ error: { code: 'INVALID_NAME', message: 'Enter a name for this bot.' } })
+    }
+    const start = (body.start ?? 'blank') as BotStart
+    if (!BOT_STARTS.includes(start)) {
+      return reply.status(400).send({ error: { code: 'INVALID_START', message: 'Choose how this bot should start.' } })
+    }
+    const personaName = (body.personaName ?? '').trim() || null
 
     const bot = await prisma.bot.create({
       data: {
         tenantId,
         name,
-        description,
+        description: body.description,
+        personaName,
         environments: {
           create: [
             { tenantId, kind: 'sandbox', name: 'Sandbox' },
@@ -60,8 +79,14 @@ export async function botsRoutes(app: FastifyInstance) {
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
     const sandbox = bot.environments.find((env) => env.kind === 'sandbox')
     const companyName = tenant?.name ?? name
-    await installCorporatePack(tenantId, bot.id, companyName, sandbox?.id ?? null)
-    await installStarterFlows(tenantId, bot.id, companyName, sandbox?.id ?? null)
+    if (start === 'hair-studio') {
+      await installHairStudioPack(tenantId, bot.id, companyName, sandbox?.id ?? null, personaName)
+    } else if (start === 'corporate') {
+      await installCorporatePack(tenantId, bot.id, companyName, sandbox?.id ?? null)
+      await installStarterFlows(tenantId, bot.id, companyName, sandbox?.id ?? null)
+    } else {
+      await installDraftWelcome(tenantId, bot.id, start === 'sample' ? (body.sample ?? '') : '')
+    }
 
     return reply.status(201).send({ data: bot })
   })
@@ -69,7 +94,13 @@ export async function botsRoutes(app: FastifyInstance) {
   async function importPack(
     request: { user: JwtPayload; params: { botId: string } },
     reply: { status: (code: number) => { send: (body: unknown) => unknown } },
-    install: typeof installCorporatePack,
+    install: (
+      tenantId: string,
+      botId: string,
+      companyName: string,
+      environmentId: string | null,
+      personaName?: string | null,
+    ) => Promise<Awaited<ReturnType<typeof installCorporatePack>>>,
   ) {
     const { tenantId } = request.user
     const { botId } = request.params
@@ -81,7 +112,7 @@ export async function botsRoutes(app: FastifyInstance) {
 
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
     const sandbox = bot.environments.find((env) => env.kind === 'sandbox') ?? bot.environments[0]
-    const result = await install(tenantId, bot.id, tenant?.name ?? bot.name, sandbox?.id ?? null)
+    const result = await install(tenantId, bot.id, tenant?.name ?? bot.name, sandbox?.id ?? null, bot.personaName)
     return {
       data: {
         ...result,

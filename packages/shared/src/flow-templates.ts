@@ -315,3 +315,30 @@ export function guidedFlowGraph(input: GuidedFlowInput): { nodes: object[]; edge
   }
   return { nodes, edges }
 }
+
+/** One welcome chart. A pasted line is the greeting. An empty start is a line to replace. */
+export function draftWelcome(sample: string): StarterFlow {
+  const line = sample.trim().slice(0, 2000) || 'Write the first line.'
+  const asks = line.includes('?')
+  return {
+    name: 'Welcome',
+    description: sample.trim()
+      ? 'Draft welcome from an example conversation. Publish it to Sandbox when visitors should hear it.'
+      : 'A blank welcome. Write the first line in the editor.',
+    tags: ['welcome'],
+    publish: false,
+    graph: {
+      nodes: [
+        { id: 'start', type: 'flow-node', position: { x: 80, y: 80 }, data: { kind: 'trigger_start', label: 'Start', config: {} } },
+        asks
+          ? { id: 'welcome', type: 'flow-node', position: { x: 320, y: 80 }, data: { kind: 'ask_question', label: 'Welcome', config: { question: line, variable: 'greeting_reply' } } }
+          : { id: 'welcome', type: 'flow-node', position: { x: 320, y: 80 }, data: { kind: 'send_message', label: 'Welcome', config: { text: line } } },
+        { id: 'end', type: 'flow-node', position: { x: 560, y: 80 }, data: { kind: 'end_flow', label: 'End', config: {} } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'welcome' },
+        { id: 'e2', source: 'welcome', target: 'end' },
+      ],
+    },
+  }
+}

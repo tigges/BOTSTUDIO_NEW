@@ -88,9 +88,8 @@ const botSelectorRoute = createRoute({
 })
 
 const botNewRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appRoute,
   path: '/bots/new',
-  beforeLoad: requireAuth,
   component: BotNewPage,
 })
 
@@ -168,10 +167,10 @@ const routeTree = rootRoute.addChildren([
   resetPasswordRoute,
   acceptInviteRoute,
   botSelectorRoute,
-  botNewRoute,
   appRoute.addChildren([
     indexRoute,
     overviewRoute,
+    botNewRoute,
     flowsRoute,
     flowCanvasRoute,
     workflowsRoute,
