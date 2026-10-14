@@ -67,7 +67,7 @@ export function HelpPage() {
         <section id="start" className="scroll-mt-6 space-y-2">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Getting started</h2>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-            Sign in, pick a bot in the top bar, then choose Sandbox or Production. Sandbox is where you try a flow. Production is what the website widget uses after you publish. Acme and Bella are the demos you can click through. New records you create for practice belong in QA Lab.
+            Sign in, pick a bot in the top bar, then choose Sandbox or Production. Sandbox is where you try a flow. Production is what the website widget uses after you publish. Acme and Bella are the demos you can click through. New records you create for practice belong in QA Lab. Manage bots, in that same menu, renames the bot in the top bar or deletes it. The name guests hear stays in Settings, under Bot Identity.
           </p>
           <Figure file="overview.jpg" alt="Overview dashboard" />
         </section>
