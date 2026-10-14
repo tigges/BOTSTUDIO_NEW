@@ -65,8 +65,10 @@ export const me = {
 export const bots = {
   list: () => apiFetch<{ data: BotSummary[] }>('/bots'),
   get: (id: string) => apiFetch<{ data: BotSummary }>(`/bots/${id}`),
-  create: (body: { name: string; description?: string; personaName?: string; start: 'hair-studio' | 'corporate' | 'sample' | 'blank'; sample?: string }) =>
+  create: (body: { name: string; description?: string; personaName?: string; start: 'hair-studio' | 'corporate' | 'sample' | 'blank' | 'website'; sample?: string; websiteUrl?: string }) =>
     apiFetch<{ data: BotSummary }>('/bots', { method: 'POST', body: JSON.stringify(body) }),
+  scanWebsite: (body: { url: string; personaName?: string; companyName?: string }) =>
+    apiFetch<{ data: WebsiteScanPreview }>('/bots/scan', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: string, body: Partial<{ name: string; personaName: string | null; description: string | null; avatarUrl: string | null }>) =>
     apiFetch<{ data: BotSummary }>(`/bots/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (id: string) => apiFetch<void>(`/bots/${id}`, { method: 'DELETE' }),
@@ -100,6 +102,15 @@ export const flows = {
     apiFetch<{ data: FlowVersion }>(`/bots/${botId}/flows/${flowId}/publish`, { method: 'POST', body: JSON.stringify({ environmentId, ...(version ? { version } : {}) }) }),
   traffic: (botId: string) =>
     apiFetch<{ data: { days: number; chats: Record<string, number> } }>(`/bots/${botId}/journey-traffic`),
+}
+
+export interface WebsiteScanPreview {
+  url: string
+  pages: string[]
+  greeting: string
+  doors: Array<{ title: string; flowName: string; blurb: string; found: boolean }>
+  facts: Array<{ label: string; text: string }>
+  note: string
 }
 
 export interface LearnCard {
