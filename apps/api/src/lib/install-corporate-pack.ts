@@ -29,8 +29,12 @@ export async function installHairStudioPack(
   botId: string,
   companyName: string,
   environmentId: string | null,
+  personaName?: string | null,
 ): Promise<CorporateInstallResult> {
-  return installPlannedPack(tenantId, botId, companyName, environmentId, planHairStudioImport)
+  const persona = personaName?.trim() || undefined
+  return installPlannedPack(tenantId, botId, companyName, environmentId, (input) =>
+    planHairStudioImport({ ...input, personaName: persona }),
+  )
 }
 
 async function installPlannedPack(

@@ -6,6 +6,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, usePublishFlow, useSaveCanvas, useImportStarterPack, useRemoveStarterPack } from '../../lib/hooks'
 import type { CorporatePackResult, PackRemovalResult } from '../../lib/api'
 import { FlowWizard } from './FlowWizard'
+import { ConversationMap } from './ConversationMap'
 import { LearnFromChats } from './LearnFromChats'
 import { reviewFlow } from './PublishCheck'
 import type { Flow, FlowGraph } from '../../lib/api'
@@ -64,6 +65,7 @@ export function FlowsPage() {
   const removePack = useRemoveStarterPack()
   const environments = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments) ?? NO_ENVIRONMENTS
   const botName = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.name ?? '')
+  const personaName = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.personaName ?? '')
   const selectedEnv = useAppStore((s) => s.selectedEnv)
   const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((env) => env.kind === s.selectedEnv)?.id ?? '')
   const envLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
@@ -146,6 +148,16 @@ export function FlowsPage() {
       />
 
       <div className="flex-1 overflow-auto p-6">
+        <ConversationMap
+          flows={flows.flatMap((flow) => {
+            const version = shown(flow)
+            if (!version?.graph) return []
+            return [{ flow, graph: version.graph, published: version.status === 'published' }]
+          })}
+          persona={personaName}
+          botName={botName}
+          onEdit={(flowId) => navigate({ to: '/build/flows/$flowId', params: { flowId } })}
+        />
         <LearnFromChats
           botName={botName}
           envLabel={envLabel}

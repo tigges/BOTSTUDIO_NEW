@@ -65,8 +65,8 @@ export const me = {
 export const bots = {
   list: () => apiFetch<{ data: BotSummary[] }>('/bots'),
   get: (id: string) => apiFetch<{ data: BotSummary }>(`/bots/${id}`),
-  create: (name: string, description?: string) =>
-    apiFetch<{ data: BotSummary }>('/bots', { method: 'POST', body: JSON.stringify({ name, description }) }),
+  create: (body: { name: string; description?: string; personaName?: string; start: 'hair-studio' | 'corporate' | 'sample' | 'blank'; sample?: string }) =>
+    apiFetch<{ data: BotSummary }>('/bots', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: string, body: Partial<{ name: string; personaName: string | null; description: string | null; avatarUrl: string | null }>) =>
     apiFetch<{ data: BotSummary }>(`/bots/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   renameEnvironment: (botId: string, environmentId: string, name: string) =>
