@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
+import { normalizedBotName } from '../lib/bot-name.js'
+import { deleteBotRecords } from '../lib/delete-bot.js'
 import { installCorporatePack, installHairStudioPack, removeStarterPack } from '../lib/install-corporate-pack.js'
 import { installDraftWelcome, installStarterFlows } from '../lib/install-starter-flows.js'
 
@@ -50,10 +52,11 @@ export async function botsRoutes(app: FastifyInstance) {
       start?: string
       sample?: string
     }
-    const name = (body.name ?? '').trim()
-    if (!name) {
-      return reply.status(400).send({ error: { code: 'INVALID_NAME', message: 'Enter a name for this bot.' } })
+    const parsedName = normalizedBotName(body.name ?? '')
+    if (!parsedName.ok) {
+      return reply.status(400).send({ error: { code: 'INVALID_NAME', message: parsedName.message } })
     }
+    const name = parsedName.name
     const start = (body.start ?? 'blank') as BotStart
     if (!BOT_STARTS.includes(start)) {
       return reply.status(400).send({ error: { code: 'INVALID_START', message: 'Choose how this bot should start.' } })
@@ -149,10 +152,19 @@ export async function botsRoutes(app: FastifyInstance) {
     const bot = await prisma.bot.findFirst({ where: { id: botId, tenantId } })
     if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
 
+    let name: string | undefined
+    if (body.name !== undefined) {
+      const parsedName = normalizedBotName(body.name)
+      if (!parsedName.ok) {
+        return reply.status(400).send({ error: { code: 'INVALID_NAME', message: parsedName.message } })
+      }
+      name = parsedName.name
+    }
+
     const updated = await prisma.bot.update({
       where: { id: botId },
       data: {
-        ...(body.name !== undefined      && { name: body.name }),
+        ...(name !== undefined && { name }),
         ...(body.personaName !== undefined && { personaName: body.personaName ?? null }),
         ...(body.description !== undefined && { description: body.description ?? null }),
         ...(body.avatarUrl !== undefined   && { avatarUrl: body.avatarUrl ?? null }),
@@ -160,6 +172,16 @@ export async function botsRoutes(app: FastifyInstance) {
       include: { environments: true },
     })
     return { data: updated }
+  })
+
+  app.delete('/:botId', { preHandler: canBuild }, async (request, reply) => {
+    const { tenantId } = request.user as JwtPayload
+    const { botId } = request.params as { botId: string }
+    const outcome = await prisma.$transaction((tx) => deleteBotRecords(tx, tenantId, botId))
+    if (outcome === 'missing') {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
+    }
+    return reply.status(204).send()
   })
 
   app.patch('/:botId/environments/:environmentId', { preHandler: canBuild }, async (request, reply) => {

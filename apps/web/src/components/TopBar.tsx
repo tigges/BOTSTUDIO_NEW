@@ -27,6 +27,7 @@ import {
 } from '@ybot/ui'
 import { useAppStore } from '../store/app'
 import { apiFetch } from '../lib/api'
+import { ManageBotsDialog } from './ManageBotsDialog'
 import { useAgentStatus, useUpdateAgentStatus } from '../lib/hooks'
 import { workspaceIdentity } from '../lib/workspace-handle'
 import { HELP_TOPICS } from '../pages/help-topics'
@@ -107,6 +108,7 @@ export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
   }
 
   const selectedBot = bots.find((b) => b.id === selectedBotId)
+  const [manageOpen, setManageOpen] = React.useState(false)
 
   async function handleLogout() {
     await apiFetch('/auth/logout', { method: 'POST' }).catch(() => null)
@@ -166,8 +168,12 @@ export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
               <Plus size={14} />
               New Bot
             </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setManageOpen(true)}>
+              Manage bots
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <ManageBotsDialog open={manageOpen} onOpenChange={setManageOpen} />
 
         <EnvSwitcher />
       </div>
