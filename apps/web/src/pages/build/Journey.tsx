@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Play, Plus } from 'lucide-react'
 import { useNavigate } from '@tanstack/react-router'
 import { Button, PageHeader, Skeleton } from '@ybot/ui'
 import { cn } from '@ybot/ui'
 import { journeyLayout, versionForEnvironment } from '@ybot/shared'
+import type { FlowGraph as RuntimeGraph } from '@ybot/runtime'
 import { FlowWizard } from './FlowWizard'
 import { JourneyMap, type ChapterHealth, type JourneyLens } from './JourneyMap'
+import { JourneyTest } from './JourneyTest'
 import { reviewFlow } from './PublishCheck'
 import { useCreateFlow, useFlows, useJourneyTraffic, usePublishFlow, useSaveCanvas, useWorkflows } from '../../lib/hooks'
 import type { Flow, FlowGraph } from '../../lib/api'
@@ -56,6 +58,8 @@ export function JourneyPage() {
   const [createError, setCreateError] = useState('')
   const [connectingId, setConnectingId] = useState('')
   const [connectError, setConnectError] = useState('')
+  const [testing, setTesting] = useState(false)
+  const [guestChapterId, setGuestChapterId] = useState('')
   const { data: flows = [], isLoading, isError, error, refetch } = useFlows()
   const traffic = useJourneyTraffic(lens === 'traffic')
   const { data: workflows = [] } = useWorkflows()
@@ -79,6 +83,15 @@ export function JourneyPage() {
     }]
   }), [flows, environmentId, selectedEnv])
   const layout = useMemo(() => journeyLayout(named), [named])
+  const suggestedIds = useMemo(() => new Set(layout.suggested.map((chapter) => chapter.id)), [layout])
+  const guestChapters = useMemo(() => named.flatMap((flow) => {
+    if (!flow.graph || suggestedIds.has(flow.id)) return []
+    return [{ name: flow.name, graph: flow.graph as unknown as RuntimeGraph }]
+  }), [named, suggestedIds])
+  const welcome = layout.roots.find((chapter) => chapter.welcome)
+  const environmentLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
+  const botName = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.name ?? 'Bot')
+  const chapterKey = guestChapters.map((chapter) => chapter.name).join('|')
   const names = flows.map((flow) => flow.name)
   const graphs = useMemo(() => {
     const map = new Map<string, FlowGraph | undefined>()
@@ -135,12 +148,28 @@ export function JourneyPage() {
         title="Journey"
         description="Each chart is a chapter. Click a chart to edit it."
         actions={
-          <Button size="md" onClick={() => setShowNew(true)}>
-            <Plus size={14} /> Add chapter
-          </Button>
+          <>
+            {lens === 'design' && (
+              <Button
+                size="md"
+                variant={testing ? 'secondary' : 'ghost'}
+                disabled={!welcome && !testing}
+                onClick={() => {
+                  setTesting((open) => !open)
+                  if (testing) setGuestChapterId('')
+                }}
+              >
+                <Play size={14} /> {testing ? 'Hide test' : 'Test this journey'}
+              </Button>
+            )}
+            <Button size="md" onClick={() => setShowNew(true)}>
+              <Plus size={14} /> Add chapter
+            </Button>
+          </>
         }
         tabs={<LensTabs lens={lens} onChange={setLens} />}
       />
+      <div className="flex min-h-0 flex-1">
       <div className="flex-1 overflow-auto p-6">
         {lens === 'traffic' && traffic.isError && (
           <p className="mb-4 text-sm text-[var(--text-secondary)]">Traffic counts are unavailable right now. The chapters are still here.</p>
@@ -161,10 +190,26 @@ export function JourneyPage() {
             healthFor={(id) => (lens === 'health' ? healthForChapter(graphs.get(id), names) : undefined)}
             automationsFor={automationsFor}
             connectingId={connectingId}
+            activeId={lens === 'design' && testing ? guestChapterId : undefined}
             onOpen={(flowId) => navigate({ to: '/build/flows/$flowId', params: { flowId }, search: { from: 'journey' } })}
             onConnect={(flowId) => { void connect(flowId) }}
           />
         )}
+      </div>
+      {lens === 'design' && testing && welcome && (
+        <JourneyTest
+          botName={botName}
+          chapters={guestChapters}
+          startChapter={welcome.name}
+          environmentLabel={environmentLabel}
+          chapterKey={chapterKey}
+          onChapter={(name) => {
+            const match = named.find((flow) => flow.name === name)
+            setGuestChapterId(match?.id ?? '')
+          }}
+          onClose={() => { setTesting(false); setGuestChapterId('') }}
+        />
+      )}
       </div>
       <FlowWizard
         open={showNew}

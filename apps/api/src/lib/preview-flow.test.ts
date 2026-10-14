@@ -4,6 +4,15 @@ import { hairStudioPack } from '@ybot/shared'
 import type { FlowGraph } from '@ybot/runtime'
 import { keepFirstQuestion, runCanvasPreview } from './preview-flow.js'
 
+test('a chart test stops at the chapter boundary', async () => {
+  const graph = hairStudioPack('Yuzu').flows.find((flow) => flow.name === 'Salon welcome')!.graph as unknown as FlowGraph
+  const hello = await runCanvasPreview({ graph, message: 'where are you' })
+  assert.match(hello.text, /What's your name\?/)
+  const named = await runCanvasPreview({ graph, message: 'Ada', session: hello.session })
+  assert.match(named.text, /This step continues in Location\./)
+  assert.equal(named.text.includes('Rosewood'), false)
+})
+
 test('a second question is left for the next turn', () => {
   const stacked = "Great! I'd be happy to help you book a haircut. To get you scheduled, I'll need a few details: What day works best for you? Do you have a preferred time? Do you have a specific stylist?"
   const kept = keepFirstQuestion(stacked)

@@ -15,14 +15,18 @@ const Y = 200
 const mkNode = (id: string, x: number, kind: string, label: string, config: Record<string, unknown> = {}) =>
   ({ id, type: 'flow-node', position: { x, y: Y }, data: { kind, label, config } })
 const mkEdge = (id: string, source: string, target: string, label?: string) =>
-  ({ id, source, target, label, type: 'default' })
+  ({ id, source, target, label, sourceHandle: label, type: 'default' })
 
 const WELCOME_GRAPH = {
   nodes: [
     mkNode('n1',   80, 'trigger',      'Start',          { event: 'conversation.started' }),
     mkNode('n2',  320, 'send_message', 'Greeting',       { text: 'Sandbox greeting. This is the rehearsal copy.' }),
     mkNode('n3',  580, 'ask_question', 'Route',          { question: 'Choose an option:', options: ['Order / Delivery', 'Returns & Refunds', 'Billing', 'Speak to an agent'], variable: 'route' }),
-    mkNode('n4',  840, 'condition',    'Route check',    { variable: 'route', operator: 'equals' }),
+    mkNode('n4',  840, 'route_topic',  'Route check',    { routes: [
+      { handle: 'order', phrases: ['order', 'delivery'] },
+      { handle: 'return', phrases: ['return', 'refund'] },
+      { handle: 'agent', phrases: ['agent', 'speak to an agent', 'person'] },
+    ] }),
     mkNode('n5', 1100, 'handover',     'Agent handover', { team: 'support' }),
     mkNode('n6', 1360, 'execute_flow', 'Order Status',   { flowName: 'Order Status' }),
     mkNode('n7', 1620, 'execute_flow', 'Return Request', { flowName: 'Return Request' }),

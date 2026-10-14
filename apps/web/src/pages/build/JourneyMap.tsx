@@ -22,6 +22,7 @@ function Chart({
   health,
   automations,
   connecting,
+  active,
   onOpen,
   onConnect,
 }: {
@@ -31,6 +32,7 @@ function Chart({
   health: ChapterHealth | undefined
   automations: string[]
   connecting: boolean
+  active: boolean
   onOpen: (id: string) => void
   onConnect: (id: string) => void
 }) {
@@ -43,7 +45,10 @@ function Chart({
         chapter.suggested ? 'border-dashed border-amber-300 bg-amber-50' : '',
         !chapter.welcome && !chapter.suggested ? 'border-[var(--border)]' : '',
         loose && !chapter.published ? 'border-dashed' : '',
+        active ? 'ring-2 ring-[var(--accent)]' : '',
       ].join(' ')}
+      data-chapter={chapter.name}
+      data-active={active ? 'true' : 'false'}
     >
       <button type="button" className="block w-full text-left" onClick={() => onOpen(chapter.id)}>
         <span className={`block text-sm font-semibold ${chapter.welcome ? 'text-emerald-800' : 'text-[var(--text-primary)]'}`}>
@@ -66,6 +71,7 @@ function Chart({
             )}
           </span>
         )}
+        {active && <span className="mt-2 block text-[11px] font-medium text-[var(--accent)]">Guest is here</span>}
         {lens === 'traffic' && (
           <span className="mt-1 block text-xs text-[var(--text-secondary)]">
             {chats ? `${chats} ${chats === 1 ? 'chat' : 'chats'} in 30 days` : 'No chats yet'}
@@ -107,6 +113,7 @@ function Column({
   healthFor,
   automationsFor,
   connectingId,
+  activeId,
   onOpen,
   onConnect,
 }: {
@@ -117,6 +124,7 @@ function Column({
   healthFor: (id: string) => ChapterHealth | undefined
   automationsFor: (name: string) => string[]
   connectingId: string
+  activeId?: string
   onOpen: (id: string) => void
   onConnect: (id: string) => void
 }) {
@@ -129,6 +137,7 @@ function Column({
         health={healthFor(chapter.id)}
         automations={automationsFor(chapter.name)}
         connecting={connectingId === chapter.id}
+        active={activeId === chapter.id}
         onOpen={onOpen}
         onConnect={onConnect}
       />
@@ -143,6 +152,7 @@ function Column({
               healthFor={healthFor}
               automationsFor={automationsFor}
               connectingId={connectingId}
+              activeId={activeId}
               onOpen={onOpen}
               onConnect={onConnect}
             />
@@ -160,6 +170,7 @@ export function JourneyMap({
   healthFor,
   automationsFor,
   connectingId,
+  activeId,
   onOpen,
   onConnect,
 }: {
@@ -169,6 +180,7 @@ export function JourneyMap({
   healthFor: (id: string) => ChapterHealth | undefined
   automationsFor: (name: string) => string[]
   connectingId: string
+  activeId?: string
   onOpen: (id: string) => void
   onConnect: (id: string) => void
 }) {
@@ -180,6 +192,7 @@ export function JourneyMap({
     healthFor,
     automationsFor,
     connectingId,
+    activeId,
     onOpen,
     onConnect,
   }
