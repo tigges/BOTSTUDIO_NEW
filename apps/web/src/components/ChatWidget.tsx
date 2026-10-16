@@ -48,6 +48,7 @@ interface PreviewSnapshot {
 interface ChatWidgetProps {
   botId: string
   botName?: string
+  avatarUrl?: string | null
   systemPrompt?: string
   onClose?: () => void
   className?: string
@@ -64,7 +65,7 @@ function welcomeLine(name: string, followsChart: boolean): string {
   return `Hi! I'm ${name}. Ask me anything — I'll search my knowledge base and answer.`
 }
 
-export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, className, autoFocus = false, flowGraph }: ChatWidgetProps) {
+export function ChatWidget({ botId, botName = 'Bot', avatarUrl, systemPrompt, onClose, className, autoFocus = false, flowGraph }: ChatWidgetProps) {
   const followsChart = Boolean(flowGraph)
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     const content = welcomeLine(botName, followsChart)
@@ -259,7 +260,7 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--bg-elevated)] shrink-0">
         <div className="flex items-center gap-2">
           <div className="relative">
-            <Avatar name={botName} size="xs" />
+            <Avatar name={botName} src={avatarUrl} size="xs" />
             <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-[var(--success)] border border-[var(--bg-elevated)]" />
           </div>
           <div>
@@ -315,7 +316,7 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
         {messages.map((msg) => (
           <div key={msg.id} className={cn('flex gap-2', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
             {msg.role === 'assistant' && (
-              <Avatar name={botName} size="xs" className="shrink-0 mt-1" />
+              <Avatar name={botName} src={avatarUrl} size="xs" className="shrink-0 mt-1" />
             )}
             <div className="max-w-[85%]">
               <div

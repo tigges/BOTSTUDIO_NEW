@@ -1,7 +1,7 @@
 /**
- * Start wizard: pick a cluster, then a template.
- * Hair vs corporate are templates inside clusters, not the first choice.
- * Crawled sites (cevro.ai, hubspot.com, gmail/workspace) sit here with brand names off.
+ * Start wizard: name, then how to start (scan, sample, blank, or a template).
+ * Templates are the mapped cases (hair studio, CRM, software, inbox).
+ * Each template has its own persona, avatar colour, and kind of conversation.
  */
 
 import { assistantGreeting } from './greeting-welcome.js'
@@ -53,7 +53,95 @@ export interface StartTemplate {
   title: string
   body: string
   tag: string
+  persona: string
+  accent: string
+  role: string
   source?: { host: string; note: string }
+}
+
+export type StartPath = 'template' | 'website' | 'sample' | 'blank'
+
+export interface StartOption {
+  id: StartPath
+  title: string
+  body: string
+  tag: string
+}
+
+export interface TemplateIdentity {
+  persona: string
+  accent: string
+  role: string
+  genre: string
+}
+
+export const START_OPTIONS: StartOption[] = [
+  {
+    id: 'template',
+    title: 'From a template',
+    body: 'Hair studio, CRM, software, inbox, or commerce — then the map for that kind of conversation.',
+    tag: 'Mapped cases',
+  },
+  {
+    id: 'website',
+    title: 'Scan my website',
+    body: 'We read the public pages it links to, then draft a greeting that asks one thing at a time.',
+    tag: 'Draft only',
+  },
+  {
+    id: 'sample',
+    title: 'An example conversation',
+    body: 'Paste a chat. It becomes the welcome guests hear.',
+    tag: 'Draft only',
+  },
+  {
+    id: 'blank',
+    title: 'A blank welcome',
+    body: 'One empty chart. You write the first line in the editor.',
+    tag: 'Editor',
+  },
+]
+
+const FALLBACK_IDENTITY: TemplateIdentity = {
+  persona: '',
+  accent: '#4f46e5',
+  role: 'Assistant',
+  genre: 'Custom',
+}
+
+export const TEMPLATE_IDENTITIES: Record<string, TemplateIdentity> = {
+  'hair-studio': { persona: 'Bella', accent: '#059669', role: 'Front desk', genre: 'Hair studio' },
+  corporate: { persona: 'Cal', accent: '#2563eb', role: 'Customer care', genre: 'Commerce' },
+  'product-support': { persona: 'Aria', accent: '#7c3aed', role: 'Product support', genre: 'Software' },
+  'crm-platform': { persona: 'Maya', accent: '#ea580c', role: 'Customer platform', genre: 'CRM' },
+  'inbox-assistant': { persona: 'Jules', accent: '#0d9488', role: 'Inbox', genre: 'Email' },
+  website: { persona: 'Bella', accent: '#4f46e5', role: 'Assistant', genre: 'Your site' },
+  sample: { persona: '', accent: '#64748b', role: 'Assistant', genre: 'Custom' },
+  blank: { persona: '', accent: '#64748b', role: 'Assistant', genre: 'Custom' },
+}
+
+const CLUSTER_TO_START: Record<string, string> = {
+  hair: 'hair-studio',
+  commerce: 'corporate',
+  software: 'product-support',
+  crm: 'crm-platform',
+  email: 'inbox-assistant',
+}
+
+export function identityFor(start?: string | null): TemplateIdentity {
+  const key = start && TEMPLATE_IDENTITIES[start] ? start : CLUSTER_TO_START[start ?? '']
+  return TEMPLATE_IDENTITIES[key ?? ''] ?? FALLBACK_IDENTITY
+}
+
+export function personaAvatar(name: string, accent: string): string {
+  const letter = (name.trim()[0] || '?').toUpperCase()
+  const fill = /^#[0-9A-Fa-f]{6}$/.test(accent) ? accent : FALLBACK_IDENTITY.accent
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="${fill}"/><text x="32" y="41" text-anchor="middle" font-size="28" fill="#ffffff" font-family="system-ui,sans-serif">${letter}</text></svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+}
+
+function voiceFor(start: BotStart, personaName?: string | null): string {
+  return personaName?.trim() || identityFor(start).persona
 }
 
 export const START_CLUSTERS: StartCluster[] = [
@@ -65,66 +153,50 @@ export const START_CLUSTERS: StartCluster[] = [
   { id: 'custom', title: 'Custom', body: 'Scan a website, paste a conversation, or start from a blank welcome.' },
 ]
 
+function withIdentity(item: Omit<StartTemplate, 'persona' | 'accent' | 'role'>): StartTemplate {
+  const identity = identityFor(item.id)
+  return { ...item, persona: identity.persona, accent: identity.accent, role: identity.role }
+}
+
 export const BAKED_TEMPLATES: StartTemplate[] = [
-  {
+  withIdentity({
     id: 'hair-studio',
     clusterId: 'hair',
     title: 'Hair studio',
     body: 'The same kind of conversation as Bella. A greeting, then a booking, a price, the hours, or where the studio is.',
     tag: 'Like Bella',
-  },
-  {
+  }),
+  withIdentity({
     id: 'corporate',
     clusterId: 'commerce',
     title: 'Corporate services',
     body: 'Orders, shipping, returns, plans and pricing, and a handoff to the team.',
     tag: 'Shop & support',
-  },
-  {
+  }),
+  withIdentity({
     id: 'product-support',
     clusterId: 'software',
     title: 'Software support',
     body: 'What the product does, support, payments and identity, safety, integrations, and a demo.',
     tag: 'From cevro.ai',
     source: { host: 'cevro.ai', note: 'Public crawl. Brand names and customer stories are left off.' },
-  },
-  {
+  }),
+  withIdentity({
     id: 'crm-platform',
     clusterId: 'crm',
     title: 'CRM platform',
     body: 'Marketing, sales, service, plans, and a demo — the usual doors on a customer platform.',
     tag: 'From hubspot.com',
     source: { host: 'hubspot.com', note: 'Public crawl. Product brand names are left off.' },
-  },
-  {
+  }),
+  withIdentity({
     id: 'inbox-assistant',
     clusterId: 'email',
     title: 'Inbox assistant',
     body: 'Inbox, compose, search, and security. The sign-in wall is left off; this is the public product map.',
     tag: 'From gmail.com',
     source: { host: 'gmail.com', note: 'Public about page. The signed-in inbox is not readable, so this is the public product journey.' },
-  },
-  {
-    id: 'website',
-    clusterId: 'custom',
-    title: 'Scan my website',
-    body: 'We read the public pages it links to, then draft a greeting that asks one thing at a time.',
-    tag: 'Draft only',
-  },
-  {
-    id: 'sample',
-    clusterId: 'custom',
-    title: 'An example conversation',
-    body: 'Paste a chat. It becomes the welcome guests hear.',
-    tag: 'Draft only',
-  },
-  {
-    id: 'blank',
-    clusterId: 'custom',
-    title: 'A blank welcome',
-    body: 'One empty chart. You write the first line in the editor.',
-    tag: 'Editor',
-  },
+  }),
 ]
 
 export function templatesInCluster(clusterId: ClusterId, learned: StartTemplate[] = []): StartTemplate[] {
@@ -305,12 +377,19 @@ function inboxTopics(company: string): SiteTopic[] {
   ]
 }
 
+function packGreeting(start: BotStart, company: string, personaName?: string | null): string {
+  const voice = voiceFor(start, personaName)
+  return voice ? `Hi, I'm ${voice} at ${company}.` : assistantGreeting(company)
+}
+
 export function bakedPack(
   start: BotStart,
   companyName: string,
   personaName?: string | null,
 ): SiteTemplatePack | null {
   const company = companyLabel(companyName)
+  const greeting = packGreeting(start, company, personaName)
+  const voice = voiceFor(start, personaName) || null
   if (start === 'product-support') {
     const topics = softwareTopics(company)
     return siteTemplatePack({
@@ -318,8 +397,8 @@ export function bakedPack(
       tag: 'software',
       welcomeName: 'Product welcome',
       companyName: company,
-      personaName,
-      greeting: personaName?.trim() ? `Hi, I'm ${personaName.trim()} at ${company}. What's your name?` : assistantGreeting(company),
+      personaName: voice,
+      greeting,
       followUp: 'Hi {{contact.name}}. What do you need help with?',
       menu: 'I can help with what we do, support, payments, safety, integrations, a demo, or a person on the team.',
       topics,
@@ -332,8 +411,8 @@ export function bakedPack(
       tag: 'crm',
       welcomeName: 'CRM welcome',
       companyName: company,
-      personaName,
-      greeting: personaName?.trim() ? `Hi, I'm ${personaName.trim()} at ${company}. What's your name?` : assistantGreeting(company),
+      personaName: voice,
+      greeting,
       followUp: 'Hi {{contact.name}}. What do you need help with?',
       menu: 'I can help with marketing, sales, service, plans, a demo, or a person on the team.',
       topics,
@@ -346,8 +425,8 @@ export function bakedPack(
       tag: 'inbox',
       welcomeName: 'Inbox welcome',
       companyName: company,
-      personaName,
-      greeting: personaName?.trim() ? `Hi, I'm ${personaName.trim()} at ${company}. What's your name?` : assistantGreeting(company),
+      personaName: voice,
+      greeting,
       followUp: 'Hi {{contact.name}}. What do you need help with?',
       menu: 'I can help with the inbox, compose, search, security, chat, or a person on the team.',
       topics,
@@ -366,7 +445,7 @@ export function startPreview(input: {
   sample?: string
 }): { greeting: string; doors: PreviewDoor[]; note?: string } {
   const company = companyLabel(input.companyName)
-  const voice = input.personaName?.trim()
+  const voice = voiceFor(input.start, input.personaName)
   if (input.start === 'learned' && input.learned) {
     const pack = packFromLearned(input.learned, company, input.personaName)
     return { greeting: pack.greeting, doors: pack.doors, note: input.learned.body }
@@ -384,10 +463,10 @@ export function startPreview(input: {
     return { greeting: 'Write the first line.', doors: [] }
   }
   if (input.start === 'hair-studio') {
-    const pack = hairStudioPack(company, input.personaName ?? undefined)
+    const pack = hairStudioPack(company, voice || undefined)
     const welcome = pack.flows.find((flow) => flow.name === SALON_WELCOME_NAME)
     return {
-      greeting: voice ? `Hi, I'm ${voice} at ${company}. What's your name?` : `Hi, I'm Bella at ${company}. What's your name?`,
+      greeting: `Hi, I'm ${voice || 'Bella'} at ${company}. What's your name?`,
       doors: [
         { title: 'Where we are', flowName: 'Location', blurb: 'Address' },
         { title: 'Hours', flowName: 'Salon hours', blurb: 'When we are open' },
@@ -398,9 +477,9 @@ export function startPreview(input: {
     }
   }
   if (input.start === 'corporate') {
-    const pack = corporateServicesPack(company)
+    const pack = corporateServicesPack(company, voice || undefined)
     return {
-      greeting: assistantGreeting(company),
+      greeting: packGreeting('corporate', company, voice),
       doors: doorsFromTopics(pack.intents.map((intent) => ({
         flowName: intent.name,
         choice: intent.name,
@@ -411,7 +490,28 @@ export function startPreview(input: {
       }))).slice(0, 8),
     }
   }
-  const pack = bakedPack(input.start, company, input.personaName)
+  const pack = bakedPack(input.start, company, voice)
   if (pack) return { greeting: pack.greeting, doors: pack.doors }
   return { greeting: assistantGreeting(company), doors: [] }
+}
+
+export function startWalkChapters(input: {
+  start: BotStart
+  companyName: string
+  personaName?: string | null
+  learned?: LearnedTemplateSpec | null
+}): Array<{ name: string; graph: object }> {
+  const company = companyLabel(input.companyName)
+  const voice = voiceFor(input.start, input.personaName)
+  if (input.start === 'learned' && input.learned) {
+    return packFromLearned(input.learned, company, voice || null).flows.map((flow) => ({ name: flow.name, graph: flow.graph }))
+  }
+  if (input.start === 'hair-studio') {
+    return hairStudioPack(company, voice || undefined).flows.map((flow) => ({ name: flow.name, graph: flow.graph }))
+  }
+  if (input.start === 'corporate') {
+    return corporateServicesPack(company, voice || undefined).flows.map((flow) => ({ name: flow.name, graph: flow.graph }))
+  }
+  const pack = bakedPack(input.start, company, voice)
+  return pack ? pack.flows.map((flow) => ({ name: flow.name, graph: flow.graph })) : []
 }

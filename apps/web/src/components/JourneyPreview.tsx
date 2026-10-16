@@ -10,15 +10,22 @@ export function JourneyPreview({
   greeting,
   doors,
   empty,
+  persona,
+  avatarUrl,
 }: {
   greeting: string
   doors: JourneyPreviewDoor[]
   empty?: string
+  persona?: string
+  avatarUrl?: string
 }) {
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
-        <p className="text-[11px] font-bold text-emerald-800">Visitors start here</p>
+        <div className="flex items-center gap-2">
+          {avatarUrl ? <img src={avatarUrl} alt="" className="h-7 w-7 rounded-full" /> : null}
+          <p className="text-[11px] font-bold text-emerald-800">{persona ? `${persona} starts here` : 'Visitors start here'}</p>
+        </div>
         <p className="mt-1 text-sm text-emerald-950">{greeting}</p>
       </div>
       {doors.length > 0 ? (

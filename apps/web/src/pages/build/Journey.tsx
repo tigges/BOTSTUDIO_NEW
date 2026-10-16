@@ -96,7 +96,8 @@ export function JourneyPage() {
   }), [named, suggestedIds])
   const welcome = layout.roots.find((chapter) => chapter.welcome)
   const environmentLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
-  const botName = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.name ?? 'Bot')
+  const selectedBot = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId))
+  const botName = selectedBot?.personaName?.trim() || selectedBot?.name || 'Bot'
   const chapterKey = guestChapters.map((chapter) => chapter.name).join('|')
   const names = flows.map((flow) => flow.name)
   const graphs = useMemo(() => {
@@ -208,6 +209,7 @@ export function JourneyPage() {
       {lens === 'design' && testing && welcome && (
         <JourneyTest
           botName={botName}
+          avatarUrl={selectedBot?.avatarUrl}
           chapters={guestChapters}
           startChapter={welcome.name}
           environmentLabel={environmentLabel}

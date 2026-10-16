@@ -5,11 +5,14 @@ import type { ExecutionServices, Session } from '@ybot/runtime'
 import {
   BAKED_TEMPLATES,
   START_CLUSTERS,
+  START_OPTIONS,
   abstractBrand,
   bakedPack,
   draftClusteredTemplate,
+  identityFor,
   inspectFlowGraph,
   pageFromHtml,
+  personaAvatar,
   startPreview,
   suggestCluster,
   templatesInCluster,
@@ -32,14 +35,34 @@ function session(text: string, name = 'Ada'): Session {
   }
 }
 
-test('the wizard clusters hair and corporate instead of listing them first', () => {
-  assert.deepEqual(START_CLUSTERS.map((item) => item.id), ['hair', 'commerce', 'software', 'crm', 'email', 'custom'])
+test('the wizard starts with scan, blank, and templates — not clusters first', () => {
+  assert.deepEqual(START_OPTIONS.map((item) => item.id), ['template', 'website', 'sample', 'blank'])
+  assert.equal(BAKED_TEMPLATES.some((item) => item.id === 'website' || item.id === 'blank'), false)
   assert.equal(templatesInCluster('hair').some((item) => item.id === 'hair-studio'), true)
   assert.equal(templatesInCluster('commerce').some((item) => item.id === 'corporate'), true)
   assert.equal(templatesInCluster('hair').some((item) => item.id === 'corporate'), false)
   assert.equal(BAKED_TEMPLATES.filter((item) => item.id === 'product-support')[0]?.source?.host, 'cevro.ai')
   assert.equal(BAKED_TEMPLATES.filter((item) => item.id === 'crm-platform')[0]?.source?.host, 'hubspot.com')
   assert.equal(BAKED_TEMPLATES.filter((item) => item.id === 'inbox-assistant')[0]?.source?.host, 'gmail.com')
+  assert.deepEqual(START_CLUSTERS.map((item) => item.id), ['hair', 'commerce', 'software', 'crm', 'email', 'custom'])
+})
+
+test('each template has its own persona, and the company is the bot name', () => {
+  assert.equal(identityFor('hair-studio').persona, 'Bella')
+  assert.equal(identityFor('crm-platform').persona, 'Maya')
+  assert.equal(identityFor('crm').persona, 'Maya')
+  assert.notEqual(identityFor('crm-platform').accent, identityFor('hair-studio').accent)
+  const crm = startPreview({ start: 'crm-platform', companyName: 'test' })
+  assert.match(crm.greeting, /Maya/)
+  assert.match(crm.greeting, /test/)
+  assert.equal(/Bella Hair Studio|Bella/.test(crm.greeting), false)
+  assert.ok(crm.doors.some((door) => door.title === 'Marketing'))
+  const hair = startPreview({ start: 'hair-studio', companyName: 'Yuzu' })
+  assert.match(hair.greeting, /Bella/)
+  assert.match(hair.greeting, /Yuzu/)
+  const avatar = personaAvatar('Maya', identityFor('crm-platform').accent)
+  assert.match(avatar, /^data:image\/svg\+xml/)
+  assert.match(avatar, /M/)
 })
 
 test('crawled brand names come off so the map can sit as a template', () => {
@@ -84,13 +107,30 @@ test('the software pack from cevro.ai answers without brand names', async () => 
   assert.equal(demo.jumpToFlow, 'Book a demo')
 })
 
+test('the CRM pack speaks as Maya at the bot name, not a salon', async () => {
+  const pack = bakedPack('crm-platform', 'test')
+  assert.ok(pack)
+  const blob = JSON.stringify(pack.flows)
+  assert.equal(/Bella Hair Studio|\bBella\b/.test(blob), false)
+  assert.match(blob, /Maya at test/)
+  const welcome = pack.flows.find((flow) => flow.name === pack.welcomeName)!
+  const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
+  const graph = welcome.graph as unknown as FlowGraph
+  const sales = await machine.run(session('sales pipeline'), graph, 'sales pipeline')
+  assert.equal(sales.jumpToFlow, 'Sales')
+  const hello = await machine.run(session('hi', 'there'), graph, 'hi')
+  assert.match(hello.newMessages.map((message) => message.content.text).join('\n'), /Maya at test/)
+})
+
 test('crm and inbox packs keep a visual map of doors', () => {
   const crm = startPreview({ start: 'crm-platform', companyName: 'Northwind' })
   assert.ok(crm.doors.some((door) => door.title === 'Marketing'))
   assert.ok(crm.doors.some((door) => door.title === 'A demo'))
+  assert.match(crm.greeting, /Maya at Northwind/)
   const inbox = startPreview({ start: 'inbox-assistant', companyName: 'Northwind' })
   assert.ok(inbox.doors.some((door) => /inbox/i.test(door.title)))
   assert.ok(inbox.doors.some((door) => /security/i.test(door.title)))
+  assert.match(inbox.greeting, /Jules at Northwind/)
   const hair = startPreview({ start: 'hair-studio', companyName: 'Yuzu', personaName: 'Bella' })
   assert.match(hair.greeting, /Bella/)
   assert.equal(hair.doors.length, 4)

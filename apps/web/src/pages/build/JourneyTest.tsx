@@ -22,6 +22,7 @@ interface ChatLine {
  */
 export function JourneyTest({
   botName,
+  avatarUrl,
   chapters,
   startChapter,
   environmentLabel,
@@ -31,6 +32,7 @@ export function JourneyTest({
   onClose,
 }: {
   botName: string
+  avatarUrl?: string | null
   chapters: JourneyTestChapter[]
   startChapter: string
   environmentLabel: string
@@ -143,7 +145,7 @@ export function JourneyTest({
     <div className="flex h-full w-[360px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--bg-surface)]" data-testid="journey-test">
       <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
         <div className="flex items-center gap-2">
-          <Avatar name={botName} size="xs" />
+          <Avatar name={botName} src={avatarUrl} size="xs" />
           <div>
             <p className="text-[13px] font-semibold text-[var(--text-primary)]">{botName}</p>
             <p className="text-[11px] text-[var(--text-muted)]">This journey · {environmentLabel}</p>
@@ -161,7 +163,7 @@ export function JourneyTest({
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
         {messages.map((line) => (
           <div key={line.id} className={cn('flex gap-2', line.role === 'user' ? 'justify-end' : 'justify-start')}>
-            {line.role === 'assistant' && <Avatar name={botName} size="xs" className="mt-1 shrink-0" />}
+            {line.role === 'assistant' && <Avatar name={botName} src={avatarUrl} size="xs" className="mt-1 shrink-0" />}
             <div
               className={cn(
                 'max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed',

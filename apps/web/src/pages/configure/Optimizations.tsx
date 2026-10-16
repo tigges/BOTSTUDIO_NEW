@@ -325,7 +325,7 @@ function TemplatesFromSites() {
         clusterId: clusterId || preview?.clusterId,
       })
       setPreview(result.data)
-      setSavedNote(`${result.data.title} is in the start wizard under ${START_CLUSTERS.find((item) => item.id === result.data.clusterId)?.title ?? result.data.clusterId}.`)
+      setSavedNote(`${result.data.title} is in the start wizard’s templates, under ${START_CLUSTERS.find((item) => item.id === result.data.clusterId)?.title ?? result.data.clusterId}.`)
     } catch (err: unknown) {
       if (err instanceof Error) setError(err.message)
     } finally {
