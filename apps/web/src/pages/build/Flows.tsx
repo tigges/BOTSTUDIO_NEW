@@ -5,8 +5,6 @@ import { useNavigate } from '@tanstack/react-router'
 import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, useSaveCanvas, useImportStarterPack, useRemoveStarterPack } from '../../lib/hooks'
 import type { CorporatePackResult, PackRemovalResult } from '../../lib/api'
 import { FlowWizard } from './FlowWizard'
-import { LearnFromChats } from './LearnFromChats'
-import { reviewFlow } from './PublishCheck'
 import type { Flow, FlowGraph } from '../../lib/api'
 import { useAppStore } from '../../store/app'
 import { versionForEnvironment } from '@ybot/shared'
@@ -56,31 +54,12 @@ export function FlowsPage() {
   const importPack = useImportStarterPack()
   const removePack = useRemoveStarterPack()
   const environments = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments) ?? NO_ENVIRONMENTS
-  const botName = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.name ?? '')
   const selectedEnv = useAppStore((s) => s.selectedEnv)
   const setEnv = useAppStore((s) => s.setEnv)
   const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((env) => env.kind === s.selectedEnv)?.id ?? '')
-  const envLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
   const shown = (flow: Flow) => versionForEnvironment(flow.versions, environmentId, selectedEnv)
 
-  const flowNames = flows.map((flow) => flow.name)
-  const checked = flows.flatMap((flow) => {
-    const latest = shown(flow)
-    if (!latest?.graph) return []
-    const review = reviewFlow(latest.graph, { flowNames })
-    const open = review.repairs.length + review.blocks.length + review.notes.length
-    if (open === 0) return []
-    return [{ flow, version: latest.version, review }]
-  })
   const filtered = flows.filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
-
-  async function repairStored(flowId: string, version: number, graph: { nodes: unknown[]; edges: unknown[] }) {
-    await saveCanvas.mutateAsync({
-      flowId,
-      version,
-      graph: graph as FlowGraph,
-    })
-  }
 
   function relativeTime(iso: string) {
     const diff = Date.now() - new Date(iso).getTime()
@@ -124,7 +103,7 @@ export function FlowsPage() {
     <div className="flex flex-col h-full">
       <PageHeader
         title="Flows"
-        description="Each flow is one chapter. Publish, rename, and repair them here."
+        description="Each flow is one chapter. Publish, rename, and open them here."
         actions={
           <div className="flex items-center gap-2">
             <Button size="md" variant="secondary" onClick={() => { setPackChoice(null); setPackResult(null); setPackRemoved(null); setConfirmRemove(false); setPackError(''); setShowPack(true) }}>
@@ -138,45 +117,6 @@ export function FlowsPage() {
       />
 
       <div className="flex-1 overflow-auto p-6">
-        <LearnFromChats
-          botName={botName}
-          envLabel={envLabel}
-          environmentId={environmentId}
-          sandboxId={environments.find((env) => env.kind === 'sandbox')?.id ?? ''}
-        />
-        {checked.length > 0 && (
-          <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-4">
-            <p className="text-sm font-medium text-[var(--text-primary)]">Connection check</p>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">
-              This check uses the {envLabel} version. A published flow with a missing line does not run that path. Repair fills the lines that have an obvious fix. The rest need a decision, then a walk-through in Test Bot.
-            </p>
-            <div className="mt-3 flex flex-col gap-3">
-              {checked.map(({ flow, version, review }) => (
-                <div key={flow.id} className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-[var(--text-primary)]">{flow.name}</p>
-                    {review.repairs.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={saveCanvas.isPending}
-                        onClick={() => { void repairStored(flow.id, version, review.graph) }}
-                      >
-                        Repair connections
-                      </Button>
-                    )}
-                  </div>
-                  <ul className="mt-1 space-y-0.5">
-                    {[...review.planned, ...review.blocks, ...review.notes].map((issue, index) => (
-                      <li key={`${issue.code}-${index}`} className="text-xs text-[var(--text-secondary)]">{issue.message}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         <div className="mb-4 flex items-center gap-3">
           <div className="flex-1 max-w-xs">
             <Input
