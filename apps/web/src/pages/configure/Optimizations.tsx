@@ -1,12 +1,8 @@
 /**
  * Configure > Optimizations
  *
- * Shows AI-generated supervised optimisation proposals for the selected bot.
- * Each card displays:
- *   - Title + description + evidence count
- *   - Quality score
- *   - Diff between current and proposed system prompt
- *   - Apply / Dismiss buttons
+ * Learn from chats drafts a shorter chart from sample or rated chats.
+ * Prompt suggestions are supervised system-prompt proposals.
  */
 
 import React, { useState } from 'react'
@@ -20,6 +16,7 @@ import { useOptimizations, useApplyOptimization, useDismissOptimization } from '
 import { useAppStore } from '../../store/app'
 import { cn } from '@ybot/ui'
 import type { TemplateOptimization } from '../../lib/api'
+import { LearnFromChats } from '../build/LearnFromChats'
 
 const SUBNAV = [
   { label: 'Channels',      path: '/configure/channels' },
@@ -195,7 +192,7 @@ export function OptimizationsPage() {
           <div>
             <h1 className="text-base font-semibold text-[var(--text-primary)]">Configure</h1>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
-              AI-generated improvement suggestions based on resolved conversations. All changes are supervised — review before applying.
+              Learn from real chats, then review prompt suggestions. Changes stay supervised — review before they go live.
             </p>
           </div>
           <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => refetch()}>
@@ -206,7 +203,11 @@ export function OptimizationsPage() {
       </div>
 
       <div className="flex-1 overflow-auto p-6">
-        {/* Stats + filter */}
+        <div className="mb-6">
+          <LearnFromChats />
+        </div>
+
+        <p className="mb-3 text-sm font-medium text-[var(--text-primary)]">Prompt suggestions</p>
         <div className="flex items-center gap-4 mb-6 flex-wrap">
           {[
             { label: 'Pending',   value: pending,   key: 'pending',   color: 'text-[var(--accent)]' },
@@ -248,11 +249,11 @@ export function OptimizationsPage() {
               <Sparkles size={32} className="text-[var(--text-muted)]" />
             </div>
             <div>
-              <p className="font-semibold text-[var(--text-primary)] mb-1">No optimizations yet</p>
+              <p className="font-semibold text-[var(--text-primary)] mb-1">No prompt suggestions yet</p>
               <p className="text-sm text-[var(--text-muted)] max-w-sm">
                 {filter === 'pending'
-                  ? 'Optimizations are generated after conversations are resolved with positive CSAT ratings. Resolve some conversations and come back!'
-                  : `No ${filter} optimizations found.`}
+                  ? 'Prompt suggestions appear after conversations are resolved with helpful ratings. Learn from chats above can draft a shorter chart in the meantime.'
+                  : `No ${filter} prompt suggestions.`}
               </p>
             </div>
           </div>

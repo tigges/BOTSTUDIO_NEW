@@ -41,19 +41,18 @@ function cardFromSuggestion(suggestion: LearnSuggestion): LearnCard {
   }
 }
 
-export function LearnFromChats({
-  botName,
-  envLabel,
-  environmentId,
-  sandboxId,
-}: {
-  botName: string
-  envLabel: string
-  environmentId: string
-  sandboxId: string
-}) {
+const NO_ENVIRONMENTS: Array<{ id: string; kind: string; name: string }> = []
+
+export function LearnFromChats() {
   const demo = isDemoMode()
   const bid = useAppStore((s) => s.selectedBotId ?? '')
+  const bot = useAppStore((s) => s.bots.find((item) => item.id === s.selectedBotId))
+  const selectedEnv = useAppStore((s) => s.selectedEnv)
+  const environments = bot?.environments ?? NO_ENVIRONMENTS
+  const botName = bot?.name ?? ''
+  const environmentId = environments.find((env) => env.kind === selectedEnv)?.id ?? ''
+  const sandboxId = environments.find((env) => env.kind === 'sandbox')?.id ?? ''
+  const envLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
   const queryClient = useQueryClient()
   const live = useLearning(demo ? '' : environmentId)
   const [local, setLocal] = useState<LearnSnapshot | null>(null)
@@ -178,7 +177,7 @@ export function LearnFromChats({
   }
 
   return (
-    <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+    <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-4">
       <p className="text-sm font-medium text-[var(--text-primary)]">{botName || 'This bot'} · {envLabel}</p>
       <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">Learn from chats</p>
       <p className="mt-1 text-xs text-[var(--text-muted)]">Sample chats and helpful ratings draft a shorter chart. That draft is the copy guests hear.</p>
