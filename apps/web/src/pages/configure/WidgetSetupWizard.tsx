@@ -1,8 +1,8 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Button } from '@ybot/ui'
 import { Check, Copy, CheckCircle2, ChevronRight, Globe, ArrowLeft, ExternalLink, Sparkles } from 'lucide-react'
 import { cn } from '@ybot/ui'
-import { useCreateChannel } from '../../lib/hooks'
+import { useChannels, useCreateChannel, useUpdateChannel } from '../../lib/hooks'
 import { useAppStore } from '../../store/app'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -199,8 +199,18 @@ interface WidgetSetupWizardProps {
 
 export function WidgetSetupWizard({ onClose }: WidgetSetupWizardProps) {
   const createChannel = useCreateChannel()
+  const updateChannel = useUpdateChannel()
+  const { data: channels = [] } = useChannels()
   const { bots, selectedBotId } = useAppStore()
   const selectedBot = bots.find((b) => b.id === selectedBotId)
+  const productionId = selectedBot?.environments.find((env) => env.kind === 'production')?.id
+  const liveChannel = channels.find((channel) => channel.kind === 'web' && channel.environmentId === productionId)
+    ?? channels.find((channel) => channel.kind === 'web')
+
+  useEffect(() => {
+    if (!liveChannel) return
+    setSiteName((current) => current || liveChannel.name)
+  }, [liveChannel])
 
   const [step, setStep]             = useState<Step>('customize')
   const [siteName, setSiteName]     = useState('')
@@ -231,10 +241,19 @@ export function WidgetSetupWizard({ onClose }: WidgetSetupWizardProps) {
     setCreating(true)
     setCreateError(null)
     try {
-      const state = useAppStore.getState()
-      const currentBots = (state as unknown as { bots: Array<{ id: string; environments: Array<{ id: string }> }> }).bots
-      const currentBot = currentBots?.find((b) => b.id === selectedBotId)
-      const envId = currentBot?.environments?.[0]?.id ?? ''
+      if (liveChannel) {
+        await updateChannel.mutateAsync({
+          id: liveChannel.id,
+          name: siteName.trim(),
+          config: { ...liveChannel.config, title: widgetTitle, accentColor: accent },
+        })
+        setChannelId(liveChannel.id)
+        setStep('install')
+        return
+      }
+      const envId = selectedBot?.environments.find((env) => env.kind === 'production')?.id
+        ?? selectedBot?.environments[0]?.id
+        ?? ''
       if (!envId) {
         setCreateError('No environment found for the selected bot. Please select a bot first.')
         setCreating(false)
@@ -269,7 +288,7 @@ export function WidgetSetupWizard({ onClose }: WidgetSetupWizardProps) {
               onChange={(e) => setSiteName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleCustomizeNext() }}
             />
-            <p className="text-[11px] text-[var(--text-muted)] mt-1">Used as the channel label inside BotStudio only.</p>
+            <p className="text-[11px] text-[var(--text-muted)] mt-1">Website chat is already on. This names the live embed inside BotStudio.</p>
           </div>
 
           <div>

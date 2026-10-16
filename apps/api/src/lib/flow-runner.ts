@@ -56,6 +56,15 @@ function savedQuestion(waiting: unknown): string | undefined {
   return typeof question === 'string' ? question : undefined
 }
 
+/** When the chart is silent, stay on the map instead of handing the turn to RAG. */
+export function silentMapReply(
+  chapters: Array<{ name: string; graph: FlowGraph }>,
+  current?: string,
+): string | undefined {
+  if (chapters.length === 0) return undefined
+  return offerOnMap(chapters, current)
+}
+
 /** A saved session from an older chart may not have flow, global, and contact. */
 export function resumeVariables(raw: unknown, userText: string, contactName: string): SessionVariables {
   const record = asRecord(raw)
@@ -170,7 +179,12 @@ export async function runFlowIfPublished(opts: {
       contactName: named.spoken,
     })
   }
-  if (!first) return { handled: false, messages: [] }
+  if (!first) {
+    const map = await loadChapters()
+    const offer = silentMapReply(map, active.flow.name)
+    if (offer) return { handled: true, messages: [offer], flowName: active.flow.name }
+    return { handled: false, messages: [] }
+  }
 
   let version = active
   let outcome = first
@@ -297,8 +311,13 @@ export async function runFlowIfPublished(opts: {
     }
   }
   if (!visible && !outcome.handover) {
-    await prisma.flowSession.delete({ where: { conversationId } }).catch(() => {})
-    return { handled: false, messages: [] }
+    const map = await loadChapters()
+    const offer = silentMapReply(map, version.flow.name)
+    if (!offer) {
+      await prisma.flowSession.delete({ where: { conversationId } }).catch(() => {})
+      return { handled: false, messages: [] }
+    }
+    outcome = { ...outcome, messages: [offer] }
   }
 
   await prisma.flowSession.upsert({
