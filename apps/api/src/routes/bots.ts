@@ -10,7 +10,9 @@ import {
   bakedPack,
   draftClusteredTemplate,
   draftWebsiteChat,
+  identityFor,
   packFromLearned,
+  personaAvatar,
   type BotStart,
   type ClusterId,
   type LearnedTemplateSpec,
@@ -79,15 +81,21 @@ export async function botsRoutes(app: FastifyInstance) {
       where: { tenantId },
       orderBy: { createdAt: 'desc' },
     })
-    const learned = saved.map((item) => ({
-      id: 'learned' as const,
-      templateId: item.id,
-      clusterId: item.clusterId as ClusterId,
-      title: item.title,
-      body: item.body,
-      tag: item.sourceHost ? `From ${item.sourceHost}` : 'From a site',
-      source: item.sourceHost ? { host: item.sourceHost, note: item.body } : undefined,
-    }))
+    const learned = saved.map((item) => {
+      const identity = identityFor(item.clusterId)
+      return {
+        id: 'learned' as const,
+        templateId: item.id,
+        clusterId: item.clusterId as ClusterId,
+        title: item.title,
+        body: item.body,
+        tag: item.sourceHost ? `From ${item.sourceHost}` : 'From a site',
+        persona: identity.persona,
+        accent: identity.accent,
+        role: identity.role,
+        source: item.sourceHost ? { host: item.sourceHost, note: item.body } : undefined,
+      }
+    })
     return {
       data: {
         clusters: START_CLUSTERS,
@@ -191,7 +199,9 @@ export async function botsRoutes(app: FastifyInstance) {
     if (!(BOT_STARTS as string[]).includes(start)) {
       return reply.status(400).send({ error: { code: 'INVALID_START', message: 'Choose how this bot should start.' } })
     }
-    const personaName = (body.personaName ?? '').trim() || null
+    const identity = identityFor(start)
+    const personaName = (body.personaName ?? '').trim() || identity.persona || null
+    const avatarUrl = personaName ? personaAvatar(personaName, identity.accent) : personaAvatar(name, identity.accent)
     let learnedSpec: LearnedTemplateSpec | null = null
     if (start === 'learned') {
       const templateId = (body.templateId ?? '').trim()
@@ -226,6 +236,7 @@ export async function botsRoutes(app: FastifyInstance) {
         name,
         description: body.description,
         personaName,
+        avatarUrl,
         environments: {
           create: [
             { tenantId, kind: 'sandbox', name: 'Sandbox' },
@@ -238,16 +249,15 @@ export async function botsRoutes(app: FastifyInstance) {
     await ensureWebChannels(tenantId, bot.id)
     await ensureOptionalChannels(tenantId, bot.id, Array.isArray(body.channels) ? body.channels : [])
 
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
     const sandbox = bot.environments.find((env) => env.kind === 'sandbox')
-    const companyName = tenant?.name ?? name
+    const companyName = name
     if (start === 'hair-studio') {
       await installHairStudioPack(tenantId, bot.id, companyName, sandbox?.id ?? null, personaName)
     } else if (start === 'website' && websitePages) {
-      const draft = draftWebsiteChat({ pages: websitePages, companyName: name, personaName })
+      const draft = draftWebsiteChat({ pages: websitePages, companyName, personaName })
       await installWebsiteScan(tenantId, bot.id, draft)
     } else if (start === 'corporate') {
-      await installCorporatePack(tenantId, bot.id, companyName, sandbox?.id ?? null)
+      await installCorporatePack(tenantId, bot.id, companyName, sandbox?.id ?? null, personaName)
       await installStarterFlows(tenantId, bot.id, companyName, sandbox?.id ?? null)
     } else if (start === 'product-support' || start === 'crm-platform' || start === 'inbox-assistant') {
       const pack = bakedPack(start, companyName, personaName)
@@ -281,9 +291,8 @@ export async function botsRoutes(app: FastifyInstance) {
     })
     if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
 
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
     const sandbox = bot.environments.find((env) => env.kind === 'sandbox') ?? bot.environments[0]
-    const result = await install(tenantId, bot.id, tenant?.name ?? bot.name, sandbox?.id ?? null, bot.personaName)
+    const result = await install(tenantId, bot.id, bot.name, sandbox?.id ?? null, bot.personaName)
     return {
       data: {
         ...result,

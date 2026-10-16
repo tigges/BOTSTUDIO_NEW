@@ -5,15 +5,17 @@ import type { ExecutionServices, Session } from '@ybot/runtime'
 import {
   BAKED_TEMPLATES,
   START_CLUSTERS,
+  START_OPTIONS,
   abstractBrand,
   bakedPack,
   draftClusteredTemplate,
+  identityFor,
   inspectFlowGraph,
   pageFromHtml,
+  personaAvatar,
   startPreview,
   suggestCluster,
   templatesInCluster,
-  WIZARD_CHANNELS,
 } from '@ybot/shared'
 
 function session(text: string, name = 'Ada'): Session {
@@ -32,14 +34,34 @@ function session(text: string, name = 'Ada'): Session {
   }
 }
 
-test('the wizard clusters hair and corporate instead of listing them first', () => {
-  assert.deepEqual(START_CLUSTERS.map((item) => item.id), ['hair', 'commerce', 'software', 'crm', 'email', 'custom'])
+test('the wizard starts with scan, blank, and templates — not clusters first', () => {
+  assert.deepEqual(START_OPTIONS.map((item) => item.id), ['template', 'website', 'sample', 'blank'])
+  assert.equal(BAKED_TEMPLATES.some((item) => item.id === 'website' || item.id === 'blank'), false)
   assert.equal(templatesInCluster('hair').some((item) => item.id === 'hair-studio'), true)
   assert.equal(templatesInCluster('commerce').some((item) => item.id === 'corporate'), true)
   assert.equal(templatesInCluster('hair').some((item) => item.id === 'corporate'), false)
   assert.equal(BAKED_TEMPLATES.filter((item) => item.id === 'product-support')[0]?.source?.host, 'cevro.ai')
   assert.equal(BAKED_TEMPLATES.filter((item) => item.id === 'crm-platform')[0]?.source?.host, 'hubspot.com')
   assert.equal(BAKED_TEMPLATES.filter((item) => item.id === 'inbox-assistant')[0]?.source?.host, 'gmail.com')
+  assert.deepEqual(START_CLUSTERS.map((item) => item.id), ['hair', 'commerce', 'software', 'crm', 'email', 'custom'])
+})
+
+test('each template has its own persona, and the company is the bot name', () => {
+  assert.equal(identityFor('hair-studio').persona, 'Bella')
+  assert.equal(identityFor('crm-platform').persona, 'Maya')
+  assert.equal(identityFor('crm').persona, 'Maya')
+  assert.notEqual(identityFor('crm-platform').accent, identityFor('hair-studio').accent)
+  const crm = startPreview({ start: 'crm-platform', companyName: 'test' })
+  assert.match(crm.greeting, /Maya/)
+  assert.match(crm.greeting, /test/)
+  assert.equal(/Bella Hair Studio|Bella/.test(crm.greeting), false)
+  assert.ok(crm.doors.some((door) => door.title === 'Marketing'))
+  const hair = startPreview({ start: 'hair-studio', companyName: 'Yuzu' })
+  assert.match(hair.greeting, /Bella/)
+  assert.match(hair.greeting, /Yuzu/)
+  const avatar = personaAvatar('Maya', identityFor('crm-platform').accent)
+  assert.match(avatar, /^data:image\/svg\+xml/)
+  assert.match(avatar, /M/)
 })
 
 test('crawled brand names come off so the map can sit as a template', () => {
@@ -51,15 +73,6 @@ test('crawled brand names come off so the map can sit as a template', () => {
   assert.equal(suggestCluster('HubSpot CRM pipeline marketing automation'), 'crm')
   assert.equal(suggestCluster('Gmail inbox compose search'), 'email')
   assert.equal(suggestCluster('Ladies wash cut and style at the salon'), 'hair')
-})
-
-test('website chat is on in the wizard; WhatsApp SMS and email are Connect', () => {
-  const byId = Object.fromEntries(WIZARD_CHANNELS.map((item) => [item.id, item.action]))
-  assert.equal(byId['web'], 'on')
-  assert.equal(byId['whatsapp'], 'connect')
-  assert.equal(byId['sms'], 'connect')
-  assert.equal(byId['email'], 'connect')
-  assert.equal(byId['facebook'], 'soon')
 })
 
 test('the software pack from cevro.ai answers without brand names', async () => {
@@ -84,16 +97,44 @@ test('the software pack from cevro.ai answers without brand names', async () => 
   assert.equal(demo.jumpToFlow, 'Book a demo')
 })
 
+test('the CRM pack speaks as Maya at the bot name, not a salon', async () => {
+  const pack = bakedPack('crm-platform', 'test')
+  assert.ok(pack)
+  const blob = JSON.stringify(pack.flows)
+  assert.equal(/Bella Hair Studio|\bBella\b/.test(blob), false)
+  assert.match(blob, /Maya at test/)
+  const welcome = pack.flows.find((flow) => flow.name === pack.welcomeName)!
+  const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
+  const graph = welcome.graph as unknown as FlowGraph
+  const sales = await machine.run(session('sales pipeline'), graph, 'sales pipeline')
+  assert.equal(sales.jumpToFlow, 'Sales')
+  const hello = await machine.run(session('hi', 'there'), graph, 'hi')
+  assert.match(hello.newMessages.map((message) => message.content.text).join('\n'), /Maya at test/)
+})
+
 test('crm and inbox packs keep a visual map of doors', () => {
   const crm = startPreview({ start: 'crm-platform', companyName: 'Northwind' })
   assert.ok(crm.doors.some((door) => door.title === 'Marketing'))
   assert.ok(crm.doors.some((door) => door.title === 'A demo'))
+  assert.ok(crm.doors.some((door) => door.title === 'Contacts'))
+  assert.ok(crm.doors.some((door) => door.title === 'Tickets'))
+  assert.ok(crm.doors.some((door) => door.title === 'Billing'))
+  assert.ok(crm.doors.length >= 12)
+  assert.match(crm.greeting, /Maya at Northwind/)
   const inbox = startPreview({ start: 'inbox-assistant', companyName: 'Northwind' })
   assert.ok(inbox.doors.some((door) => /inbox/i.test(door.title)))
   assert.ok(inbox.doors.some((door) => /security/i.test(door.title)))
+  assert.ok(inbox.doors.some((door) => door.title === 'Labels'))
+  assert.ok(inbox.doors.some((door) => door.title === 'Filters'))
+  assert.ok(inbox.doors.length >= 12)
+  assert.match(inbox.greeting, /Jules at Northwind/)
+  const software = startPreview({ start: 'product-support', companyName: 'Northwind' })
+  assert.ok(software.doors.some((door) => door.title === 'Accounts'))
+  assert.ok(software.doors.some((door) => door.title === 'Pricing'))
+  assert.ok(software.doors.length >= 12)
   const hair = startPreview({ start: 'hair-studio', companyName: 'Yuzu', personaName: 'Bella' })
   assert.match(hair.greeting, /Bella/)
-  assert.equal(hair.doors.length, 4)
+  assert.ok(hair.doors.length >= 8)
 })
 
 test('a vendor homepage becomes a software template with brand names off', () => {
@@ -111,4 +152,9 @@ test('a vendor homepage becomes a software template with brand names off', () =>
   assert.equal(/Cevro/i.test(JSON.stringify(spec.topics)), false)
   assert.ok(spec.topics.some((topic) => topic.flowName === 'Product'))
   assert.ok(spec.topics.some((topic) => topic.flowName === 'Talk to a person'))
+  assert.ok(spec.topics.some((topic) => topic.flowName === 'Accounts'))
+  assert.ok(spec.topics.some((topic) => topic.flowName === 'Pricing'))
+  assert.ok(spec.topics.length >= 12)
+  assert.match(spec.menu, /accounts/i)
+  assert.match(spec.menu, /pricing/i)
 })

@@ -31,8 +31,12 @@ export async function installCorporatePack(
   botId: string,
   companyName: string,
   environmentId: string | null,
+  personaName?: string | null,
 ): Promise<CorporateInstallResult> {
-  return installPlannedPack(tenantId, botId, companyName, environmentId, planCorporateImport)
+  const persona = personaName?.trim() || undefined
+  return installPlannedPack(tenantId, botId, companyName, environmentId, (input) =>
+    planCorporateImport({ ...input, personaName: persona }),
+  )
 }
 
 /** Adds the hair studio pack. A published welcome stays the widget entry. */

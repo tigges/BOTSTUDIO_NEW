@@ -50,24 +50,6 @@ export interface LearnedTemplateSpec {
   sourceHost: string
 }
 
-export interface WizardChannel {
-  id: string
-  label: string
-  body: string
-  action: 'on' | 'connect' | 'soon'
-}
-
-export const WIZARD_CHANNELS: WizardChannel[] = [
-  { id: 'web', label: 'Website chat', body: 'Always on. Test and live walk the journey map.', action: 'on' },
-  { id: 'whatsapp', label: 'WhatsApp', body: 'Connect a WhatsApp Business number.', action: 'connect' },
-  { id: 'sms', label: 'SMS', body: 'Send and receive texts.', action: 'connect' },
-  { id: 'email', label: 'Email', body: 'Receive and reply to mail.', action: 'connect' },
-  { id: 'facebook', label: 'Messenger', body: 'A Facebook Page inbox.', action: 'soon' },
-  { id: 'telegram', label: 'Telegram', body: 'A Telegram bot.', action: 'soon' },
-]
-
-export const CONNECTABLE_CHANNELS = WIZARD_CHANNELS.filter((item) => item.action === 'connect').map((item) => item.id)
-
 const BRANDS: Array<[RegExp, string]> = [
   [/\bCevro(?:\s+AI)?\b/gi, 'the platform'],
   [/\bWinpot\b/gi, 'a customer'],
@@ -281,33 +263,60 @@ const SEEDS: Record<Exclude<ClusterId, 'custom'>, SiteTopic[]> = {
     { flowName: 'Hours', choice: 'Hours', phrases: ['hours', 'open'], question: 'What are your opening hours?', answer: '', blurb: 'When you are open' },
     { flowName: 'Services', choice: 'Services', phrases: ['services', 'prices', 'how much'], question: 'What do you offer?', answer: '', blurb: 'Cuts, colour, prices' },
     { flowName: 'Book an appointment', choice: 'Book', phrases: ['book', 'appointment'], question: 'How do I book?', answer: '', blurb: 'A time, then a confirmation' },
+    { flowName: 'Stylist', choice: 'Stylist', phrases: ['stylist', 'who will do my hair'], question: 'Can I choose my stylist?', answer: '', blurb: 'Ask for someone by name' },
+    { flowName: 'Walk-ins', choice: 'Walk-ins', phrases: ['walk-in', 'walk in'], question: 'Do you take walk-ins?', answer: '', blurb: 'When a chair is free' },
+    { flowName: 'Cancellation', choice: 'Cancel', phrases: ['cancel', 'cancellation'], question: 'How do I cancel?', answer: '', blurb: 'Notice, then a confirmation' },
+    { flowName: 'Gift voucher', choice: 'Voucher', phrases: ['gift voucher', 'gift card'], question: 'Do you sell gift vouchers?', answer: '', blurb: 'Amounts and how long they last' },
   ],
   commerce: [
     { flowName: 'Shipping', choice: 'Shipping', phrases: ['shipping', 'delivery'], question: 'How long does shipping take?', answer: '', blurb: 'Delivery times' },
     { flowName: 'Returns', choice: 'Returns', phrases: ['return', 'refund'], question: 'What is the return policy?', answer: '', blurb: 'How to send something back' },
-    { flowName: 'Orders', choice: 'Orders', phrases: ['order', 'tracking'], question: 'Where is my order?', answer: '', blurb: 'Tracking and status' },
+    { flowName: 'Orders', choice: 'Orders', phrases: ['order', 'tracking', 'where is my order'], question: 'Where is my order?', answer: '', blurb: 'Tracking and status' },
+    { flowName: 'Payments', choice: 'Payments', phrases: ['payment', 'card', 'invoice'], question: 'How do I pay?', answer: '', blurb: 'Cards and invoices' },
+    { flowName: 'Account', choice: 'Account', phrases: ['account', 'login', 'password'], question: 'How do I sign in?', answer: '', blurb: 'Login and a reset' },
+    { flowName: 'Hours', choice: 'Hours', phrases: ['hours', 'open', 'support hours'], question: 'When is support open?', answer: '', blurb: 'When a person replies' },
     { flowName: 'Plans', choice: 'Plans', phrases: ['pricing', 'plans'], question: 'What are the plans?', answer: '', blurb: 'Plans and pricing' },
+    { flowName: 'Warranty', choice: 'Warranty', phrases: ['warranty', 'guarantee', 'broken'], question: 'What is the warranty?', answer: '', blurb: 'What is covered' },
   ],
   software: [
     { flowName: 'Product', choice: 'What we do', phrases: ['product', 'platform', 'what do you do', 'features'], question: 'What does the product do?', answer: '', blurb: 'The product in one line' },
     { flowName: 'Support', choice: 'Support', phrases: ['support', 'help desk', 'queue'], question: 'How does support work?', answer: '', blurb: 'The usual questions, then a person' },
+    { flowName: 'Accounts', choice: 'Accounts', phrases: ['account', 'login', 'password', 'sign in'], question: 'How do accounts and login work?', answer: '', blurb: 'Login, password, locked out' },
     { flowName: 'Payments and identity', choice: 'Payments', phrases: ['payment', 'payout', 'kyc', 'verification', 'identity'], question: 'How do payments and identity checks work?', answer: '', blurb: 'Payouts and checks' },
     { flowName: 'Safety', choice: 'Safety', phrases: ['compliance', 'safety', 'responsible', 'guardrail'], question: 'How do you handle safety?', answer: '', blurb: 'Checks on every reply' },
+    { flowName: 'Onboarding', choice: 'Get started', phrases: ['onboarding', 'get started', 'setup', 'go live'], question: 'How do we get started?', answer: '', blurb: 'Setup, then a first live week' },
     { flowName: 'Integrations', choice: 'Integrations', phrases: ['integration', 'connect', 'api', 'crm'], question: 'What does it connect to?', answer: '', blurb: 'Helpdesks, CRMs, payments' },
+    { flowName: 'Pricing', choice: 'Pricing', phrases: ['pricing', 'how much', 'cost', 'plan'], question: 'What does it cost?', answer: '', blurb: 'Volume, then a quote' },
+    { flowName: 'Status', choice: 'Status', phrases: ['status', 'outage', 'incident', 'downtime'], question: 'Is there an outage?', answer: '', blurb: 'Incidents and downtime' },
+    { flowName: 'API', choice: 'API', phrases: ['api', 'developer', 'docs', 'webhook'], question: 'Is there an API?', answer: '', blurb: 'Docs, webhooks, events' },
     { flowName: 'Book a demo', choice: 'A demo', phrases: ['demo', 'book a demo', 'schedule'], question: 'How do I book a demo?', answer: '', blurb: 'A day, then the team' },
   ],
   crm: [
-    { flowName: 'Marketing', choice: 'Marketing', phrases: ['marketing', 'leads', 'campaign'], question: 'How does marketing work?', answer: '', blurb: 'Leads and campaigns' },
+    { flowName: 'Marketing', choice: 'Marketing', phrases: ['marketing', 'leads', 'campaign', 'forms'], question: 'How does marketing work?', answer: '', blurb: 'Leads, campaigns, forms' },
     { flowName: 'Sales', choice: 'Sales', phrases: ['sales', 'pipeline', 'deals'], question: 'How does sales work?', answer: '', blurb: 'Pipeline and deals' },
     { flowName: 'Service', choice: 'Service', phrases: ['service', 'support', 'retention'], question: 'How does service work?', answer: '', blurb: 'Support and retention' },
+    { flowName: 'Contacts', choice: 'Contacts', phrases: ['contact', 'contacts', 'company record'], question: 'Where do contacts live?', answer: '', blurb: 'People, companies, one record' },
+    { flowName: 'Meetings', choice: 'Meetings', phrases: ['meeting', 'calendar', 'book a meeting'], question: 'How do meetings work?', answer: '', blurb: 'Availability, then a booking' },
+    { flowName: 'Tickets', choice: 'Tickets', phrases: ['ticket', 'tickets', 'case'], question: 'How do tickets work?', answer: '', blurb: 'Open, find, and follow a case' },
+    { flowName: 'Reporting', choice: 'Reporting', phrases: ['report', 'dashboard', 'analytics'], question: 'What can I see in reports?', answer: '', blurb: 'Pipeline, campaigns, tickets' },
+    { flowName: 'Integrations', choice: 'Integrations', phrases: ['integration', 'connect', 'gmail', 'outlook'], question: 'What does it connect to?', answer: '', blurb: 'Mail, calendar, ads, chat' },
     { flowName: 'Plans and pricing', choice: 'Plans', phrases: ['pricing', 'plans', 'free'], question: 'What are the plans?', answer: '', blurb: 'Free tools and paid plans' },
+    { flowName: 'Billing', choice: 'Billing', phrases: ['billing', 'invoice', 'subscription'], question: 'How does billing work?', answer: '', blurb: 'Invoices and the workspace plan' },
+    { flowName: 'Login', choice: 'Login', phrases: ['login', 'sign in', 'password', 'sso'], question: 'How do I sign in?', answer: '', blurb: 'Password, SSO, two-factor' },
     { flowName: 'Book a demo', choice: 'A demo', phrases: ['demo', 'book a demo', 'get a demo'], question: 'How do I book a demo?', answer: '', blurb: 'A walkthrough with the team' },
   ],
   email: [
-    { flowName: 'Inbox', choice: 'Inbox', phrases: ['inbox', 'mail', 'messages'], question: 'How does the inbox work?', answer: '', blurb: 'Catch up on mail' },
-    { flowName: 'Compose', choice: 'Compose', phrases: ['compose', 'write', 'reply', 'draft'], question: 'How do I write a message?', answer: '', blurb: 'Write and reply' },
-    { flowName: 'Search', choice: 'Search', phrases: ['search', 'find', 'look up'], question: 'How do I find a message?', answer: '', blurb: 'Find a thread' },
+    { flowName: 'Inbox', choice: 'Inbox', phrases: ['inbox', 'mail', 'messages', 'unread'], question: 'How does the inbox work?', answer: '', blurb: 'Unread, catch up, summaries' },
+    { flowName: 'Compose', choice: 'Compose', phrases: ['compose', 'write', 'reply', 'draft', 'undo send'], question: 'How do I write a message?', answer: '', blurb: 'Write, reply, undo send' },
+    { flowName: 'Search', choice: 'Search', phrases: ['search', 'find', 'look up'], question: 'How do I find a message?', answer: '', blurb: 'Person, subject, or a detail' },
+    { flowName: 'Labels', choice: 'Labels', phrases: ['label', 'folder', 'star'], question: 'How do labels work?', answer: '', blurb: 'File a thread without losing it' },
+    { flowName: 'Filters', choice: 'Filters', phrases: ['filter', 'rules', 'auto file'], question: 'Can I file mail automatically?', answer: '', blurb: 'Rules as mail arrives' },
+    { flowName: 'Attachments', choice: 'Attachments', phrases: ['attachment', 'file', 'pdf'], question: 'How do attachments work?', answer: '', blurb: 'Files and linked docs' },
     { flowName: 'Security', choice: 'Security', phrases: ['security', 'spam', 'phishing', 'privacy'], question: 'How is mail kept safe?', answer: '', blurb: 'Spam, phishing, privacy' },
+    { flowName: 'Chat and calls', choice: 'Chat', phrases: ['chat', 'meet', 'call', 'video'], question: 'Can I chat or call from here?', answer: '', blurb: 'Chat, calls, and docs' },
+    { flowName: 'Storage', choice: 'Storage', phrases: ['storage', 'quota', 'mailbox full'], question: 'How much space do I have?', answer: '', blurb: 'Quota and a full mailbox' },
+    { flowName: 'Mobile', choice: 'Mobile', phrases: ['mobile', 'phone', 'app', 'offline'], question: 'Does it work on a phone?', answer: '', blurb: 'Phone app and offline' },
+    { flowName: 'Privacy', choice: 'Privacy', phrases: ['privacy', 'ads', 'who can read'], question: 'Who can read my mail?', answer: '', blurb: 'Mail is not used to sell ads' },
   ],
 }
 
@@ -385,7 +394,7 @@ export function draftClusteredTemplate(input: {
     packTag: clusterId === 'custom' ? 'software' : clusterId,
     greeting,
     followUp: `Hi {{contact.name}}. What do you need help with?`,
-    menu: `I can help with ${topics.slice(0, 4).map((topic) => topic.choice.toLowerCase()).join(', ')}, or a person on the team.`,
+    menu: `I can help with ${topics.filter((topic) => topic.flowName !== 'Talk to a person').map((topic) => topic.choice.toLowerCase()).join(', ')}, or a person on the team.`,
     topics,
     sourceUrl: pages[0]?.url ?? '',
     sourceHost: host,

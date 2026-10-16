@@ -79,7 +79,7 @@ export const bots = {
   scanWebsite: (body: { url: string; personaName?: string; companyName?: string }) =>
     apiFetch<{ data: WebsiteScanPreview }>('/bots/scan', { method: 'POST', body: JSON.stringify(body) }),
   startCatalog: () =>
-    apiFetch<{ data: { clusters: Array<{ id: string; title: string; body: string }>; templates: Array<{ id: string; templateId?: string; clusterId: string; title: string; body: string; tag: string; source?: { host: string; note: string } }> } }>('/bots/start-catalog'),
+    apiFetch<{ data: { clusters: Array<{ id: string; title: string; body: string }>; templates: Array<{ id: string; templateId?: string; clusterId: string; title: string; body: string; tag: string; persona?: string; accent?: string; role?: string; source?: { host: string; note: string } }> } }>('/bots/start-catalog'),
   previewSiteTemplate: (body: { url: string; personaName?: string; companyName?: string; clusterId?: string }) =>
     apiFetch<{ data: LearnedSiteTemplate }>('/bots/start-templates/preview', { method: 'POST', body: JSON.stringify(body) }),
   saveSiteTemplate: (body: { url: string; personaName?: string; companyName?: string; clusterId?: string }) =>

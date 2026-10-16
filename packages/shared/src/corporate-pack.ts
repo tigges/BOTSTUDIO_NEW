@@ -204,8 +204,9 @@ function taskFlow(topic: Topic): StarterFlow | undefined {
   return { ...found, publish: true, tags: [...found.tags, 'corporate', 'template'] }
 }
 
-function welcomeFlow(companyName: string, topics: Topic[]): StarterFlow {
+function welcomeFlow(companyName: string, topics: Topic[], personaName?: string): StarterFlow {
   const company = companyLabel(companyName)
+  const voice = personaName?.trim()
   const routes = topics.map((topic) => ({
     handle: handleFor(topic.flowName),
     phrases: topic.phrases,
@@ -217,7 +218,7 @@ function welcomeFlow(companyName: string, topics: Topic[]): StarterFlow {
     tags: ['welcome', 'routing', 'corporate'],
     publish: true,
     graph: greetingWelcomeGraph({
-      greeting: assistantGreeting(company),
+      greeting: voice ? `Hi, I'm ${voice} at ${company}.` : assistantGreeting(company),
       followUp: 'Hi {{contact.name}}. What do you need help with?',
       routes,
       menu: 'I can help with opening hours, shipping, a return, order tracking, payments, a password, plans, or a person on the team. Tell me which one you need.',
@@ -226,9 +227,9 @@ function welcomeFlow(companyName: string, topics: Topic[]): StarterFlow {
   }
 }
 
-export function corporateServicesPack(companyName: string): CorporatePack {
+export function corporateServicesPack(companyName: string, personaName?: string): CorporatePack {
   const topics = topicsFor(companyName)
-  const flows: StarterFlow[] = [welcomeFlow(companyName, topics)]
+  const flows: StarterFlow[] = [welcomeFlow(companyName, topics, personaName)]
   for (const topic of topics) {
     if (topic.kind === 'answer') flows.push(answerFlow(topic))
     else {
@@ -303,8 +304,9 @@ export function planCorporateImport(input: {
   existingIntentNames: string[]
   existingQuestions: string[]
   publishedWelcome: boolean
+  personaName?: string | null
 }): CorporateImportPlan {
-  const pack = corporateServicesPack(input.companyName)
+  const pack = corporateServicesPack(input.companyName, input.personaName?.trim() || undefined)
   const existing = new Set(input.existingFlowNames)
   const flows: PlannedFlow[] = []
   const welcome = pack.flows.find((flow) => flow.name === CORPORATE_WELCOME_NAME)

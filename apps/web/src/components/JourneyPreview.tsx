@@ -10,15 +10,22 @@ export function JourneyPreview({
   greeting,
   doors,
   empty,
+  persona,
+  avatarUrl,
 }: {
   greeting: string
   doors: JourneyPreviewDoor[]
   empty?: string
+  persona?: string
+  avatarUrl?: string
 }) {
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
-        <p className="text-[11px] font-bold text-emerald-800">Visitors start here</p>
+        <div className="flex items-center gap-2">
+          {avatarUrl ? <img src={avatarUrl} alt="" className="h-7 w-7 rounded-full" /> : null}
+          <p className="text-[11px] font-bold text-emerald-800">{persona ? `${persona} starts here` : 'Visitors start here'}</p>
+        </div>
         <p className="mt-1 text-sm text-emerald-950">{greeting}</p>
       </div>
       {doors.length > 0 ? (
@@ -31,7 +38,9 @@ export function JourneyPreview({
             {doors.map((door) => (
               <div key={door.title} className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-2">
                 <p className="text-xs font-semibold text-[var(--text-primary)]">{door.title}</p>
-                <p className="text-[11px] text-[var(--text-muted)]">{door.blurb}</p>
+                <p className="mt-1 rounded-md border border-[var(--border)] bg-white px-1.5 py-0.5 text-[11px] leading-snug text-[var(--text-secondary)]">
+                  {door.blurb}
+                </p>
               </div>
             ))}
           </div>

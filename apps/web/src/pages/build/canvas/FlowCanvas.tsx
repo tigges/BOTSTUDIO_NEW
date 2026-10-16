@@ -147,6 +147,7 @@ export function FlowCanvasPage() {
   const { flowId } = useParams({ from: '/app/build/flows/$flowId' })
   const { from } = useSearch({ from: '/app/build/flows/$flowId' })
   const selectedBotId = useAppStore((s) => s.selectedBotId) ?? 'demo'
+  const selectedBot = useAppStore((s) => s.bots.find((bot) => bot.id === s.selectedBotId))
   const selectedEnv = useAppStore((s) => s.selectedEnv)
   const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((e) => e.kind === s.selectedEnv)?.id ?? '')
   const publishFlow = usePublishFlow()
@@ -648,7 +649,8 @@ export function FlowCanvasPage() {
             <ChatWidget
               key={flowId}
               botId={selectedBotId}
-              botName="Bot Preview"
+              botName={selectedBot?.personaName?.trim() || selectedBot?.name || 'Bot Preview'}
+              avatarUrl={selectedBot?.avatarUrl}
               autoFocus
               flowGraph={previewGraph}
               className="flex-1 rounded-none border-0 shadow-none"
