@@ -2,7 +2,7 @@ import { prisma } from '@ybot/db'
 import { emptyCatalog, type WebsiteChatDraft } from '@ybot/shared'
 import { upsertStudioCatalog } from './studio-catalog.js'
 
-/** Saves the scanned welcome as drafts, plus the pages under Knowledge. Visitors hear it after a Sandbox publish. */
+/** Saves the scanned welcome as the working copy, plus the pages under Knowledge. The widget speaks that copy. */
 export async function installWebsiteScan(tenantId: string, botId: string, draft: WebsiteChatDraft) {
   await upsertStudioCatalog(tenantId, botId, draft.catalog ?? emptyCatalog())
 

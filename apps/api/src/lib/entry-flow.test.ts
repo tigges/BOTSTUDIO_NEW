@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { pickEntry } from './entry-flow.js'
+import { pickEntry, pickWorkingCopy } from './entry-flow.js'
 import { recipesToPropose } from './draft-flows.js'
 import { DRAFT_RECIPES } from './draft-flows.js'
 import { extendWelcomeGraph, withDestination } from './welcome-routes.js'
@@ -12,6 +12,24 @@ test('pickEntry keeps the newest welcome flow in front of a later publish', () =
     { publishedAt: new Date('2026-09-04'), flow: { name: 'Billing', tags: [] } },
   ])
   assert.equal(chosen?.flow.name, 'Welcome & Routing')
+})
+
+test('a draft salon welcome is the working copy when nothing is published', () => {
+  const chosen = pickWorkingCopy([
+    { flowId: 'loc', version: 1, publishedAt: null, flow: { name: 'Location', tags: [] } },
+    { flowId: 'welcome', version: 1, publishedAt: null, flow: { name: 'Salon welcome', tags: ['welcome'] } },
+  ])
+  assert.equal(chosen?.flow.name, 'Salon welcome')
+})
+
+test('a newer draft welcome beats an older published one', () => {
+  const chosen = pickWorkingCopy([
+    { flowId: 'welcome', version: 1, publishedAt: new Date('2026-09-01'), flow: { name: 'Salon welcome', tags: ['welcome'] } },
+    { flowId: 'welcome', version: 2, publishedAt: null, flow: { name: 'Salon welcome', tags: ['welcome'] } },
+    { flowId: 'prices', version: 3, publishedAt: new Date('2026-09-04'), flow: { name: 'Services and prices', tags: [] } },
+  ])
+  assert.equal(chosen?.flow.name, 'Salon welcome')
+  assert.equal(chosen?.version, 2)
 })
 
 test('three password chats propose a draft and a second pass does not', () => {

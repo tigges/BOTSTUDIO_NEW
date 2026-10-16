@@ -28,7 +28,7 @@ function PackResult({ result, pack }: { result: CorporatePackResult; pack: 'corp
         <p>The new answers are published on {result.environmentName}.</p>
       )}
       {draft && (
-        <p>{draftName} is a draft on this list. Publish it in Sandbox when you want the widget to use that greeting.</p>
+        <p>{draftName} is on this list. The widget uses the newest copy of each chapter.</p>
       )}
     </div>
   )
@@ -287,7 +287,7 @@ export function FlowsPage() {
                     : 'This pack greets the visitor and answers the questions customers ask first: hours, shipping, returns, tracking, payments, passwords, plans, and reaching a person. The wording is a benchmark. Edit each message so it matches your business. The guided wizard is how you reshape a flow after that.'}
                 </p>
                 <p className="text-sm text-[var(--text-secondary)]">
-                  The widget says the words in the published flow. The same answers are added under Intents and FAQs. Anything already on this bot stays as it is. Your current welcome stays the one the widget uses. A draft named {packChoice === 'hair-studio' ? 'Salon welcome' : 'Corporate welcome'} is added when you already have a welcome. Publish that draft in Sandbox when you want to try the new greeting. Publish a flow to Production when the live widget should use it.
+                  The widget says the words on the map. The same answers are added under Intents and FAQs. Anything already on this bot stays as it is. Your current welcome stays the one the widget uses. A draft named {packChoice === 'hair-studio' ? 'Salon welcome' : 'Corporate welcome'} is added when you already have a welcome. That draft is the working copy on Sandbox and Production.
                 </p>
                 {packError && <p className="text-xs text-[var(--danger)]">{packError}</p>}
               </>

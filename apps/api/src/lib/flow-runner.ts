@@ -2,8 +2,8 @@
  * flow-runner.ts
  *
  * Integrates the @ybot/runtime SessionMachine with the widget public chat route.
- * The newest published welcome flow is the entry. An execute_flow node jumps
- * into another published flow in the same environment. Session state is stored
+ * The newest saved welcome is the entry. An execute_flow node jumps
+ * into that chapter's newest saved graph. Session state is stored
  * in flow_sessions so a later message resumes the flow the visitor is in.
  */
 
@@ -13,7 +13,7 @@ import type { Session, SessionVariables, FlowGraph } from '@ybot/runtime'
 import { prisma } from '@ybot/db'
 import { CATALOG_ENTITY, catalogFromValues } from '@ybot/shared'
 import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
-import { pickEntry } from './entry-flow.js'
+import { pickWorkingCopy } from './entry-flow.js'
 import { runFlowTurn } from './flow-turn.js'
 import { finishBotLines, nameThanksEndsTurn, saveContactName, takeNameTurn } from './visitor-name.js'
 
@@ -88,7 +88,7 @@ export async function runFlowIfPublished(opts: {
   let fsRecord = await prisma.flowSession.findUnique({ where: { conversationId } })
   let active = fsRecord
     ? await prisma.flowVersion.findUnique({ where: { id: fsRecord.flowVersionId }, include: { flow: true } })
-    : await entryVersion(botId, envId)
+    : await entryVersion(botId)
   if (!active) return { handled: false, messages: [] }
 
   const cfg = await prisma.botConfig.findUnique({ where: { botId } }).catch(() => null)
@@ -113,7 +113,7 @@ export async function runFlowIfPublished(opts: {
   } catch (error) {
     if (!fsRecord) throw error
     await prisma.flowSession.delete({ where: { conversationId } }).catch(() => {})
-    const entry = await entryVersion(botId, envId)
+    const entry = await entryVersion(botId)
     if (!entry) throw error
     fsRecord = null
     active = entry
@@ -134,9 +134,9 @@ export async function runFlowIfPublished(opts: {
   let outcome = first
   if (first.jumpToFlow) {
     const target = await prisma.flowVersion.findFirst({
-      where: { status: 'published', environmentId: envId, flow: { botId, name: first.jumpToFlow } },
+      where: { flow: { botId, name: first.jumpToFlow } },
       include: { flow: true },
-      orderBy: { publishedAt: 'desc' },
+      orderBy: { version: 'desc' },
     })
     if (!target) {
       outcome = {
@@ -250,12 +250,12 @@ export async function runFlowIfPublished(opts: {
   }
 }
 
-async function entryVersion(botId: string, environmentId: string) {
+async function entryVersion(botId: string) {
   const versions = await prisma.flowVersion.findMany({
-    where: { status: 'published', environmentId, flow: { botId } },
+    where: { flow: { botId } },
     include: { flow: true },
   })
-  return pickEntry(versions)
+  return pickWorkingCopy(versions)
 }
 
 async function runVersion(opts: {
