@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { environmentsNeedingGraph, environmentsToRefresh, isShopWelcomeGraph } from './bella-salon-sync.js'
+import {
+  environmentsNeedingGraph,
+  environmentsToRefresh,
+  isShopWelcomeGraph,
+  isUniqueConstraint,
+  retryOnUnique,
+} from './bella-salon-sync.js'
 
 test('the shop welcome is the retail menu, not the salon greeting', () => {
   assert.equal(isShopWelcomeGraph('Welcome & Routing', { text: 'I can help with an order, a return, billing' }), true)
@@ -36,5 +42,27 @@ test('a published learning route is left in place on that environment', () => {
       { environmentId: 'production', graph: { nodes: [{ id: 'old' }] } },
     ], ['sandbox', 'production']),
     ['production'],
+  )
+})
+
+test('a unique version clash is retried and then kept', async () => {
+  assert.equal(isUniqueConstraint({ code: 'P2002' }), true)
+  assert.equal(isUniqueConstraint({ code: 'P2003' }), false)
+  assert.equal(isUniqueConstraint('boom'), false)
+
+  let n = 0
+  const value = await retryOnUnique(async () => {
+    n += 1
+    if (n === 1) throw Object.assign(new Error('clash'), { code: 'P2002' })
+    return 'ok'
+  })
+  assert.equal(value, 'ok')
+  assert.equal(n, 2)
+
+  await assert.rejects(
+    () => retryOnUnique(async () => {
+      throw Object.assign(new Error('foreign'), { code: 'P2003' })
+    }),
+    /foreign/,
   )
 })

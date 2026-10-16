@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test'
-import { expectNoCrash, labEmail, labPassword, signIn } from '../helpers'
+import { expectNoCrash, labEmail, labPassword, signIn, useSandbox } from '../helpers'
 
 test('QA Lab saves a contact, a ticket, and a flow', async ({ page }) => {
   test.setTimeout(120_000)
   await signIn(page, labEmail, labPassword)
+  await useSandbox(page)
 
   await page.goto('/inbox/contacts')
   if (await page.getByText('QA Scratch Contact').count() === 0) {
@@ -31,12 +32,13 @@ test('QA Lab saves a contact, a ticket, and a flow', async ({ page }) => {
     await page.getByRole('button', { name: 'Guided' }).click()
     await page.getByLabel('Name').fill('QA Scratch Flow')
     await page.getByRole('dialog').getByRole('button', { name: 'Create flow' }).click()
-    await expect(page.getByRole('button', { name: 'Save' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled()
     await page.getByRole('button', { name: 'Save' }).click()
   } else {
     await scratch.click()
   }
   await expect(page.getByText('QA Scratch Flow').first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled()
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page.getByText('saved', { exact: true })).toBeVisible()
   const flowId = new URL(page.url()).pathname.split('/').pop()

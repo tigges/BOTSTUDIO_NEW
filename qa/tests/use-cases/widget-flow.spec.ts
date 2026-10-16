@@ -26,7 +26,7 @@ test('a widget flow is processed and shows in the inbox and on the dashboard', {
   const body = await chat.text()
   expect(body).not.toContain('outside our working hours')
   expect(body).toMatch(/Hi, I'm Bella at Bella Hair Studio/)
-  expect(body).not.toContain("What's your name?")
+  expect(body).toContain("What's your name?")
   const conversationId = body.match(/"conversationId":"([^"]+)"/)?.[1]
   expect(conversationId).toBeTruthy()
 
