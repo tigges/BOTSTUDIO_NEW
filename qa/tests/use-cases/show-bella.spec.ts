@@ -10,8 +10,8 @@ test('show the Bella Hair Studio journey', { tag: '@smoke' }, async ({ page }) =
   await expect(page.locator('[data-chapter="Book an appointment"]')).toBeVisible()
   await expect(page.locator('[data-chapter="Services and prices"]')).toBeVisible()
   await expect(page.locator('[data-chapter="Salon hours"]')).toBeVisible()
-  await expect(page.getByText("Hi, I'm Bella at Bella Hair Studio.").first()).toBeVisible()
-  await expect(page.getByText("What's your name?").first()).toBeVisible()
+  // Design chips clip the spoken line, so the name question is not on this map.
+  await expect(page.locator('[data-chapter="Salon welcome"]').getByText("Hi, I'm Bella at Bella Hair Studio.")).toBeVisible()
   await expectStudioUnchanged(page)
 
   await page.locator('[data-chapter="Salon welcome"]').getByRole('button').first().click()
