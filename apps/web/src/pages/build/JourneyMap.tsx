@@ -102,13 +102,13 @@ function Chart({
           </Button>
         </div>
       )}
-      {automations.map((name) => (
+      {[...new Set([...chapter.workflows, ...automations])].map((name) => (
         <Link
           key={name}
           to="/build/workflows"
           className="mt-2 block text-[11px] font-medium text-amber-800"
         >
-          Automation · {name}
+          Workflow · {name}
         </Link>
       ))}
     </div>

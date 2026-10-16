@@ -2,9 +2,29 @@ import { prisma } from '@ybot/db'
 import { emptyCatalog, type WebsiteChatDraft } from '@ybot/shared'
 import { upsertStudioCatalog } from './studio-catalog.js'
 
+async function upsertBookingWorkflow(tenantId: string, botId: string, draft: WebsiteChatDraft) {
+  const booking = draft.booking
+  if (!booking) return
+  const found = await prisma.automationRule.findFirst({ where: { tenantId, botId, name: booking.label } })
+  const data = {
+    description: `After a booking is confirmed in chat, ${booking.label} is the diary. A later connection can send the confirmed booking instead of sending the guest there.`,
+    trigger: 'ticket.created',
+    conditions: 'Book an appointment',
+    actions: [`Open ${booking.label}`],
+  }
+  if (found) {
+    await prisma.automationRule.update({ where: { id: found.id }, data })
+    return
+  }
+  await prisma.automationRule.create({
+    data: { tenantId, botId, name: booking.label, ...data, status: 'draft' },
+  })
+}
+
 /** Saves the scanned welcome as the working copy, plus the pages under Knowledge. The widget speaks that copy. */
 export async function installWebsiteScan(tenantId: string, botId: string, draft: WebsiteChatDraft) {
   await upsertStudioCatalog(tenantId, botId, draft.catalog ?? emptyCatalog())
+  await upsertBookingWorkflow(tenantId, botId, draft)
 
   for (const starter of draft.flows) {
     const found = await prisma.flow.findFirst({ where: { tenantId, botId, name: starter.name } })

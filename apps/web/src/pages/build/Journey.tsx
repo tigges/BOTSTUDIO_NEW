@@ -106,11 +106,14 @@ export function JourneyPage() {
   }, [named])
 
   function automationsFor(chapterName: string): string[] {
-    if (chapterName.trim().length < 4) return []
     const needle = chapterName.toLowerCase()
     return workflows.flatMap((workflow) => {
-      const blob = `${workflow.name} ${workflow.description ?? ''}`.toLowerCase()
-      return blob.includes(needle) ? [workflow.name] : []
+      const blob = `${workflow.name} ${workflow.description ?? ''} ${workflow.conditions ?? ''}`.toLowerCase()
+      if (blob.includes(needle) && needle.length >= 4) return [workflow.name]
+      if (/book/i.test(chapterName) && /phorest|fresha|booksy|calendly|vagaro/i.test(workflow.name)) {
+        return [workflow.name]
+      }
+      return []
     })
   }
 

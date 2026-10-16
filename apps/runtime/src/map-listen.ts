@@ -43,7 +43,16 @@ function nodeById(graph: FlowGraph): Map<string, GraphNode> {
   return new Map(graph.nodes.map((node) => [node.id, node]))
 }
 
-/** Phrases that stay on this chart, not the doors that leave it. */
+const INSIDE_ANSWERS = new Set([
+  'yes', 'yeah', 'yep', 'no', 'nope', 'ok', 'okay', 'please', 'both',
+])
+
+function keepOpenPhrase(phrase: string): boolean {
+  const needle = phrase.toLowerCase().trim()
+  return Boolean(needle) && needle.length >= 3 && !INSIDE_ANSWERS.has(needle)
+}
+
+/** Phrases that stay on this chart, not the doors that leave it, and not yes/no answers inside the walk. */
 export function phrasesFromGraph(graph: FlowGraph, extra: string[] = []): string[] {
   const nodes = nodeById(graph)
   const phrases = [...extra]
@@ -52,7 +61,7 @@ export function phrasesFromGraph(graph: FlowGraph, extra: string[] = []): string
       const edge = outgoing(graph, node.id).find((item) => item.sourceHandle === route.handle)
       const target = jumpName(nodes.get(edge?.target ?? ''))
       if (target) continue
-      phrases.push(...route.phrases)
+      phrases.push(...route.phrases.filter(keepOpenPhrase))
     }
   }
   return phrases
@@ -177,6 +186,19 @@ export function shapeTurn(text: string, chapter?: string): string {
   return spoken
 }
 
+const COLOUR_SERVICE = /\b(colou?rs?|highlights?|balayage|foiliage)\b/i
+const PRICE_ASK = /\b(how much|price|prices|cost|pricing)\b/i
+const OFFER_ASK = /\b(offer|offers|discount|promo|%|tuesday|wednesday|thursday|friday|monday|saturday|sunday)\b/i
+
+/** A colour service word without a price or offer ask belongs on Book, not Offers. */
+export function colourWantsBooking(text: string): boolean {
+  const heard = text.trim()
+  if (!COLOUR_SERVICE.test(heard)) return false
+  if (PRICE_ASK.test(heard)) return false
+  if (OFFER_ASK.test(heard)) return false
+  return true
+}
+
 /**
  * Hear a chapter from the whole map: its name, the words that open it, and catalog facts.
  * The welcome is a hub, not a destination.
@@ -189,6 +211,10 @@ export function listenForChapter(input: {
 }): string | undefined {
   const heard = input.text.trim()
   if (!heard || isSmallTalk(heard)) return undefined
+  const book = input.chapters.find((chapter) => chapter.name === 'Book an appointment')
+  if (book && colourWantsBooking(heard)) {
+    return book.name === input.current ? undefined : book.name
+  }
   const withFacts: TopicRoute[] = []
   const withoutFacts: TopicRoute[] = []
   for (const chapter of input.chapters) {

@@ -6,8 +6,10 @@
  * Rosewood Lane address stay in the hair studio template.
  */
 
+import { bookAppointmentFlow } from './booking-walk.js'
 import type { CatalogFact, StudioCatalog } from './catalog.js'
 import { emptyCatalog } from './catalog.js'
+import { BOOKING_HOSTS, namedLink } from './chat-links.js'
 import { catalogLookupFlow, SALON_WELCOME_NAME } from './salon-pack.js'
 import type { StarterFlow } from './flow-templates.js'
 
@@ -50,6 +52,7 @@ export interface WebsiteChatDraft {
   intents: Array<{ name: string; description: string; utterances: string[]; responses: Array<{ text: string }> }>
   documents: Array<{ title: string; url: string; content: string }>
   catalog: StudioCatalog
+  booking: { url: string; label: string } | null
 }
 
 const DOORS: Array<{ flowName: string; title: string; phrases: string[]; question: string }> = [
@@ -74,21 +77,9 @@ const DOORS: Array<{ flowName: string; title: string; phrases: string[]; questio
   {
     flowName: 'Book an appointment',
     title: 'Book',
-    phrases: ['book', 'booking', 'book an appointment', 'appointment', 'make an appointment'],
+    phrases: ['book', 'booking', 'book an appointment', 'appointment', 'make an appointment', 'colour', 'color', 'highlights', 'balayage'],
     question: 'How do I book an appointment?',
   },
-]
-
-const BOOKING_HOSTS: Array<{ host: string; label: string }> = [
-  { host: 'phorest.com', label: 'Phorest' },
-  { host: 'fresha.com', label: 'Fresha' },
-  { host: 'booksy.com', label: 'Booksy' },
-  { host: 'calendly.com', label: 'Calendly' },
-  { host: 'setmore.com', label: 'Setmore' },
-  { host: 'simplybook.me', label: 'SimplyBook' },
-  { host: 'vagaro.com', label: 'Vagaro' },
-  { host: 'squareup.com', label: 'Square' },
-  { host: 'square.site', label: 'Square' },
 ]
 
 function decodeHtml(value: string): string {
@@ -569,6 +560,15 @@ function conversationFlow(input: {
 
 const STOP_WORDS = new Set(['much', 'what', 'when', 'where', 'your', 'with', 'from', 'that', 'this', 'have', 'does', 'about', 'want', 'would', 'could', 'please'])
 
+/** Offer phrases keep the day and the deal, not the service word that belongs on Book. */
+function phrasesForOffer(line: string): string[] {
+  const day = line.match(/Every\s+(\w+)/i)?.[1]?.toLowerCase()
+  const phrases = ['offer', 'offers', 'discount', 'special', 'promo']
+  if (day) phrases.push(day, `every ${day}`)
+  if (/%/.test(line) || /\boff\b/i.test(line)) phrases.push('percent off', 'half price')
+  return uniquePhrases(phrases.filter((phrase) => !/\b(colour|color|cut|blow|wash|service)\b/i.test(phrase)))
+}
+
 function phrasesForLabel(label: string): string[] {
   const clean = label.toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim()
   const phrases = clean.length >= 4 && clean !== 'cut' ? [clean] : []
@@ -935,7 +935,7 @@ export function draftWebsiteChat(input: {
       ? (firstSay(services[0]!) || 'The pages did not state prices.')
       : 'The pages did not state prices.'
   const bookAnswer = booking
-    ? `Book on ${booking.label}: ${booking.url}`
+    ? `I'll confirm the booking in this chat and by text. You can also open it on ${namedLink(booking.label, booking.url)}.`
     : 'The pages did not show a booking link. The studio can confirm a time in this chat.'
 
   const core = DOORS.map((spec) => spec.flowName)
@@ -1010,7 +1010,7 @@ export function draftWebsiteChat(input: {
       again: 'Shall we book?',
       spokes: offers.map((line) => ({
         title: line.match(/Every\s+(\w+)/i)?.[1] ?? 'Offer',
-        phrases: phrasesForLabel(line.split('.')[0] ?? line),
+        phrases: phrasesForOffer(line),
         say: line,
       })),
       book: true,
@@ -1047,7 +1047,7 @@ export function draftWebsiteChat(input: {
   doors.push({
     title: 'Book',
     flowName: 'Book an appointment',
-    blurb: booking ? `Booking opens on ${booking.label}.` : 'The pages did not show a booking link.',
+    blurb: booking ? `Workflow · ${booking.label}. Confirmed in chat, then ${booking.label}.` : 'The pages did not show a booking link.',
     answer: bookAnswer,
     found: Boolean(booking),
     phrases: DOORS[3]?.phrases ?? [],
@@ -1121,10 +1121,15 @@ export function draftWebsiteChat(input: {
       if (door.flowName === 'Salon hours' && hours) {
         return lookupDoor('Salon hours', 'hours', 'Are you after the opening hours?', 'Shall I book a time?')
       }
-      if (door.flowName === 'Book an appointment' && !booking) {
-        return answerFlow(door.flowName, door.answer, {
-          subject: 'Booking request',
-          description: '{{topic}} {{request}}',
+      if (door.flowName === 'Book an appointment') {
+        return bookAppointmentFlow({
+          publish: false,
+          tags: ['website', 'booking'],
+          description: booking
+            ? `Qualifies a colour or cut, then confirms in chat and by text. ${booking.label} is the diary workflow.`
+            : 'Qualifies a colour or cut, then confirms in chat and by text.',
+          booking,
+          timeQuestion: 'When would suit you?',
         })
       }
       return answerFlow(door.flowName, door.answer)
@@ -1166,6 +1171,7 @@ export function draftWebsiteChat(input: {
       content: page.text.slice(0, 20_000),
     })),
     catalog,
+    booking,
   }
 }
 
@@ -1234,7 +1240,7 @@ function catalogFromScan(input: {
       id: slugHandle(line.match(/Every\s+(\w+)/i)?.[1] ?? 'offer', used),
       kind: 'offer',
       title: line.match(/Every\s+(\w+)/i)?.[1] ?? 'Offer',
-      phrases: phrasesForLabel(line.split('.')[0] ?? line),
+      phrases: phrasesForOffer(line),
       fact: line,
       source: 'Offers',
     })

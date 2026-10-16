@@ -3,6 +3,8 @@
  * A graph with no greeting is not a map.
  */
 
+import { chatPlain } from './chat-links.js'
+
 interface MapNode {
   id: string
   position?: { x?: number; y?: number }
@@ -94,7 +96,7 @@ export function spokenLines(graph: unknown, limit = 5): string[] {
   for (const node of parsed.nodes) {
     const kind = node.data?.kind ?? ''
     if (kind !== 'send_message' && kind !== 'ask_question') continue
-    const line = spoken(node).replace(/\{\{[^}]+\}\}/g, '').replace(/\s+/g, ' ').trim()
+    const line = chatPlain(spoken(node).replace(/\{\{[^}]+\}\}/g, '').replace(/\s+/g, ' ').trim())
     if (!line) continue
     lines.push(line)
     if (lines.length >= limit) break

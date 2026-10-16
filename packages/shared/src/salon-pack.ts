@@ -6,8 +6,8 @@
  * salon can answer from the first minute and then edit the lines.
  */
 
+import { bookAppointmentFlow } from './booking-walk.js'
 import type { CatalogFact, StudioCatalog } from './catalog.js'
-import { NAME_QUESTION } from './contact-speech.js'
 import type { StarterFlow } from './flow-templates.js'
 
 export const HAIR_STUDIO_PACK_ID = 'hair-studio'
@@ -334,115 +334,19 @@ const TIME_PREFERENCE = 'Would Saturday morning or a weekday after 5 suit you? T
 const ARRIVE = 'Please arrive about 10 minutes early. We are at 14 Rosewood Lane. See you soon, {{contact.name}}.'
 const NOTICE = "We need at least 24 hours' notice to cancel or move the appointment."
 
-const COLOUR_ROUTE = {
-  handle: 'colour',
-  phrases: ['going lighter', 'go lighter', 'lighter', 'highlights', 'balayage', 'box dye', 'henna', 'a colour', 'a color', 'colour', 'color', 'first visit', 'first time', 'not been', 'never been', 'not sure', 'unsure'],
-}
-const CUT_ROUTE = {
-  handle: 'cut',
-  phrases: ['haircut', 'a cut', 'a trim', 'trim', 'fringe'],
-}
-const TREATMENT_ROUTE = {
-  handle: 'treatment',
-  phrases: ['skin scrub', 'keratin', 'a treatment', 'treatment'],
-}
-const CONSULT_ROUTE = {
-  handle: 'consult',
-  phrases: ['consultation'],
-}
-
 function ask(id: string, x: number, y: number, label: string, question: string, variable: string) {
   return { id, type: 'flow-node', position: { x, y }, data: { kind: 'ask_question', label, config: { question, variable } } }
 }
 
-function say(id: string, x: number, y: number, label: string, text: string) {
-  return { id, type: 'flow-node', position: { x, y }, data: { kind: 'send_message', label, config: { text } } }
-}
-
 function bookFlow(topic: Topic): StarterFlow {
-  const serviceRoutes = [COLOUR_ROUTE, CUT_ROUTE, TREATMENT_ROUTE, CONSULT_ROUTE]
-  const y = 80
-  const nodes: object[] = [
-    { id: 'b-start', type: 'flow-node', position: { x: 40, y }, data: { kind: 'trigger_start', label: 'Book', config: {} } },
-    { id: 'b-save', type: 'flow-node', position: { x: 260, y }, data: { kind: 'set_variable', label: 'Keep the request', config: { variable: 'topic', value: '{{_last_user_message}}' } } },
-    say('b-ack', 500, y, 'Acknowledge', 'I can book that.'),
-    { id: 'b-named', type: 'flow-node', position: { x: 740, y }, data: { kind: 'condition', label: 'Name known?', config: { conditions: [{ field: 'contact.name', operator: 'equals', value: 'there' }] } } },
-    ask('b-name', 760, y - 160, 'Name', NAME_QUESTION, 'guest_name'),
-    { id: 'b-route', type: 'flow-node', position: { x: 1020, y }, data: { kind: 'route_topic', label: 'What they want', config: { routes: serviceRoutes } } },
-    ask('b-want', 1280, y + 280, 'Ask what they want', 'What would you like done? A cut, colour, or something else is fine, and not sure is fine too.', 'request'),
-    { id: 'b-route2', type: 'flow-node', position: { x: 1540, y: y + 280 }, data: { kind: 'route_topic', label: 'Route the answer', config: { routes: serviceRoutes } } },
-    say('b-more', 1800, y + 420, 'Ask again', 'Tell me a little more about what you would like, even if you are not sure.'),
-    { id: 'b-end', type: 'flow-node', position: { x: 2720, y: 520 }, data: { kind: 'end_flow', label: 'End', config: {} } },
-    ask('b-history', 1280, y - 280, 'Hair history', 'What colour is your hair now, and have you used box dye or henna?', 'hair_history'),
-    ask('b-heard', 1520, y - 280, 'How they found us', 'How did you hear about us?', 'heard'),
-    ask('b-photo', 1760, y - 280, 'Photos', 'Can you send a photo of your hair now, and any looks you like? A description is fine too.', 'photo_note'),
-    ask('b-colour-time', 2000, y - 280, 'Colour time', `The next step is a free 15-minute consultation. If we are doing colour, you will need a patch test at least 48 hours before. ${TIME_PREFERENCE}`, 'preferred_time'),
-    ask('b-email', 2240, y - 280, 'Email', `If a deposit is needed, the studio will send a secure link. Please do not send card details in this chat. ${NOTICE} What email should the receipt go to?`, 'email'),
-    ask('b-addon', 2480, y - 280, 'Add-on', 'Would you like a bond-building treatment as well? No is completely fine.', 'addon'),
-    say('b-close', 2720, y - 280, 'Close', ARRIVE),
-    { id: 'b-ticket', type: 'flow-node', position: { x: 2480, y: 520 }, data: { kind: 'create_ticket', label: 'Inbox', config: { subject: 'Booking for {{preferred_time}}', description: '{{topic}} for {{preferred_time}}' } } },
-    ask('b-been', 1280, y + 40, 'Been before?', 'Have you been to us before?', 'been_before'),
-    { id: 'b-been-route', type: 'flow-node', position: { x: 1520, y: y + 40 }, data: { kind: 'route_topic', label: 'New or returning', config: { routes: [
-      { handle: 'returning', phrases: ['i have been', "i've been", 'been in before', 'regular', 'returning', 'yes i have'] },
-      { handle: 'first', phrases: ['first time', 'first visit', 'never been', 'not been', 'not yet', "haven't", 'have not', 'new here'] },
-    ] } } },
-    ask('b-return-time', 1800, y + 40, 'Cut time', TIME_PREFERENCE, 'preferred_time'),
-    say('b-return-close', 2060, y + 40, 'Cut close', `I have noted a cut for {{preferred_time}}. ${topic.answer} ${NOTICE} ${ARRIVE}`),
-    ask('b-cut-hope', 1800, y + 200, 'The cut', 'What are you hoping for with the cut?', 'cut_hope'),
-    ask('b-cut-photo', 2060, y + 200, 'Cut photo', 'Can you send a photo of your hair now, and any looks you like? A description is fine too.', 'photo_note'),
-    ask('b-cut-time', 2320, y + 200, 'First cut time', `We can start with a free 15-minute chat about the cut. ${TIME_PREFERENCE}`, 'preferred_time'),
-    say('b-cut-close', 2580, y + 200, 'First cut close', `I have noted a cut for {{preferred_time}}. ${topic.answer} ${NOTICE} ${ARRIVE}`),
-    ask('b-treat-time', 1280, y + 480, 'Treatment time', TIME_PREFERENCE, 'preferred_time'),
-    say('b-treat-close', 1540, y + 480, 'Treatment close', `I have noted {{request}} for {{preferred_time}}. ${topic.answer} ${NOTICE} ${ARRIVE}`),
-    { id: 'b-consult', type: 'flow-node', position: { x: 1280, y: y + 640 }, data: { kind: 'execute_flow', label: 'Consultation', config: { flowName: 'Consultation' } } },
-  ]
-  const edges: object[] = [
-    { id: 'e-start', source: 'b-start', target: 'b-save' },
-    { id: 'e-save', source: 'b-save', target: 'b-ack' },
-    { id: 'e-ack', source: 'b-ack', target: 'b-named' },
-    { id: 'e-named-yes', source: 'b-named', target: 'b-name', sourceHandle: 'yes' },
-    { id: 'e-named-no', source: 'b-named', target: 'b-route', sourceHandle: 'no' },
-    { id: 'e-name', source: 'b-name', target: 'b-route' },
-    { id: 'e-colour', source: 'b-route', target: 'b-history', sourceHandle: 'colour' },
-    { id: 'e-cut', source: 'b-route', target: 'b-been', sourceHandle: 'cut' },
-    { id: 'e-treatment', source: 'b-route', target: 'b-treat-time', sourceHandle: 'treatment' },
-    { id: 'e-consult', source: 'b-route', target: 'b-consult', sourceHandle: 'consult' },
-    { id: 'e-other', source: 'b-route', target: 'b-want', sourceHandle: 'other' },
-    { id: 'e-want', source: 'b-want', target: 'b-route2' },
-    { id: 'e2-colour', source: 'b-route2', target: 'b-history', sourceHandle: 'colour' },
-    { id: 'e2-cut', source: 'b-route2', target: 'b-been', sourceHandle: 'cut' },
-    { id: 'e2-treatment', source: 'b-route2', target: 'b-treat-time', sourceHandle: 'treatment' },
-    { id: 'e2-consult', source: 'b-route2', target: 'b-consult', sourceHandle: 'consult' },
-    { id: 'e2-other', source: 'b-route2', target: 'b-more', sourceHandle: 'other' },
-    { id: 'e-more', source: 'b-more', target: 'b-end' },
-    { id: 'e-history', source: 'b-history', target: 'b-heard' },
-    { id: 'e-heard', source: 'b-heard', target: 'b-photo' },
-    { id: 'e-photo', source: 'b-photo', target: 'b-colour-time' },
-    { id: 'e-colour-time', source: 'b-colour-time', target: 'b-email' },
-    { id: 'e-email', source: 'b-email', target: 'b-addon' },
-    { id: 'e-addon', source: 'b-addon', target: 'b-close' },
-    { id: 'e-close', source: 'b-close', target: 'b-ticket' },
-    { id: 'e-ticket', source: 'b-ticket', target: 'b-end' },
-    { id: 'e-been', source: 'b-been', target: 'b-been-route' },
-    { id: 'e-returning', source: 'b-been-route', target: 'b-return-time', sourceHandle: 'returning' },
-    { id: 'e-first', source: 'b-been-route', target: 'b-cut-hope', sourceHandle: 'first' },
-    { id: 'e-been-other', source: 'b-been-route', target: 'b-cut-hope', sourceHandle: 'other' },
-    { id: 'e-return-time', source: 'b-return-time', target: 'b-return-close' },
-    { id: 'e-return-close', source: 'b-return-close', target: 'b-ticket' },
-    { id: 'e-cut-hope', source: 'b-cut-hope', target: 'b-cut-photo' },
-    { id: 'e-cut-photo', source: 'b-cut-photo', target: 'b-cut-time' },
-    { id: 'e-cut-time', source: 'b-cut-time', target: 'b-cut-close' },
-    { id: 'e-cut-close', source: 'b-cut-close', target: 'b-ticket' },
-    { id: 'e-treat-time', source: 'b-treat-time', target: 'b-treat-close' },
-    { id: 'e-treat-close', source: 'b-treat-close', target: 'b-ticket' },
-  ]
-  return {
-    name: topic.flowName,
-    description: 'Books a cut, colour, or treatment. The studio confirms the exact time. Edit the lines to match your salon.',
-    tags: ['salon', 'template', 'booking'],
+  return bookAppointmentFlow({
     publish: true,
-    graph: { nodes, edges },
-  }
+    tags: ['salon', 'template', 'booking'],
+    description: 'Qualifies a colour, then a cut with it, a stylist, a time, and a mobile so the studio can confirm in chat. Edit the lines to match your salon.',
+    timeQuestion: TIME_PREFERENCE,
+    confirmExtra: `${topic.answer} ${NOTICE} ${ARRIVE}`,
+    salonBranches: true,
+  })
 }
 
 function cancelFlow(topic: Topic): StarterFlow {

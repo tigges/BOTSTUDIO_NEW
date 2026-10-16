@@ -209,7 +209,7 @@ export async function runJourneyPreview(input: {
       continue
     }
 
-    if (chapterName === originChapter && !opening && heard && !isSmallTalk(heard)) {
+    if (chapterName === originChapter && !opening && heard && !isSmallTalk(heard) && !/^book/i.test(chapterName)) {
       const nextName = listenForChapter({
         chapters: input.chapters,
         catalog: input.catalog,

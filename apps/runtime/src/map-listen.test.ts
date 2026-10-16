@@ -17,6 +17,9 @@ test('a service word opens prices, not the welcome', () => {
   assert.equal(listenForChapter({ chapters, catalog, text: 'cut', current: 'Salon welcome' }), 'Services and prices')
   assert.equal(listenForChapter({ chapters, catalog, text: 'services', current: 'Salon hours' }), 'Services and prices')
   assert.equal(listenForChapter({ chapters, catalog, text: 'book a haircut', current: 'Salon welcome' }), 'Book an appointment')
+  assert.equal(listenForChapter({ chapters, catalog, text: 'colour', current: 'Salon welcome' }), 'Book an appointment')
+  assert.equal(listenForChapter({ chapters, catalog, text: 'color', current: 'Offers' }), 'Book an appointment')
+  assert.equal(listenForChapter({ chapters, catalog, text: 'how much is colour', current: 'Salon welcome' }), 'Services and prices')
   assert.equal(listenForChapter({ chapters, catalog, text: 'hi', current: 'Salon welcome' }), undefined)
 })
 

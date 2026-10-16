@@ -230,7 +230,7 @@ export async function runFlowIfPublished(opts: {
         }
       }
     }
-  } else if (!isSmallTalk(userText)) {
+  } else if (!isSmallTalk(userText) && !/^book/i.test(version.flow.name)) {
     const map = await loadChapters()
     const nextName = listenForChapter({ chapters: map, catalog, text: userText, current: version.flow.name })
     const target = nextName

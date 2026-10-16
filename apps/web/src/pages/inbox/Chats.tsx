@@ -21,7 +21,8 @@ import * as api from '../../lib/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { claimChat, queueContact } from '../../lib/inbox-nav'
-import { chatText } from '../../lib/chat-text'
+import { ChatText } from '../../components/ChatText'
+import { chatMarkup, chatText } from '../../lib/chat-text'
 import { useCannedReplies, useTeamMembers, useLabels, useCreateLabel, useCreateTicket } from '../../lib/hooks'
 
 const SUBNAV = [
@@ -193,7 +194,7 @@ export function ChatsPage() {
     id: m.id,
     from: (m.authorKind ?? m.direction === 'inbound' ? 'user' : 'agent') as 'user' | 'bot' | 'agent',
     name: m.authorKind === 'user' ? selectedConvo!.contact?.displayName ?? 'User' : m.authorKind === 'bot' ? 'BotStudio' : 'Agent',
-    text: chatText(m.content?.text, selectedConvo?.contact?.displayName),
+    text: chatMarkup(m.content?.text, selectedConvo?.contact?.displayName),
     time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     isNote: Boolean(m.content?.internal),
   }))
@@ -474,7 +475,7 @@ export function ChatsPage() {
                         </span>
                       </div>
                       <div className="rounded-[var(--radius-md)] px-3 py-2 text-sm bg-[var(--warning-muted,#2d2000)] border border-[var(--warning,#fbbf24)]/25 text-[var(--text-primary)] max-w-[70%]">
-                        {msg.text}
+                        <ChatText text={msg.text} />
                       </div>
                     </div>
                   </div>
@@ -494,7 +495,7 @@ export function ChatsPage() {
                             ? 'bg-[var(--accent-muted)] text-[var(--text-primary)] border border-[var(--accent)]/20'
                             : 'bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border)]'
                       )}>
-                        {msg.text}
+                        <ChatText text={msg.text} />
                       </div>
                     </div>
                   </div>

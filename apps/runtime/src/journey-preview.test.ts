@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { draftWebsiteChat, hairStudioPack, pageFromHtml } from '@ybot/shared'
+import { chatPlain, draftWebsiteChat, hairStudioPack, pageFromHtml } from '@ybot/shared'
 import { runJourneyPreview } from './journey-preview.js'
 import type { FlowGraph } from './engine.js'
 
@@ -142,6 +142,99 @@ test('a handoff to a chapter that is not on this map stops', async () => {
   assert.match(stopped.text, /Location is not on this Production map\./)
   assert.equal(stopped.text.includes('Rosewood'), false)
   assert.equal(stopped.chapter, 'Salon welcome')
+})
+
+test('colour qualifies the booking instead of reading a Tuesday offer', async () => {
+  const home = pageFromHtml('https://yuzu.hair/', `<title>Yuzu</title>
+<p>Yuzu Hair and Beauty works at 5 Dickens Yard, Longfield Avenue, Ealing, W5 2TD.</p>
+<p>Open Tuesday to Friday 10am to 8pm and Saturday 9am to 6pm. Monday and Sunday closed.</p>
+<p>Every Tuesday, 50% off your most expensive colour service with a full-priced wash, cut and blow-dry.</p>
+<p>Every Wednesday, 25% off blow-dries.</p>
+<a href="https://www.phorest.com/salon/yuzuhairandbeauty">Book</a>`)
+  const draft = draftWebsiteChat({ pages: [home], companyName: 'Yuzu', personaName: 'Bella' })
+  const chapters = draft.flows.map((flow) => ({
+    name: flow.name,
+    graph: flow.graph as unknown as FlowGraph,
+  }))
+  const open = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: '',
+    environmentLabel: 'Sandbox',
+  })
+  const colour = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: 'color',
+    environmentLabel: 'Sandbox',
+    session: open.session,
+  })
+  assert.equal(colour.chapter, 'Book an appointment')
+  assert.match(colour.text, /colour work/i)
+  assert.equal(/50%|Every Tuesday/i.test(colour.text), false)
+  assert.equal(/phorest\.com/i.test(colour.text), false)
+  assert.equal((colour.text.match(/\?/g) ?? []).length, 1)
+
+  const need = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: 'full head',
+    environmentLabel: 'Sandbox',
+    session: colour.session,
+  })
+  assert.match(need.text, /cut with the colour/i)
+  const upsell = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: 'yes',
+    environmentLabel: 'Sandbox',
+    session: need.session,
+  })
+  assert.match(upsell.text, /senior stylist/i)
+  const stylist = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: 'senior',
+    environmentLabel: 'Sandbox',
+    session: upsell.session,
+  })
+  assert.match(stylist.text, /When would suit/i)
+  const when = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: 'Tuesday afternoon',
+    environmentLabel: 'Sandbox',
+    session: stylist.session,
+  })
+  assert.match(when.text, /What's your name/)
+  const named = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: 'Sophie',
+    environmentLabel: 'Sandbox',
+    session: when.session,
+  })
+  assert.match(named.text, /mobile/i)
+  const mobile = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: '07700 900123',
+    environmentLabel: 'Sandbox',
+    session: named.session,
+  })
+  assert.match(mobile.text, /confirm/i)
+  assert.match(chatPlain(mobile.text), /Phorest/)
+  assert.equal(/https?:\/\//.test(chatPlain(mobile.text)), false)
+  assert.match(mobile.text, /\[Phorest\]\(/)
+  assert.equal(mobile.chapter, 'Book an appointment')
 })
 
 test('cut then men hears Gents instead of the whole map', async () => {
