@@ -201,10 +201,11 @@ export function WidgetSetupWizard({ onClose }: WidgetSetupWizardProps) {
   const createChannel = useCreateChannel()
   const updateChannel = useUpdateChannel()
   const { data: channels = [] } = useChannels()
-  const { bots, selectedBotId } = useAppStore()
+  const { bots, selectedBotId, selectedEnv } = useAppStore()
   const selectedBot = bots.find((b) => b.id === selectedBotId)
-  const productionId = selectedBot?.environments.find((env) => env.kind === 'production')?.id
-  const liveChannel = channels.find((channel) => channel.kind === 'web' && channel.environmentId === productionId)
+  const layerId = selectedBot?.environments.find((env) => env.kind === selectedEnv)?.id
+    ?? selectedBot?.environments.find((env) => env.kind === 'production')?.id
+  const liveChannel = channels.find((channel) => channel.kind === 'web' && channel.environmentId === layerId)
     ?? channels.find((channel) => channel.kind === 'web')
 
   useEffect(() => {
@@ -251,9 +252,7 @@ export function WidgetSetupWizard({ onClose }: WidgetSetupWizardProps) {
         setStep('install')
         return
       }
-      const envId = selectedBot?.environments.find((env) => env.kind === 'production')?.id
-        ?? selectedBot?.environments[0]?.id
-        ?? ''
+      const envId = layerId ?? selectedBot?.environments[0]?.id ?? ''
       if (!envId) {
         setCreateError('No environment found for the selected bot. Please select a bot first.')
         setCreating(false)
@@ -288,7 +287,7 @@ export function WidgetSetupWizard({ onClose }: WidgetSetupWizardProps) {
               onChange={(e) => setSiteName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleCustomizeNext() }}
             />
-            <p className="text-[11px] text-[var(--text-muted)] mt-1">Website chat is already on. This names the live embed inside BotStudio.</p>
+            <p className="text-[11px] text-[var(--text-muted)] mt-1">Website chat is already on for this layer. This names the embed inside BotStudio.</p>
           </div>
 
           <div>

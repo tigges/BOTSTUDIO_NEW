@@ -501,6 +501,7 @@ export function useChannels() {
   return useQuery({
     queryKey: ['channels', bid],
     queryFn: withDemoFallback(() => api.channels.list(bid).then((r) => r.data), demo.DEMO_CHANNELS),
+    staleTime: isDemoMode() ? Infinity : 30_000,
   })
 }
 
@@ -508,9 +509,26 @@ export function useCreateChannel() {
   const qc = useQueryClient()
   const bid = botId()
   return useMutation({
-    mutationFn: (body: { name: string; kind: string; environmentId: string; config?: Record<string, unknown> }) =>
-      api.channels.create(bid, body).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['channels', bid] }),
+    mutationFn: async (body: { name: string; kind: string; environmentId: string; config?: Record<string, unknown> }) => {
+      if (isDemoMode()) {
+        const created: api.Channel = {
+          id: `ch_demo_${body.kind}_${Date.now()}`,
+          name: body.name,
+          kind: body.kind,
+          environmentId: body.environmentId,
+          config: body.config ?? {},
+          isActive: body.kind === 'web',
+          botId: bid,
+          createdAt: new Date().toISOString(),
+        }
+        return created
+      }
+      return api.channels.create(bid, body).then((r) => r.data)
+    },
+    onSuccess: (created) => {
+      qc.setQueryData(['channels', bid], (prev: api.Channel[] | undefined) => [...(prev ?? []), created])
+      if (!isDemoMode()) qc.invalidateQueries({ queryKey: ['channels', bid] })
+    },
   })
 }
 
@@ -518,8 +536,14 @@ export function useDeleteChannel() {
   const qc = useQueryClient()
   const bid = botId()
   return useMutation({
-    mutationFn: (id: string) => api.channels.delete(bid, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['channels', bid] }),
+    mutationFn: async (id: string) => {
+      if (isDemoMode()) return
+      return api.channels.delete(bid, id)
+    },
+    onSuccess: (_data, id) => {
+      qc.setQueryData(['channels', bid], (prev: api.Channel[] | undefined) => (prev ?? []).filter((channel) => channel.id !== id))
+      if (!isDemoMode()) qc.invalidateQueries({ queryKey: ['channels', bid] })
+    },
   })
 }
 
@@ -527,9 +551,16 @@ export function useUpdateChannel() {
   const qc = useQueryClient()
   const bid = botId()
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; name?: string; isActive?: boolean; config?: Record<string, unknown> }) =>
-      api.channels.update(bid, id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['channels', bid] }),
+    mutationFn: async ({ id, ...body }: { id: string; name?: string; isActive?: boolean; config?: Record<string, unknown> }) => {
+      if (isDemoMode()) return { data: { id, ...body } }
+      return api.channels.update(bid, id, body)
+    },
+    onSuccess: (_data, vars) => {
+      qc.setQueryData(['channels', bid], (prev: api.Channel[] | undefined) =>
+        (prev ?? []).map((channel) => channel.id === vars.id ? { ...channel, ...vars } : channel),
+      )
+      if (!isDemoMode()) qc.invalidateQueries({ queryKey: ['channels', bid] })
+    },
   })
 }
 
