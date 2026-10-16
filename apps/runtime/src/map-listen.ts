@@ -101,16 +101,80 @@ function shortName(name: string): string {
   return trimmed.toLowerCase()
 }
 
+const CORE_DOORS = ['Services and prices', 'Salon hours', 'Book an appointment', 'Location']
+
 /** A next offer from the map, instead of asking the same question again. */
 export function offerOnMap(chapters: Array<{ name: string; graph: FlowGraph }>, current?: string): string {
   const doors = doorsFromWelcome(chapters)
   const names = (doors.length > 0 ? doors : chapters.map((chapter) => chapter.name))
     .filter((name) => !isWelcomeName(name) && name !== current)
-  const shown = names.slice(0, 4).map(shortName)
+  const ranked = [
+    ...CORE_DOORS.filter((name) => names.includes(name)),
+    ...names.filter((name) => !CORE_DOORS.includes(name)),
+  ]
+  const shown = ranked.slice(0, 3).map(shortName)
   if (shown.length === 0) return 'Tell me a little more about what you need.'
   if (shown.length === 1) return `I can help with ${shown[0]}. What would you like?`
   const last = shown.pop()
   return `I can help with ${shown.join(', ')}, or ${last}. What would you like?`
+}
+
+/** A reply may explain and then ask once. A second question is the next turn. */
+export function keepFirstQuestion(text: string): string {
+  const trimmed = text.trim()
+  const first = trimmed.indexOf('?')
+  if (first < 0) return trimmed
+  const later = trimmed.indexOf('?', first + 1)
+  if (later < 0) return trimmed
+  return trimmed.slice(0, first + 1).trim()
+}
+
+function shortOption(title: string): string {
+  const cleaned = title
+    .replace(/wash,?\s*cut\s*(and|&)\s*style/gi, '')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const first = (cleaned || title).split(/[,/]/)[0]?.trim() || title
+  return first.charAt(0).toUpperCase() + first.slice(1)
+}
+
+function clipChoiceList(text: string): string {
+  return text.replace(/\b(Which [^?\n]{1,80}\? )([^.?\n]+)\./g, (full, lead: string, listed: string) => {
+    if (/or another/i.test(listed)) return full
+    const parts = listed.split(/,\s*(?=[A-Z])/).map((part) => part.replace(/\s+and a few more$/i, '').trim()).filter(Boolean)
+    if (parts.length <= 1) return full
+    const long = parts.some((part) => part.length > 18 || /wash/i.test(part))
+    if (parts.length <= 3 && !long) return full
+    const labels = parts.slice(0, 3).map(shortOption)
+    const more = parts.length > 3
+    if (labels.length === 1) return `${lead}${labels[0]}.`
+    const last = labels.pop()
+    const joined = `${labels.join(', ')}, or ${last}`
+    return more ? `${lead}${joined} — or another.` : `${lead}${joined}.`
+  })
+}
+
+const OLD_NEXT: Array<{ find: RegExp; chapter: RegExp; next: string }> = [
+  { find: /Want where we are, a price, or to book\?/i, chapter: /hour/i, next: 'Shall I book a time?' },
+  { find: /Want the hours, a price, or to book\?/i, chapter: /location|where/i, next: 'Want the hours?' },
+  { find: /Want another (?:price|question|offer), or shall we book\?/i, chapter: /.*/, next: 'Shall we book?' },
+]
+
+/**
+ * One question per turn. A long which-one list becomes three short names.
+ * Charts scanned before that still get the same shape at speak time.
+ */
+export function shapeTurn(text: string, chapter?: string): string {
+  let spoken = clipChoiceList(keepFirstQuestion(text))
+  if (chapter) {
+    for (const rule of OLD_NEXT) {
+      if (rule.chapter.test(chapter) && rule.find.test(spoken)) {
+        spoken = spoken.replace(rule.find, rule.next)
+      }
+    }
+  }
+  return spoken
 }
 
 /**

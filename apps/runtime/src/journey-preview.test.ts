@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { hairStudioPack } from '@ybot/shared'
+import { draftWebsiteChat, hairStudioPack, pageFromHtml } from '@ybot/shared'
 import { runJourneyPreview } from './journey-preview.js'
 import type { FlowGraph } from './engine.js'
 
@@ -73,6 +73,9 @@ test('cut opens the price, and services after hours does not dead-end', async ()
     session: cut.session,
   })
   assert.match(hours.text, /Monday to Saturday/)
+  assert.match(hours.text, /Shall I book/)
+  assert.equal(/where we are/.test(hours.text), false)
+  assert.equal((hours.text.match(/\?/g) ?? []).length, 1)
   assert.equal(hours.chapter, 'Salon hours')
 
   const services = await runJourneyPreview({
@@ -139,4 +142,65 @@ test('a handoff to a chapter that is not on this map stops', async () => {
   assert.match(stopped.text, /Location is not on this Production map\./)
   assert.equal(stopped.text.includes('Rosewood'), false)
   assert.equal(stopped.chapter, 'Salon welcome')
+})
+
+test('cut then men hears Gents instead of the whole map', async () => {
+  const home = pageFromHtml('https://yuzu.hair/', `<title>Yuzu</title>
+<p>Yuzu Hair and Beauty works at 5 Dickens Yard, Longfield Avenue, Ealing, W5 2TD.</p>
+<p>Open Tuesday to Friday 10am to 8pm and Saturday 9am to 6pm. Monday and Sunday closed.</p>
+<a href="https://www.phorest.com/salon/yuzuhairandbeauty">Book</a>`)
+  const prices = pageFromHtml('https://yuzu.hair/prices/', `<title>Price list</title>
+<h2>Cut &amp; style</h2>
+<table>
+<tr><th>Service</th><th>Senior</th><th>Stylist</th></tr>
+<tr><th>Ladies wash, cut &amp; style</th><td data-label="Senior">£87</td><td data-label="Stylist">£58</td></tr>
+<tr><th>Gents wash, cut &amp; style</th><td data-label="Senior">£45</td><td data-label="Stylist">£38</td></tr>
+<tr><th>Kids (12 &amp; under)</th><td data-label="Senior">£29</td><td data-label="Stylist">£23</td></tr>
+<tr><th>Teens (13-16) boys</th><td data-label="Senior">£35</td><td data-label="Stylist">£29</td></tr>
+<tr><th>Blow-dry</th><td data-label="Senior">£28</td><td data-label="Stylist">£22</td></tr>
+</table>
+<h2>Colour</h2>
+<table>
+<tr><th>Service</th><th>Senior</th><th>Stylist</th></tr>
+<tr><th>Full head</th><td data-label="Senior">£101</td><td data-label="Stylist">£87</td></tr>
+<tr><th>Roots</th><td data-label="Senior">£88</td><td data-label="Stylist">£75</td></tr>
+</table>`)
+  const draft = draftWebsiteChat({ pages: [home, prices], companyName: 'Yuzu', personaName: 'Bella' })
+  const chapters = draft.flows.map((flow) => ({
+    name: flow.name,
+    graph: flow.graph as unknown as FlowGraph,
+  }))
+  const open = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: '',
+    environmentLabel: 'Sandbox',
+  })
+  const cut = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: 'cut',
+    environmentLabel: 'Sandbox',
+    session: open.session,
+  })
+  assert.match(cut.text, /which cut/i)
+  assert.match(cut.text, /Ladies/)
+  assert.match(cut.text, /or another/)
+  assert.equal(/Ladies wash/.test(cut.text), false)
+  assert.equal(cut.chapter, 'Services and prices')
+
+  const men = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: 'men',
+    environmentLabel: 'Sandbox',
+    session: cut.session,
+  })
+  assert.match(men.text, /£45|£38/)
+  assert.equal(men.chapter, 'Services and prices')
+  assert.equal(/where we are/.test(men.text), false)
+  assert.equal(/What would you like/.test(men.text), false)
 })

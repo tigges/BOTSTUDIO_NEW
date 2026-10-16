@@ -165,12 +165,9 @@ function ask(id: string, x: number, y: number, label: string, question: string, 
 
 function answerFlow(name: string, answer: string, ticket?: { subject: string; description: string }): StarterFlow {
   const y = 120
-  const spoken = /I can also help with/.test(answer)
-    ? answer
-    : `${answer} I can also help with hours, prices, or a booking.`
   const nodes: object[] = [
     { id: 'start', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: name, config: {} } },
-    { id: 'say', type: 'flow-node', position: { x: 340, y }, data: { kind: 'send_message', label: 'Answer', config: { text: spoken } } },
+    { id: 'say', type: 'flow-node', position: { x: 340, y }, data: { kind: 'send_message', label: 'Answer', config: { text: answer } } },
   ]
   const edges: object[] = [
     { id: 'e1', source: 'start', target: 'say', sourceHandle: 'out' },
@@ -227,7 +224,7 @@ function welcomeFlow(company: string, persona: string, doors: ScanDoor[]): Start
     { id: 'save', type: 'flow-node', position: { x: 300, y }, data: { kind: 'set_variable', label: 'Keep the request', config: { variable: 'topic', value: '{{_last_user_message}}' } } },
     ask('welcome', 540, y, 'Welcome', greeting, 'guest_name'),
     { id: 'route', type: 'flow-node', position: { x: 820, y }, data: { kind: 'route_topic', label: 'Route', config: { routes } } },
-    ask('follow', 820, followY, 'Ask', 'What would you like done?', 'request'),
+    ask('follow', 820, followY, 'Ask', 'Are you after a price, the hours, or to book?', 'request'),
     { id: 'route2', type: 'flow-node', position: { x: 1100, y: followY }, data: { kind: 'route_topic', label: 'Route the reply', config: { routes } } },
   ]
   const edges: object[] = [
@@ -530,7 +527,7 @@ function conversationFlow(input: {
       if (openHandles.has(spoke.handle)) link(`e-open-${spoke.handle}`, 'open', `ask-${spoke.handle}`, spoke.handle)
       link(`e-pick-${spoke.handle}`, 'pick', `ask-${spoke.handle}`, spoke.handle)
       link(`e-ask-${spoke.handle}`, `ask-${spoke.handle}`, `route-${spoke.handle}`)
-      link(`e-route-other-${spoke.handle}`, `route-${spoke.handle}`, `ask-${spoke.handle}`, 'other')
+      link(`e-route-other-${spoke.handle}`, `route-${spoke.handle}`, 'pick', 'other')
       spoke.choices.forEach((choice, choiceIndex) => {
         const say = clip(choice.say ?? '')
         nodes.push(flowNode(`say-${choice.handle}`, 'send_message', choice.title, { text: say }, 1760, y + choiceIndex * 70))
@@ -594,6 +591,8 @@ function categoryPhrases(label: string): string[] {
   if (/highlight|balayage|foiliage/.test(text)) phrases.push('highlights', 'balayage')
   if (/\b(treatment|treatments|filler|smoothing)\b|\bnashi\b/.test(text)) phrases.push('treatment', 'treatments')
   if (/\b(kids|children|child)\b/.test(text)) phrases.push('kids', 'children')
+  if (/\b(gents?|men|male)\b/.test(text)) phrases.push('gents', 'gent', 'men', 'man')
+  if (/\b(ladies|lady|women|woman)\b/.test(text)) phrases.push('ladies', 'lady', 'women', 'woman')
   return phrases
 }
 
@@ -610,6 +609,34 @@ function uniquePhrases(phrases: string[]): string[] {
 
 function shortTitle(title: string): string {
   return title.split('/')[0]?.replace(/^A\s+/i, '').trim().toLowerCase() || title.toLowerCase()
+}
+
+function optionLabel(title: string): string {
+  const cleaned = title
+    .replace(/wash,?\s*cut\s*(and|&)\s*style/gi, '')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const first = (cleaned || title).split(/[,/]/)[0]?.trim() || title
+  return first.charAt(0).toUpperCase() + first.slice(1)
+}
+
+/** At most three short choices. A longer menu is the next turn, or "another". */
+function spokenChoices(names: string[]): string {
+  const labels = names.slice(0, 3)
+  if (labels.length === 0) return ''
+  const more = names.length > 3
+  if (labels.length === 1) return labels[0] ?? ''
+  const last = labels.pop()
+  const listed = `${labels.join(', ')}, or ${last}`
+  return more ? `${listed} — or another` : listed
+}
+
+function whichOneLine(groupTitle: string, choices: Array<{ title: string }>): string {
+  const listed = spokenChoices(choices.map((choice) => optionLabel(choice.title)))
+  return listed
+    ? `Which ${shortTitle(groupTitle)}? ${listed}.`
+    : `Which ${shortTitle(groupTitle)}?`
 }
 
 function isNoiseLine(line: string): boolean {
@@ -726,12 +753,10 @@ function spokesFromPriceGroups(groups: Array<{ title: string; rows: Array<{ labe
       })
       continue
     }
-    const shown = choices.slice(0, 8).map((choice) => choice.title)
-    const more = choices.length > shown.length ? ', and a few more' : ''
     spokes.push({
       title: group.title,
       phrases: uniquePhrases([...phrasesForLabel(group.title), ...categoryPhrases(group.title)]),
-      say: `Which ${shortTitle(group.title)}? ${shown.join(', ')}${more}.`,
+      say: whichOneLine(group.title, choices),
       choices,
     })
   }
@@ -807,7 +832,7 @@ function mentionPatch(spokes: Spoke[], patch: string | null): Spoke[] {
   return spokes.map((spoke) => {
     if (!/\bcolou?r\b/i.test(spoke.title)) return spoke
     if ((spoke.say ?? '').toLowerCase().includes('patch test')) return spoke
-    return { ...spoke, say: `${spoke.say ?? ''} ${patch}`.trim() }
+    return { ...spoke, say: `${patch} ${spoke.say ?? ''}`.trim() }
   })
 }
 
@@ -905,7 +930,7 @@ export function draftWebsiteChat(input: {
     : 'The pages did not state opening hours.'
   const serviceNames = services.map((spoke) => shortTitle(spoke.title))
   const serviceIntro = serviceNames.length > 1
-    ? `What are you thinking of? ${serviceNames.slice(0, -1).join(', ')}, or ${serviceNames[serviceNames.length - 1]}.`
+    ? `What are you thinking of? ${spokenChoices(serviceNames)}.`
     : serviceNames.length === 1
       ? (firstSay(services[0]!) || 'The pages did not state prices.')
       : 'The pages did not state prices.'
@@ -943,7 +968,7 @@ export function draftWebsiteChat(input: {
   if (services.length > 1) {
     talks.set('Services and prices', {
       intro: serviceIntro,
-      again: 'Want another price, or shall we book?',
+      again: 'Shall we book?',
       spokes: services,
       book: true,
     })
@@ -965,7 +990,7 @@ export function draftWebsiteChat(input: {
     })
     talks.set('Questions', {
       intro: 'What would you like to know?',
-      again: 'Want another question, or shall we book?',
+      again: 'Shall we book?',
       spokes: questionSpokes,
       book: true,
     })
@@ -982,7 +1007,7 @@ export function draftWebsiteChat(input: {
     })
     talks.set('Offers', {
       intro: 'Which offer are you asking about?',
-      again: 'Want another offer, or shall we book?',
+      again: 'Shall we book?',
       spokes: offers.map((line) => ({
         title: line.match(/Every\s+(\w+)/i)?.[1] ?? 'Offer',
         phrases: phrasesForLabel(line.split('.')[0] ?? line),
@@ -1091,10 +1116,10 @@ export function draftWebsiteChat(input: {
         })
       }
       if (door.flowName === 'Location' && address) {
-        return lookupDoor('Location', 'location', 'Are you after the address?', 'Want the hours, a price, or to book?')
+        return lookupDoor('Location', 'location', 'Are you after the address?', 'Want the hours?')
       }
       if (door.flowName === 'Salon hours' && hours) {
-        return lookupDoor('Salon hours', 'hours', 'Are you after the opening hours?', 'Want where we are, a price, or to book?')
+        return lookupDoor('Salon hours', 'hours', 'Are you after the opening hours?', 'Shall I book a time?')
       }
       if (door.flowName === 'Book an appointment' && !booking) {
         return answerFlow(door.flowName, door.answer, {

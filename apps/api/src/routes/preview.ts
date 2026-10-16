@@ -16,10 +16,10 @@ import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
-import type { FlowGraph } from '@ybot/runtime'
+import { shapeTurn, type FlowGraph } from '@ybot/runtime'
 import { z } from 'zod'
 import { CATALOG_ENTITY, catalogFromValues } from '@ybot/shared'
-import { keepFirstQuestion, runCanvasPreview, type PreviewSnapshot } from '../lib/preview-flow.js'
+import { runCanvasPreview, type PreviewSnapshot } from '../lib/preview-flow.js'
 
 
 // Shared adapters (module-level singletons)
@@ -193,7 +193,7 @@ export async function previewRoutes(app: FastifyInstance) {
         },
       })
 
-      const spoken = keepFirstQuestion(fullText)
+      const spoken = shapeTurn(fullText)
       sendEvent('chunk', { text: spoken })
       sendEvent('done', { fullText: spoken, ragChunks: context.length })
     } catch (err) {

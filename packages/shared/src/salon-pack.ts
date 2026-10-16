@@ -200,7 +200,7 @@ function answerFlow(topic: Topic): StarterFlow {
     graph: {
       nodes: [
         { id: 'start', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: topic.flowName, config: {} } },
-        { id: 'say', type: 'flow-node', position: { x: 340, y }, data: { kind: 'send_message', label: 'Answer', config: { text: `${topic.answer} I can also help with hours, prices, or a booking.` } } },
+        { id: 'say', type: 'flow-node', position: { x: 340, y }, data: { kind: 'send_message', label: 'Answer', config: { text: topic.answer } } },
         { id: 'end', type: 'flow-node', position: { x: 640, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
       ],
       edges: [
@@ -231,7 +231,7 @@ export function catalogLookupFlow(input: {
     { id: 'ask', type: 'flow-node', position: { x: 820, y }, data: { kind: 'ask_question', label: 'Next', config: { question: input.next, variable: 'request' } } },
     { id: 'next', type: 'flow-node', position: { x: 1080, y }, data: { kind: 'route_topic', label: 'What next', config: { routes: input.doors.map((door) => ({ handle: door.handle, phrases: door.phrases })) } } },
     { id: 'which', type: 'flow-node', position: { x: 560, y: y + 200 }, data: { kind: 'ask_question', label: 'Which', config: { question: input.intro, variable: 'request' } } },
-    { id: 'close', type: 'flow-node', position: { x: 1340, y: y + 240 }, data: { kind: 'send_message', label: 'Close', config: { text: 'I can also help with hours, prices, or a booking.' } } },
+    { id: 'close', type: 'flow-node', position: { x: 1340, y: y + 240 }, data: { kind: 'send_message', label: 'Close', config: { text: 'I can help with hours, prices, or a booking. What would you like?' } } },
     { id: 'end', type: 'flow-node', position: { x: 1600, y: y + 200 }, data: { kind: 'end_flow', label: 'End', config: {} } },
   ]
   const edges: object[] = [
@@ -302,7 +302,7 @@ function pricesChapter(): StarterFlow {
     name: 'Services and prices',
     description: 'Looks up one price, then offers to book.',
     kind: 'service',
-    intro: 'What are you thinking of? A cut, colour, a treatment, balayage, a skin scrub, or keratin.',
+    intro: 'What are you thinking of? A cut, colour, or a treatment — or another.',
     next: 'Shall I book that?',
     doors: NEXT_DOORS.filter((door) => door.handle !== 'prices'),
   })
@@ -314,7 +314,7 @@ function locationChapter(): StarterFlow {
     description: 'Looks up the address, then offers a next step.',
     id: 'location',
     intro: 'Are you after the address?',
-    next: 'Want the hours, a price, or to book?',
+    next: 'Want the hours?',
     doors: NEXT_DOORS.filter((door) => door.handle !== 'location'),
   })
 }
@@ -325,7 +325,7 @@ function hoursChapter(): StarterFlow {
     description: 'Looks up the hours, then offers a next step.',
     id: 'hours',
     intro: 'Are you after the opening hours?',
-    next: 'Want where we are, a price, or to book?',
+    next: 'Shall I book a time?',
     doors: NEXT_DOORS.filter((door) => door.handle !== 'hours'),
   })
 }
@@ -595,7 +595,7 @@ function welcomeFlow(companyName: string, topics: Topic[], personaName?: string)
     { id: 'save', type: 'flow-node', position: { x: 300, y }, data: { kind: 'set_variable', label: 'Keep the request', config: { variable: 'topic', value: '{{_last_user_message}}' } } },
     ask('welcome', 540, y, 'Welcome', greeting, 'guest_name'),
     { id: 'route', type: 'flow-node', position: { x: 820, y }, data: { kind: 'route_topic', label: 'Route', config: { routes } } },
-    ask('follow', 820, followY, 'Ask', 'What would you like done?', 'request'),
+    ask('follow', 820, followY, 'Ask', 'Are you after a price, the hours, or to book?', 'request'),
     { id: 'route2', type: 'flow-node', position: { x: 1100, y: followY }, data: { kind: 'route_topic', label: 'Route the reply', config: { routes } } },
   ]
   const edges: object[] = [

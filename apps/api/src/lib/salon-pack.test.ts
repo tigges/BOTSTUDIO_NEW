@@ -172,12 +172,12 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
 
   const cancel = await afterName('Please cancel my booking')
   assert.equal(cancel.jumpToFlow, undefined)
-  assert.equal(spoken(cancel), 'What would you like done?')
+  assert.equal(spoken(cancel), 'Are you after a price, the hours, or to book?')
 
   const hello = await machine.run(session('hello', 'Ada'), graph, 'hello')
   assert.equal(spoken(hello), greeting)
   const namedHello = await reply(machine, hello, graph, 'Sophie', 'Sophie')
-  assert.equal(spoken(namedHello), 'What would you like done?')
+  assert.equal(spoken(namedHello), 'Are you after a price, the hours, or to book?')
   const haircut = await reply(machine, namedHello, graph, 'a haircut')
   assert.equal(haircut.jumpToFlow, 'Services and prices')
   assert.equal(spoken(haircut).includes("Hi, I'm Bella"), false)
@@ -197,7 +197,7 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
 
   const reaction = await afterName('I had an allergic reaction')
   assert.equal(reaction.jumpToFlow, undefined)
-  assert.equal(spoken(reaction), 'What would you like done?')
+  assert.equal(spoken(reaction), 'Are you after a price, the hours, or to book?')
 
   const voiced = hairStudioPack('Rose Studio', 'Yuzu')
   assert.equal(
@@ -218,14 +218,19 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   const address = await machine.run(session('address'), location.graph as unknown as FlowGraph, 'address')
   const addressText = address.newMessages.map((message) => message.content.text).join('\n')
   assert.match(addressText, /14 Rosewood Lane/)
-  assert.match(addressText, /hours|price|book/i)
+  assert.match(addressText, /Want the hours/)
+  assert.equal(/a price, or to book/.test(addressText), false)
+  assert.equal((addressText.match(/\?/g) ?? []).length, 1)
   assert.equal(address.session.status, 'waiting_input')
 
   const hoursFlow = pack.flows.find((flow) => flow.name === 'Salon hours')!
   const hoursSpoken = await machine.run(session('hours'), hoursFlow.graph as unknown as FlowGraph, 'hours')
   const hoursText = hoursSpoken.newMessages.map((message) => message.content.text).join('\n')
   assert.match(hoursText, /Monday to Saturday, 09:00 to 18:00/)
+  assert.match(hoursText, /Shall I book a time/)
   assert.equal(hoursText.includes('Sunday'), false)
+  assert.equal(/where we are/.test(hoursText), false)
+  assert.equal((hoursText.match(/\?/g) ?? []).length, 1)
   assert.equal(hoursSpoken.session.status, 'waiting_input')
 
   const voucherFlow = pack.flows.find((flow) => flow.name === 'Gift voucher')!

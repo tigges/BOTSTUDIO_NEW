@@ -83,12 +83,22 @@ export async function executeHttpRequest(ctx: NodeContext): Promise<NodeResult> 
 }
 
 // ── route_topic ───────────────────────────────────────────────────────────────
+function heardText(session: NodeContext['session']): { latest: string; withTopic: string } {
+  const topic = String(session.variables.flow['topic'] ?? '').trim()
+  const last = String(session.variables.flow['_last_user_message'] ?? '').trim()
+  const request = String(session.variables.flow['request'] ?? '').trim()
+  const latest = request || last
+  return { latest, withTopic: `${topic} ${latest}`.trim() }
+}
+
 export async function executeRouteTopic(ctx: NodeContext): Promise<NodeResult> {
   const { config, session } = ctx
   const routes = (config['routes'] as TopicRoute[] | undefined) ?? []
-  const text = `${session.variables.flow['topic'] ?? ''} ${session.variables.flow['_last_user_message'] ?? ''}`
-  const handle = matchTopic(text, routes)
-  return { output: { route: handle }, nextNodeId: handle }
+  const heard = heardText(session)
+  const handle = matchTopic(heard.latest, routes)
+  if (handle !== 'other') return { output: { route: handle }, nextNodeId: handle }
+  const fallback = matchTopic(heard.withTopic, routes)
+  return { output: { route: fallback }, nextNodeId: fallback }
 }
 
 // ── execute_flow ──────────────────────────────────────────────────────────────
@@ -103,8 +113,10 @@ export async function executeLookupCatalog(ctx: NodeContext): Promise<NodeResult
   const id = String(config['id'] ?? '').trim()
   const kind = String(config['kind'] ?? '').trim() || undefined
   const pinned = id ? services.catalog?.facts.find((fact) => fact.id === id) : undefined
-  const text = `${session.variables.flow['topic'] ?? ''} ${session.variables.flow['request'] ?? ''} ${session.variables.flow['_last_user_message'] ?? ''}`
-  const hit = pinned ?? matchCatalog(services.catalog, text, kind)
+  const heard = heardText(session)
+  const hit = pinned
+    ?? matchCatalog(services.catalog, heard.latest, kind)
+    ?? matchCatalog(services.catalog, heard.withTopic, kind)
   if (!hit) return { output: { fact: '', catalog_title: '' }, nextNodeId: 'other' }
   return {
     output: { fact: hit.fact, catalog_title: hit.title, catalog_id: hit.id },

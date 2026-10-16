@@ -1,4 +1,4 @@
-import { SessionMachine } from '@ybot/runtime'
+import { SessionMachine, keepFirstQuestion, shapeTurn } from '@ybot/runtime'
 import type { ExecutionServices, FlowGraph, Session, SessionVariables } from '@ybot/runtime'
 import { spokenFirstName, type StudioCatalog } from '@ybot/shared'
 
@@ -15,15 +15,7 @@ export interface PreviewTurn {
   session?: PreviewSnapshot
 }
 
-/** A reply may explain and then ask once. A second question is the next turn. */
-export function keepFirstQuestion(text: string): string {
-  const trimmed = text.trim()
-  const first = trimmed.indexOf('?')
-  if (first < 0) return trimmed
-  const later = trimmed.indexOf('?', first + 1)
-  if (later < 0) return trimmed
-  return trimmed.slice(0, first + 1).trim()
-}
+export { keepFirstQuestion }
 
 function startNodeId(graph: FlowGraph): string | undefined {
   return graph.nodes.find((node) => node.data.kind === 'trigger_start' || node.data.kind === 'start')?.id
@@ -105,7 +97,7 @@ export async function runCanvasPreview(input: {
   if (result.handover && lines.length === 0) {
     lines.push('A person on the team will follow up.')
   }
-  const text = keepFirstQuestion(lines.join('\n\n'))
+  const text = shapeTurn(lines.join('\n\n'))
   if (!text) return { handled: false, text: '', session: snapshot(result.session) }
   return { handled: true, text, session: snapshot(result.session) }
 }
