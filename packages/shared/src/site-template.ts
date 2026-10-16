@@ -7,6 +7,8 @@
 import { assistantGreeting, greetingWelcomeGraph } from './greeting-welcome.js'
 import { supportUseCaseFlows, type StarterFlow } from './flow-templates.js'
 import type { ScannedPage } from './website-scan.js'
+import { extractPlanTiers, planChoices, planSummary } from './plan-tiers.js'
+import { emailFollowUpFlow, planWalkFlow } from './plan-walk.js'
 
 export type ClusterId = 'hair' | 'commerce' | 'software' | 'crm' | 'email' | 'custom'
 
@@ -17,6 +19,9 @@ export interface SiteTopic {
   question: string
   answer: string
   blurb: string
+  /** plans = which-plan walk. email = ask for a follow-up address, then sales. */
+  walk?: 'plans' | 'email'
+  choices?: Array<{ title: string; phrases: string[]; say: string }>
 }
 
 export interface PreviewDoor {
@@ -86,8 +91,9 @@ export function abstractBrand(text: string): string {
 
 const CLUSTER_HINTS: Array<[ClusterId, RegExp]> = [
   ['hair', /\b(hair|salon|beauty|stylist|colour|balayage|haircut)\b/i],
-  ['email', /\b(gmail|inbox|email|mailbox|compose)\b/i],
   ['crm', /\b(hubspot|crm|pipeline|marketing automation|sales hub)\b/i],
+  // After CRM: inbox sites name gmail/inbox. Bare "email" is CRM plan copy ("Email and in-app chat").
+  ['email', /\b(gmail|inbox|mailbox|compose)\b/i],
   ['software', /\b(cevro|operator|kyc|vendor|integration|platform|saas)\b/i],
   ['commerce', /\b(shipping|return policy|order tracking|checkout)\b/i],
 ]
@@ -129,7 +135,29 @@ function answerFlow(topic: SiteTopic, tag: string): StarterFlow {
   }
 }
 
-function chapterFor(topic: SiteTopic, tag: string): StarterFlow {
+function chapterFor(
+  topic: SiteTopic,
+  tag: string,
+  companyName: string,
+  personaName?: string | null,
+  salesFlow?: string,
+): StarterFlow {
+  if (topic.walk === 'email' || topic.flowName === 'Book a demo') {
+    return emailFollowUpFlow({
+      name: topic.flowName,
+      tag,
+      companyName,
+      personaName,
+    })
+  }
+  if (topic.walk === 'plans' && topic.choices && topic.choices.length >= 2) {
+    return planWalkFlow({
+      name: topic.flowName,
+      tag,
+      choices: topic.choices,
+      salesFlow,
+    }) ?? answerFlow(topic, tag)
+  }
   if (topic.flowName === 'Talk to a person') {
     const found = supportUseCaseFlows().find((flow) => flow.name === 'Talk to a person')
     if (found) return { ...found, publish: true, tags: [...found.tags, tag, 'template'] }
@@ -175,7 +203,8 @@ export function siteTemplatePack(input: {
       choices: topics.map((topic) => topic.choice),
     }),
   }
-  const flows: StarterFlow[] = [welcome, ...topics.map((topic) => chapterFor(topic, input.tag))]
+  const salesFlow = topics.find((topic) => topic.walk === 'email' || /demo/i.test(topic.flowName))?.flowName
+  const flows: StarterFlow[] = [welcome, ...topics.map((topic) => chapterFor(topic, input.tag, input.companyName, input.personaName, salesFlow))]
   return {
     id: input.id,
     tag: input.tag,
@@ -300,10 +329,10 @@ const SEEDS: Record<Exclude<ClusterId, 'custom'>, SiteTopic[]> = {
     { flowName: 'Tickets', choice: 'Tickets', phrases: ['ticket', 'tickets', 'case'], question: 'How do tickets work?', answer: '', blurb: 'Open, find, and follow a case' },
     { flowName: 'Reporting', choice: 'Reporting', phrases: ['report', 'dashboard', 'analytics'], question: 'What can I see in reports?', answer: '', blurb: 'Pipeline, campaigns, tickets' },
     { flowName: 'Integrations', choice: 'Integrations', phrases: ['integration', 'connect', 'gmail', 'outlook'], question: 'What does it connect to?', answer: '', blurb: 'Mail, calendar, ads, chat' },
-    { flowName: 'Plans and pricing', choice: 'Plans', phrases: ['pricing', 'plans', 'free'], question: 'What are the plans?', answer: '', blurb: 'Free tools and paid plans' },
+    { flowName: 'Plans and pricing', choice: 'Plans', phrases: ['pricing', 'plans', 'free', 'starter', 'professional', 'enterprise'], question: 'Which plan are you asking about?', answer: '', blurb: 'Free, Starter, Professional, Enterprise' },
     { flowName: 'Billing', choice: 'Billing', phrases: ['billing', 'invoice', 'subscription'], question: 'How does billing work?', answer: '', blurb: 'Invoices and the workspace plan' },
     { flowName: 'Login', choice: 'Login', phrases: ['login', 'sign in', 'password', 'sso'], question: 'How do I sign in?', answer: '', blurb: 'Password, SSO, two-factor' },
-    { flowName: 'Book a demo', choice: 'A demo', phrases: ['demo', 'book a demo', 'get a demo'], question: 'How do I book a demo?', answer: '', blurb: 'A walkthrough with the team' },
+    { flowName: 'Book a demo', choice: 'A demo', phrases: ['demo', 'book a demo', 'get a demo', 'talk to sales'], question: 'How do I book a demo?', answer: '', blurb: 'Email, then sales' },
   ],
   email: [
     { flowName: 'Inbox', choice: 'Inbox', phrases: ['inbox', 'mail', 'messages', 'unread'], question: 'How does the inbox work?', answer: '', blurb: 'Unread, catch up, summaries' },
@@ -365,6 +394,7 @@ export function draftClusteredTemplate(input: {
     ? `Hi, I'm ${persona} at ${company}. What's your name?`
     : assistantGreeting(company)
   const seeds = clusterId === 'custom' ? SEEDS.software : SEEDS[clusterId]
+  const tiers = clusterId === 'hair' || clusterId === 'email' ? [] : extractPlanTiers(text)
   const topics: SiteTopic[] = []
   for (const seed of seeds) {
     const found = sentenceFor(text, seed.phrases)
@@ -375,6 +405,18 @@ export function draftClusteredTemplate(input: {
       blurb: found ? clip(found, 80) : seed.blurb,
     })
   }
+  if (tiers.length >= 2) {
+    const plan = topics.find((topic) => /plan|pricing/i.test(topic.flowName))
+    if (plan) {
+      plan.answer = planSummary(tiers)
+      plan.blurb = tiers.map((tier) => (tier.price ? `${tier.name} ${tier.price}` : tier.name)).join(', ')
+      plan.walk = 'plans'
+      plan.choices = planChoices(tiers)
+      plan.question = 'Which plan are you asking about?'
+    }
+  }
+  const demo = topics.find((topic) => /demo/i.test(topic.flowName))
+  if (demo && clusterId !== 'hair' && clusterId !== 'email') demo.walk = 'email'
   topics.push(talkTopic(company))
   const host = hostOf(pages[0]?.url ?? '')
   const clusterTitle: Record<ClusterId, string> = {

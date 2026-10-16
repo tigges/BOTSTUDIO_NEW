@@ -4,6 +4,7 @@ import { SessionMachine, type FlowGraph } from '@ybot/runtime'
 import type { ExecutionServices, Session } from '@ybot/runtime'
 import {
   BAKED_TEMPLATES,
+  EMAIL_QUESTION,
   START_CLUSTERS,
   START_OPTIONS,
   abstractBrand,
@@ -71,6 +72,10 @@ test('crawled brand names come off so the map can sit as a template', () => {
   assert.equal(/Gmail/i.test(abstractBrand('Gmail never uses your mail content for ads.')), false)
   assert.equal(suggestCluster('Cevro AI customer support for iGaming KYC payments'), 'software')
   assert.equal(suggestCluster('HubSpot CRM pipeline marketing automation'), 'crm')
+  assert.equal(
+    suggestCluster('Email and in-app chat support. Keep your CRM up to date. HubSpot pipeline marketing automation.'),
+    'crm',
+  )
   assert.equal(suggestCluster('Gmail inbox compose search'), 'email')
   assert.equal(suggestCluster('Ladies wash cut and style at the salon'), 'hair')
 })
@@ -110,6 +115,32 @@ test('the CRM pack speaks as Maya at the bot name, not a salon', async () => {
   assert.equal(sales.jumpToFlow, 'Sales')
   const hello = await machine.run(session('hi', 'there'), graph, 'hi')
   assert.match(hello.newMessages.map((message) => message.content.text).join('\n'), /Maya at test/)
+  const names = pack.flows.map((flow) => flow.name)
+  for (const flow of pack.flows) {
+    const issues = inspectFlowGraph(flow.graph as Parameters<typeof inspectFlowGraph>[0], { flowNames: names })
+    assert.deepEqual(issues.filter((issue) => issue.level === 'block' || issue.level === 'repair'), [], flow.name)
+  }
+  const plans = pack.flows.find((flow) => flow.name === 'Plans and pricing')!
+  const plansGraph = plans.graph as unknown as FlowGraph
+  const which = await machine.run(session('plans'), plansGraph, 'plans')
+  const whichText = which.newMessages.map((message) => message.content.text).join('\n')
+  assert.match(whichText, /Free/)
+  assert.match(whichText, /Starter/)
+  assert.equal(/£/.test(whichText), false)
+  which.session.variables.flow['_last_user_message'] = 'starter'
+  const starter = await machine.run(which.session, plansGraph, 'starter')
+  assert.match(starter.newMessages.map((message) => message.content.text).join('\n'), /£7/)
+  const demo = pack.flows.find((flow) => flow.name === 'Book a demo')!
+  const demoGraph = demo.graph as unknown as FlowGraph
+  const email = await machine.run(session('talk to sales'), demoGraph, 'talk to sales')
+  assert.match(email.newMessages.map((message) => message.content.text).join('\n'), /good email address/)
+  email.session.variables.flow['_last_user_message'] = 'ada@example.com'
+  email.session.variables.flow['email'] = 'ada@example.com'
+  const handed = await machine.run(email.session, demoGraph, 'ada@example.com')
+  const handedText = handed.newMessages.map((message) => message.content.text).join('\n')
+  assert.match(handedText, /One moment please/)
+  assert.match(handedText, /from test sales/)
+  assert.match(handedText, /paid plans/)
 })
 
 test('crm and inbox packs keep a visual map of doors', () => {
@@ -119,6 +150,7 @@ test('crm and inbox packs keep a visual map of doors', () => {
   assert.ok(crm.doors.some((door) => door.title === 'Contacts'))
   assert.ok(crm.doors.some((door) => door.title === 'Tickets'))
   assert.ok(crm.doors.some((door) => door.title === 'Billing'))
+  assert.ok(crm.doors.some((door) => /Free/.test(door.blurb) && /Starter/.test(door.blurb)))
   assert.ok(crm.doors.length >= 12)
   assert.match(crm.greeting, /Maya at Northwind/)
   const inbox = startPreview({ start: 'inbox-assistant', companyName: 'Northwind' })
@@ -154,6 +186,7 @@ test('a vendor homepage becomes a software template with brand names off', () =>
   assert.ok(spec.topics.some((topic) => topic.flowName === 'Talk to a person'))
   assert.ok(spec.topics.some((topic) => topic.flowName === 'Accounts'))
   assert.ok(spec.topics.some((topic) => topic.flowName === 'Pricing'))
+  assert.equal(spec.topics.find((topic) => topic.flowName === 'Book a demo')?.walk, 'email')
   assert.ok(spec.topics.length >= 12)
   assert.match(spec.menu, /accounts/i)
   assert.match(spec.menu, /pricing/i)
