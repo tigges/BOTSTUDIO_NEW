@@ -6,17 +6,9 @@ import {
 } from 'lucide-react'
 import { Badge, Button, Input } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
-import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
 import { PlannedBadge } from '../../components/PlannedFeature'
 import { useIntegrations, useConnectIntegration, useDisconnectIntegration } from '../../lib/hooks'
-
-const SUBNAV = [
-  { label: 'Channels', path: '/configure/channels' },
-  { label: 'Integrations', path: '/configure/integrations' },
-  { label: 'Database', path: '/configure/database' },
-  { label: 'Webhooks', path: '/configure/webhooks' },
-]
 
 type IntegrationCategory = 'CRM' | 'Ticketing' | 'Analytics' | 'Messaging' | 'Automation' | 'Commerce' | 'Booking'
 type IntegrationStatus = 'connected' | 'available' | 'coming_soon'
@@ -102,9 +94,8 @@ export function IntegrationsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 pt-4 pb-0 shrink-0">
-        <h1 className="text-base font-semibold text-[var(--text-primary)] pb-3">Configure</h1>
-        <SubNav items={SUBNAV} />
+      <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 py-4 shrink-0">
+        <h1 className="text-base font-semibold text-[var(--text-primary)]">Integrations</h1>
       </div>
 
       {/* Toolbar */}

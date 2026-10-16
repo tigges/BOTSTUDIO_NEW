@@ -7,20 +7,11 @@ import {
 import { Badge, Button } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@ybot/ui'
-import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
 import { useChannels, useCreateChannel, useDeleteChannel, useUpdateChannel } from '../../lib/hooks'
 import type { Channel } from '../../lib/api'
 import { useAppStore } from '../../store/app'
 import { WidgetSetupWizard } from './WidgetSetupWizard'
-
-const SUBNAV = [
-  { label: 'Channels',      path: '/configure/channels' },
-  { label: 'Optimizations', path: '/configure/optimizations' },
-  { label: 'Integrations',  path: '/configure/integrations' },
-  { label: 'Database',      path: '/configure/database' },
-  { label: 'Webhooks',      path: '/configure/webhooks' },
-]
 
 const KIND_META: Record<string, { label: string; description: string; icon: React.ReactNode; docsUrl?: string }> = {
   web:       { label: 'Web Widget',          description: 'Always-on chat that walks the journey map', icon: <Globe size={22} /> },
@@ -142,9 +133,9 @@ export function ChannelsPage() {
     <div className="flex flex-col h-full">
       {showWizard && <WidgetSetupWizard onClose={() => setShowWizard(false)} />}
 
-      <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 pt-4 pb-0 shrink-0">
-        <div className="flex items-center justify-between pb-3">
-          <h1 className="text-base font-semibold text-[var(--text-primary)]">Configure</h1>
+      <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 py-4 shrink-0">
+        <div className="flex items-center justify-between">
+          <h1 className="text-base font-semibold text-[var(--text-primary)]">Channels</h1>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" className="gap-1.5" onClick={handleAddChannel}>
               <Plus size={14} /> Add Channel
@@ -154,7 +145,6 @@ export function ChannelsPage() {
             </Button>
           </div>
         </div>
-        <SubNav items={SUBNAV} />
       </div>
 
       <div className="flex-1 overflow-auto p-6">

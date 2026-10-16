@@ -11,7 +11,6 @@ import {
   BookMarked, BarChart3, Loader2, RefreshCcw, Globe,
 } from 'lucide-react'
 import { Button, Badge } from '@ybot/ui'
-import { SubNav } from '../../components/SubNav'
 import { useOptimizations, useApplyOptimization, useDismissOptimization } from '../../lib/hooks'
 import { useAppStore } from '../../store/app'
 import { cn } from '@ybot/ui'
@@ -19,14 +18,6 @@ import { bots as botsApi, type LearnedSiteTemplate, type TemplateOptimization } 
 import { LearnFromChats } from '../build/LearnFromChats'
 import { JourneyPreview } from '../../components/JourneyPreview'
 import { START_CLUSTERS, type ClusterId } from '@ybot/shared'
-
-const SUBNAV = [
-  { label: 'Channels',      path: '/configure/channels' },
-  { label: 'Optimizations', path: '/configure/optimizations' },
-  { label: 'Integrations',  path: '/configure/integrations' },
-  { label: 'Database',      path: '/configure/database' },
-  { label: 'Webhooks',      path: '/configure/webhooks' },
-]
 
 // ── Diff view ─────────────────────────────────────────────────────────────────
 function DiffView({ current, proposed }: { current: string; proposed: string }) {
@@ -189,10 +180,10 @@ export function OptimizationsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 pt-4 pb-0 shrink-0">
-        <div className="flex items-center justify-between pb-3">
+      <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 py-4 shrink-0">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-base font-semibold text-[var(--text-primary)]">Configure</h1>
+            <h1 className="text-base font-semibold text-[var(--text-primary)]">Optimizations</h1>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
               Learn from chats, read public sites into starter templates, then review prompt suggestions. Changes stay supervised.
             </p>
@@ -201,7 +192,6 @@ export function OptimizationsPage() {
             <RefreshCcw size={13} /> Refresh
           </Button>
         </div>
-        <SubNav items={SUBNAV} />
       </div>
 
       <div className="flex-1 overflow-auto p-6">

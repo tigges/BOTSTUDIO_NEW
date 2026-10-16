@@ -7,18 +7,10 @@ import {
 import { Badge, Button, Input } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@ybot/ui'
-import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
 import { useWebhooks, useCreateWebhook, useDeleteWebhook, useTestWebhook } from '../../lib/hooks'
 import * as api from '../../lib/api'
 import { useQueryClient } from '@tanstack/react-query'
-
-const SUBNAV = [
-  { label: 'Channels', path: '/configure/channels' },
-  { label: 'Integrations', path: '/configure/integrations' },
-  { label: 'Database', path: '/configure/database' },
-  { label: 'Webhooks', path: '/configure/webhooks' },
-]
 
 const WEBHOOK_EVENTS = [
   'conversation.created', 'conversation.resolved', 'conversation.escalated',
@@ -133,14 +125,13 @@ export function WebhooksPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 pt-4 pb-0 shrink-0">
-        <div className="flex items-center justify-between pb-3">
-          <h1 className="text-base font-semibold text-[var(--text-primary)]">Configure</h1>
+      <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 py-4 shrink-0">
+        <div className="flex items-center justify-between">
+          <h1 className="text-base font-semibold text-[var(--text-primary)]">Webhooks</h1>
           <Button size="sm" className="gap-1.5" onClick={() => setShowNew(true)}>
             <Plus size={14} /> Add Webhook
           </Button>
         </div>
-        <SubNav items={SUBNAV} />
       </div>
 
       {/* Stats */}
