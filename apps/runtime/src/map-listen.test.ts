@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { hairStudioPack } from '@ybot/shared'
+import { draftWebsiteChat, hairStudioPack, pageFromHtml } from '@ybot/shared'
 import type { FlowGraph } from './engine.js'
-import { isSmallTalk, listenForChapter, offerOnMap, sameQuestion, shapeTurn } from './map-listen.js'
+import { isSmallTalk, isTopicSwitch, listenForChapter, offerOnMap, sameQuestion, shapeTurn, wantsOffer } from './map-listen.js'
 
 function salonChapters() {
   const pack = hairStudioPack('Yuzu', 'Bella')
@@ -21,6 +21,26 @@ test('a service word opens prices, not the welcome', () => {
   assert.equal(listenForChapter({ chapters, catalog, text: 'color', current: 'Offers' }), 'Book an appointment')
   assert.equal(listenForChapter({ chapters, catalog, text: 'how much is colour', current: 'Salon welcome' }), 'Services and prices')
   assert.equal(listenForChapter({ chapters, catalog, text: 'hi', current: 'Salon welcome' }), undefined)
+})
+
+test('a promotion stays quiet unless they ask, and a colour answer is not a deal', () => {
+  const home = pageFromHtml('https://yuzu.hair/', `<title>Yuzu</title>
+<p>Every Tuesday, 50% off your most expensive colour service with a full-priced wash, cut and blow-dry.</p>
+<p>Every Wednesday, 25% off blow-dries.</p>
+<a href="https://www.phorest.com/salon/yuzuhairandbeauty">Book</a>`)
+  const draft = draftWebsiteChat({ pages: [home], companyName: 'Yuzu', personaName: 'Bella' })
+  const chapters = draft.flows.map((flow) => ({ name: flow.name, graph: flow.graph as unknown as FlowGraph }))
+  const catalog = draft.catalog
+  assert.equal(wantsOffer('red full head'), false)
+  assert.equal(wantsOffer('Tuesday afternoon'), false)
+  assert.equal(wantsOffer('any discounts?'), true)
+  assert.equal(wantsOffer('what offers do you have'), true)
+  assert.equal(isTopicSwitch('red full head'), false)
+  assert.equal(isTopicSwitch('color'), true)
+  assert.notEqual(listenForChapter({ chapters, catalog, text: 'red full head', current: 'Services and prices' }), 'Offers')
+  assert.equal(listenForChapter({ chapters, catalog, text: 'colour on Tuesday', current: 'Salon welcome' }), 'Book an appointment')
+  assert.equal(listenForChapter({ chapters, catalog, text: 'any discounts?', current: 'Salon welcome' }), 'Offers')
+  assert.equal(listenForChapter({ chapters, catalog, text: 'what offers do you have', current: 'Services and prices' }), 'Offers')
 })
 
 test('a finished chapter offers the doors instead of repeating itself', () => {

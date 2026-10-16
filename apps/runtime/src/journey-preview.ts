@@ -2,7 +2,7 @@ import type { StudioCatalog } from '@ybot/shared'
 import { usableContactName } from './contact-speech.js'
 import { SessionMachine, type FlowGraph } from './engine.js'
 import { copyJumpVariables, missingChapterLine } from './handoff.js'
-import { isSmallTalk, listenForChapter, offerOnMap, questionFrom, sameQuestion, shapeTurn } from './map-listen.js'
+import { isSmallTalk, isTopicSwitch, listenForChapter, offerOnMap, questionFrom, sameQuestion, shapeTurn } from './map-listen.js'
 import type { ExecutionServices, Session, SessionVariables } from './types.js'
 
 export interface JourneyPreviewSnapshot {
@@ -209,7 +209,14 @@ export async function runJourneyPreview(input: {
       continue
     }
 
-    if (chapterName === originChapter && !opening && heard && !isSmallTalk(heard) && !/^book/i.test(chapterName)) {
+    if (
+      chapterName === originChapter
+      && !opening
+      && heard
+      && !isSmallTalk(heard)
+      && !/^book/i.test(chapterName)
+      && (!previous?.waitingFor || isTopicSwitch(heard))
+    ) {
       const nextName = listenForChapter({
         chapters: input.chapters,
         catalog: input.catalog,

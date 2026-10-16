@@ -237,6 +237,109 @@ test('colour qualifies the booking instead of reading a Tuesday offer', async ()
   assert.equal(mobile.chapter, 'Book an appointment')
 })
 
+test('a named colour stays on the walk and a deal only appears when they ask', async () => {
+  const home = pageFromHtml('https://yuzu.hair/', `<title>Yuzu</title>
+<p>Yuzu Hair and Beauty works at 5 Dickens Yard, Longfield Avenue, Ealing, W5 2TD.</p>
+<p>Open Tuesday to Friday 10am to 8pm and Saturday 9am to 6pm. Monday and Sunday closed.</p>
+<p>Every Tuesday, 50% off your most expensive colour service with a full-priced wash, cut and blow-dry.</p>
+<p>Every Wednesday, 25% off blow-dries.</p>
+<a href="https://www.phorest.com/salon/yuzuhairandbeauty">Book</a>`)
+  const prices = pageFromHtml('https://yuzu.hair/prices/', `<title>Price list</title>
+<h2>Cut &amp; style</h2>
+<table>
+<tr><th>Service</th><th>Senior</th><th>Stylist</th></tr>
+<tr><th>Ladies wash, cut &amp; style</th><td data-label="Senior">£87</td><td data-label="Stylist">£58</td></tr>
+<tr><th>Gents wash, cut &amp; style</th><td data-label="Senior">£45</td><td data-label="Stylist">£38</td></tr>
+</table>
+<h2>Colour</h2>
+<table>
+<tr><th>Service</th><th>Senior</th><th>Stylist</th></tr>
+<tr><th>Full head</th><td data-label="Senior">£101</td><td data-label="Stylist">£87</td></tr>
+<tr><th>Roots</th><td data-label="Senior">£88</td><td data-label="Stylist">£75</td></tr>
+</table>`)
+  const draft = draftWebsiteChat({ pages: [home, prices], companyName: 'Yuzu', personaName: 'Bella' })
+  const chapters = draft.flows.map((flow) => ({
+    name: flow.name,
+    graph: flow.graph as unknown as FlowGraph,
+  }))
+  const open = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: '',
+    environmentLabel: 'Sandbox',
+  })
+
+  const colour = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: 'color',
+    environmentLabel: 'Sandbox',
+    session: open.session,
+  })
+  assert.equal(colour.chapter, 'Book an appointment')
+  assert.match(colour.text, /colour work/i)
+  assert.equal(/50%|Every Tuesday/i.test(colour.text), false)
+
+  const named = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: 'red full head',
+    environmentLabel: 'Sandbox',
+    session: colour.session,
+  })
+  assert.equal(named.chapter, 'Book an appointment')
+  assert.match(named.text, /cut with the colour/i)
+  assert.equal(/50%|Every Tuesday/i.test(named.text), false)
+
+  const skipQualify = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: 'full head colour',
+    environmentLabel: 'Sandbox',
+    session: open.session,
+  })
+  assert.equal(skipQualify.chapter, 'Book an appointment')
+  assert.match(skipQualify.text, /cut with the colour/i)
+  assert.equal(/colour work/i.test(skipQualify.text), false)
+  assert.equal(/50%/i.test(skipQualify.text), false)
+
+  const priced = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: 'prices',
+    environmentLabel: 'Sandbox',
+    session: open.session,
+  })
+  assert.equal(priced.chapter, 'Services and prices')
+  const fullHead = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: 'red full head',
+    environmentLabel: 'Sandbox',
+    session: priced.session,
+  })
+  assert.equal(fullHead.chapter, 'Services and prices')
+  assert.match(fullHead.text, /£101|£87/)
+  assert.equal(/50%|Every Tuesday/i.test(fullHead.text), false)
+
+  const deals = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: 'what offers do you have',
+    environmentLabel: 'Sandbox',
+    session: open.session,
+  })
+  assert.equal(deals.chapter, 'Offers')
+  assert.match(deals.text, /50%|offer/i)
+})
+
 test('cut then men hears Gents instead of the whole map', async () => {
   const home = pageFromHtml('https://yuzu.hair/', `<title>Yuzu</title>
 <p>Yuzu Hair and Beauty works at 5 Dickens Yard, Longfield Avenue, Ealing, W5 2TD.</p>

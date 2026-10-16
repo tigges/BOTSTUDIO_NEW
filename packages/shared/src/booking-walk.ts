@@ -9,11 +9,20 @@ import { namedLink } from './chat-links.js'
 import { NAME_QUESTION } from './contact-speech.js'
 import type { StarterFlow } from './flow-templates.js'
 
+/** Already named the colour work — skip asking which kind. */
+export const COLOUR_NEED_ROUTE = {
+  handle: 'colour-need',
+  phrases: [
+    'full head', 'roots', 'in-between', 'in between', 'half head',
+    'highlights', 'balayage', 'foiliage', 'illumina', 't-section', 't section',
+  ],
+}
+
 export const COLOUR_ROUTE = {
   handle: 'colour',
   phrases: [
-    'going lighter', 'go lighter', 'lighter', 'highlights', 'balayage', 'box dye', 'henna',
-    'a colour', 'a color', 'colour', 'color', 'full head', 'roots', 'illumina',
+    'going lighter', 'go lighter', 'lighter', 'box dye', 'henna',
+    'a colour', 'a color', 'colour', 'color',
   ],
 }
 
@@ -87,8 +96,8 @@ export function bookAppointmentFlow(input: {
   const timeQuestion = input.timeQuestion ?? TIME_QUESTION
   const confirm = confirmBookingLine({ booking: input.booking, extra: input.confirmExtra })
   const serviceRoutes = input.salonBranches
-    ? [COLOUR_ROUTE, CUT_ROUTE, TREATMENT_ROUTE, CONSULT_ROUTE]
-    : [COLOUR_ROUTE, CUT_ROUTE, TREATMENT_ROUTE]
+    ? [COLOUR_NEED_ROUTE, COLOUR_ROUTE, CUT_ROUTE, TREATMENT_ROUTE, CONSULT_ROUTE]
+    : [COLOUR_NEED_ROUTE, COLOUR_ROUTE, CUT_ROUTE, TREATMENT_ROUTE]
   const nodes: object[] = [
     { id: 'b-start', type: 'flow-node', position: { x: 40, y }, data: { kind: 'trigger_start', label: 'Book', config: {} } },
     { id: 'b-save', type: 'flow-node', position: { x: 260, y }, data: { kind: 'set_variable', label: 'Keep the request', config: { variable: 'topic', value: '{{_last_user_message}}' } } },
@@ -114,9 +123,11 @@ export function bookAppointmentFlow(input: {
   const edges: object[] = [
     { id: 'e-start', source: 'b-start', target: 'b-save' },
     { id: 'e-save', source: 'b-save', target: 'b-route' },
+    { id: 'e-colour-need', source: 'b-route', target: 'b-upsell', sourceHandle: 'colour-need' },
     { id: 'e-colour', source: 'b-route', target: 'b-qualify', sourceHandle: 'colour' },
     { id: 'e-other', source: 'b-route', target: 'b-want', sourceHandle: 'other' },
     { id: 'e-want', source: 'b-want', target: 'b-route2' },
+    { id: 'e2-colour-need', source: 'b-route2', target: 'b-upsell', sourceHandle: 'colour-need' },
     { id: 'e2-colour', source: 'b-route2', target: 'b-qualify', sourceHandle: 'colour' },
     { id: 'e2-other', source: 'b-route2', target: 'b-more', sourceHandle: 'other' },
     { id: 'e-more', source: 'b-more', target: 'b-end' },

@@ -560,7 +560,7 @@ function conversationFlow(input: {
 
 const STOP_WORDS = new Set(['much', 'what', 'when', 'where', 'your', 'with', 'from', 'that', 'this', 'have', 'does', 'about', 'want', 'would', 'could', 'please'])
 
-/** Offer phrases keep the day and the deal, not the service word that belongs on Book. */
+/** In-chart offer phrases may name the day so “Tuesday offer” picks that deal. Chapter listen still waits for wantsOffer. */
 function phrasesForOffer(line: string): string[] {
   const day = line.match(/Every\s+(\w+)/i)?.[1]?.toLowerCase()
   const phrases = ['offer', 'offers', 'discount', 'special', 'promo']
@@ -1239,7 +1239,7 @@ function catalogFromScan(input: {
     facts.push({
       id: slugHandle(line.match(/Every\s+(\w+)/i)?.[1] ?? 'offer', used),
       kind: 'offer',
-      title: line.match(/Every\s+(\w+)/i)?.[1] ?? 'Offer',
+      title: 'Offer',
       phrases: phrasesForOffer(line),
       fact: line,
       source: 'Offers',

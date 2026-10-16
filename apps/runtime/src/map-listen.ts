@@ -188,15 +188,38 @@ export function shapeTurn(text: string, chapter?: string): string {
 
 const COLOUR_SERVICE = /\b(colou?rs?|highlights?|balayage|foiliage)\b/i
 const PRICE_ASK = /\b(how much|price|prices|cost|pricing)\b/i
-const OFFER_ASK = /\b(offer|offers|discount|promo|%|tuesday|wednesday|thursday|friday|monday|saturday|sunday)\b/i
+const HOURS_ASK = /\b(hours?|opening|when are you open)\b/i
+const WHERE_ASK = /\b(where|address|location|directions)\b/i
+const CANCEL_ASK = /\b(cancel|cancellation)\b/i
+const BOOK_ASK = /\b(book|booking|appointment)\b/i
+const CUT_ASK = /\b(haircuts?|a cut|a trim|cut|fringe|services?)\b/i
+
+/** A deal only when they ask for one. A weekday is a time, not a promotion. */
+export function wantsOffer(text: string): boolean {
+  return /\b(offers?|discounts?|promo|promotion|percent off|% off|half price|special offer)\b/i.test(text.trim())
+}
 
 /** A colour service word without a price or offer ask belongs on Book, not Offers. */
 export function colourWantsBooking(text: string): boolean {
   const heard = text.trim()
   if (!COLOUR_SERVICE.test(heard)) return false
   if (PRICE_ASK.test(heard)) return false
-  if (OFFER_ASK.test(heard)) return false
+  if (wantsOffer(heard)) return false
   return true
+}
+
+/** Leave the current question only when they clearly start something else. */
+export function isTopicSwitch(text: string): boolean {
+  const heard = text.trim()
+  if (!heard || isSmallTalk(heard)) return false
+  return colourWantsBooking(heard)
+    || wantsOffer(heard)
+    || PRICE_ASK.test(heard)
+    || HOURS_ASK.test(heard)
+    || WHERE_ASK.test(heard)
+    || CANCEL_ASK.test(heard)
+    || BOOK_ASK.test(heard)
+    || CUT_ASK.test(heard)
 }
 
 /**
@@ -219,6 +242,7 @@ export function listenForChapter(input: {
   const withoutFacts: TopicRoute[] = []
   for (const chapter of input.chapters) {
     if (isWelcomeName(chapter.name) || chapter.name === input.current) continue
+    if (/^offers?$/i.test(chapter.name) && !wantsOffer(heard)) continue
     const facts = catalogPhrases(input.catalog, chapter.name)
     const route = {
       handle: chapter.name,
