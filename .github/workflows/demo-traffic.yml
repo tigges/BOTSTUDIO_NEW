@@ -1,0 +1,53 @@
+name: Demo traffic
+
+on:
+  schedule:
+    - cron: "20 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  traffic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Add demo chats and tickets
+        env:
+          LIVE_URL: https://app.botstudio.uk
+          SEED_DEMO_SECRET: ${{ secrets.SEED_DEMO_SECRET }}
+          QA_EMAIL: qa@acme.com
+          QA_PASSWORD: ${{ secrets.QA_ACCOUNT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          auth_header=""
+          if [ -n "$SEED_DEMO_SECRET" ]; then
+            auth_header="Authorization: Bearer $SEED_DEMO_SECRET"
+          else
+            if [ -z "$QA_PASSWORD" ]; then
+              QA_PASSWORD='QaDemo1234!'
+            fi
+            code="$(curl -sS -o /tmp/qa-login.json -w '%{http_code}' -X POST "$LIVE_URL/api/v1/auth/login" \
+              -H "Content-Type: application/json" \
+              -d "{\"email\":\"$QA_EMAIL\",\"password\":\"$QA_PASSWORD\"}" \
+              --max-time 30)"
+            if [ "$code" != "200" ]; then
+              echo "login HTTP $code"
+              cat /tmp/qa-login.json
+              echo
+              exit 1
+            fi
+            token="$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('/tmp/qa-login.json','utf8')); if(!j.data||!j.data.token) process.exit(1); process.stdout.write(j.data.token)")"
+            rm -f /tmp/qa-login.json
+            auth_header="Authorization: Bearer $token"
+          fi
+          code="$(curl -sS -o /tmp/traffic.json -w '%{http_code}' -X POST "$LIVE_URL/api/v1/system/demo-traffic" \
+            -H "$auth_header" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            --max-time 120)"
+          echo "demo-traffic HTTP $code"
+          cat /tmp/traffic.json
+          echo
+          test "$code" = "200"

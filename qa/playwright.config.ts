@@ -6,7 +6,6 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   retries: 1,
   workers: 1,
-  grep: process.env['QA_SUITE'] === 'full' ? undefined : /@smoke/,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: process.env['LIVE_URL'] ?? 'https://app.botstudio.uk',

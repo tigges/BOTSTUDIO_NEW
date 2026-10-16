@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test'
 import { bellaEmail, bellaPassword, signIn } from '../helpers'
 
-const sessionId = `qa-widget-bella-${Date.now()}`
+/** One probe of the published journey. Demo inbox volume comes from the traffic run, not from here. */
+
+const sessionId = `qa-probe-bella-${Date.now()}`
 const line = 'QA check from the website widget'
 
-test('a widget flow is processed and shows in the inbox and on the dashboard', { tag: '@smoke' }, async ({ page, request }) => {
+test('the Bella widget still walks the published journey', { tag: '@smoke' }, async ({ page, request }) => {
   let token = ''
   for (let attempt = 0; attempt < 3 && !token; attempt++) {
     const login = await request.post('/api/v1/auth/login', {

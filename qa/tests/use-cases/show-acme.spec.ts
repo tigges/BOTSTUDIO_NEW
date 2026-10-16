@@ -1,18 +1,30 @@
 import { test, expect } from '@playwright/test'
-import { expectNoCrash, qaEmail, qaPassword, signIn } from '../helpers'
+import { expectNoCrash, expectStudioUnchanged, qaEmail, qaPassword, signIn } from '../helpers'
 
-test('show the Acme demo', { tag: '@smoke' }, async ({ page, request }) => {
+test('show the Acme demo journey', { tag: '@smoke' }, async ({ page, request }) => {
   await signIn(page, qaEmail, qaPassword)
 
-  await page.goto('/inbox/chats')
-  await page.getByText('Bob Smith').first().click()
-  await expect(page.getByText(/arrived damaged/i)).toBeVisible()
+  await page.goto('/build/journey')
+  await expect(page.getByRole('heading', { name: 'Journey' })).toBeVisible()
+  await expect(page.locator('[data-chapter="Welcome & Routing"]')).toBeVisible()
+  await expect(page.locator('[data-chapter="Order Status"]')).toBeVisible()
+  await expectStudioUnchanged(page)
 
   await page.goto('/build/flows')
   await page.getByText('Order Status', { exact: true }).click()
   await expect(page.getByText('Ask order number')).toBeVisible()
   await expect(page.getByText('Order Status Trigger')).toBeVisible()
   await expect(page.getByText('Welcome Flow')).toHaveCount(0)
+  await expectStudioUnchanged(page)
+
+  await page.goto('/build/workflows')
+  await expect(page.getByRole('heading', { name: 'Workflows' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'New Workflow' })).toBeVisible()
+  await expectStudioUnchanged(page)
+
+  await page.goto('/inbox/chats')
+  await page.getByText('Bob Smith').first().click()
+  await expect(page.getByText(/arrived damaged/i)).toBeVisible()
 
   await page.goto('/inbox/tickets')
   await expect(page.getByText('Feature request: bulk export')).toBeVisible()
