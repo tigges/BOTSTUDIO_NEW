@@ -8,12 +8,12 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { SessionMachine, copyJumpVariables, missingChapterLine } from '@ybot/runtime'
+import { SessionMachine, copyJumpVariables, missingChapterLine, listenForChapter, offerOnMap, isSmallTalk, sameQuestion, questionFrom } from '@ybot/runtime'
 import type { Session, SessionVariables, FlowGraph } from '@ybot/runtime'
 import { prisma } from '@ybot/db'
 import { CATALOG_ENTITY, catalogFromValues } from '@ybot/shared'
 import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
-import { pickWorkingCopy } from './entry-flow.js'
+import { newestByFlow, pickWorkingCopy } from './entry-flow.js'
 import { runFlowTurn } from './flow-turn.js'
 import { finishBotLines, nameThanksEndsTurn, saveContactName, takeNameTurn } from './visitor-name.js'
 
@@ -49,6 +49,11 @@ function startNodeId(graph: FlowGraph): string | undefined {
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   return { ...(value as Record<string, unknown>) }
+}
+
+function savedQuestion(waiting: unknown): string | undefined {
+  const question = asRecord(waiting)['question']
+  return typeof question === 'string' ? question : undefined
 }
 
 /** A saved session from an older chart may not have flow, global, and contact. */
@@ -97,19 +102,56 @@ export async function runFlowIfPublished(opts: {
   const catalogRow = await prisma.entity.findFirst({ where: { botId, tenantId, name: CATALOG_ENTITY } }).catch(() => null)
   const catalog = catalogFromValues(catalogRow?.values)
   const machine = new SessionMachine({ llm: llmAdapter, db: prisma, httpFetch: fetch, catalog })
+  const loadChapters = () => chaptersForBot(botId)
+  const previousAsked = savedQuestion(fsRecord?.waitingFor)
 
   let first
   try {
-    first = await runVersion({
-      machine,
-      version: active,
-      fsRecord,
-      conversationId,
-      botId,
-      tenantId,
-      userText,
-      contactName: named.spoken,
-    })
+    if (fsRecord && (fsRecord.status === 'completed' || fsRecord.status === 'handed_over')) {
+      const map = await loadChapters()
+      const nextName = !isSmallTalk(userText)
+        ? listenForChapter({ chapters: map, catalog, text: userText, current: active.flow.name })
+        : undefined
+      const target = nextName
+        ? await prisma.flowVersion.findFirst({
+            where: { flow: { botId, name: nextName } },
+            include: { flow: true },
+            orderBy: { version: 'desc' },
+          })
+        : null
+      if (target) {
+        first = await runVersion({
+          machine,
+          version: target,
+          fsRecord: null,
+          conversationId,
+          botId,
+          tenantId,
+          userText,
+          contactName: named.spoken,
+          seedVariables: copyJumpVariables(resumeVariables(fsRecord.variables, userText, named.spoken), userText, named.spoken),
+        })
+        if (first) {
+          active = target
+          fsRecord = null
+        }
+      }
+      if (!first) {
+        return { handled: true, messages: [offerOnMap(map, active.flow.name)], flowName: active.flow.name }
+      }
+    }
+    if (!first) {
+      first = await runVersion({
+        machine,
+        version: active,
+        fsRecord,
+        conversationId,
+        botId,
+        tenantId,
+        userText,
+        contactName: named.spoken,
+      })
+    }
   } catch (error) {
     if (!fsRecord) throw error
     await prisma.flowSession.delete({ where: { conversationId } }).catch(() => {})
@@ -174,6 +216,52 @@ export async function runFlowIfPublished(opts: {
         }
       }
     }
+  } else if (!isSmallTalk(userText)) {
+    const map = await loadChapters()
+    const nextName = listenForChapter({ chapters: map, catalog, text: userText, current: version.flow.name })
+    const target = nextName
+      ? await prisma.flowVersion.findFirst({
+          where: { flow: { botId, name: nextName } },
+          include: { flow: true },
+          orderBy: { version: 'desc' },
+        })
+      : null
+    if (target) {
+      const jumped = await runVersion({
+        machine,
+        version: target,
+        fsRecord: null,
+        conversationId,
+        botId,
+        tenantId,
+        userText,
+        contactName: named.spoken,
+        seedVariables: copyJumpVariables(first.session.variables, userText, named.spoken),
+      })
+      if (jumped) {
+        version = target
+        outcome = { ...jumped, messages: jumped.messages }
+        const jumpLog = {
+          tenantId,
+          conversationId,
+          nodeId: 'jump',
+          nodeKind: 'execute_flow' as const,
+          input: { fromFlowId: first.session.flowId, toFlowId: target.flowId, toName: target.flow.name },
+          output: { toFlowId: target.flowId },
+        }
+        await prisma.stepLog.create({ data: { ...jumpLog, flowVersionId: first.session.flowVersionId } }).catch(() => {})
+        await prisma.stepLog.create({ data: { ...jumpLog, flowVersionId: target.id } }).catch(() => {})
+        if (!convo?.subject) {
+          await prisma.conversation.update({ where: { id: conversationId }, data: { subject: target.flow.name } }).catch(() => {})
+        }
+      }
+    }
+  }
+
+  const asked = outcome.session.waitingFor?.question ?? questionFrom(outcome.messages.at(-1) ?? '')
+  if (!first.jumpToFlow && asked && sameQuestion(asked, previousAsked)) {
+    const map = await loadChapters()
+    outcome = { ...outcome, messages: [offerOnMap(map, version.flow.name)] }
   }
 
   const visible = outcome.messages.some((message) => message.trim().length > 0)
@@ -192,33 +280,29 @@ export async function runFlowIfPublished(opts: {
     return { handled: false, messages: [] }
   }
 
-  if (outcome.session.status === 'completed') {
-    await prisma.flowSession.delete({ where: { conversationId } }).catch(() => {})
-  } else {
-    await prisma.flowSession.upsert({
-      where: { conversationId },
-      create: {
-        id: outcome.session.id,
-        tenantId,
-        conversationId,
-        botId,
-        flowId: version.flowId,
-        flowVersionId: version.id,
-        currentNodeId: outcome.session.currentNodeId,
-        variables: outcome.session.variables as object,
-        status: outcome.session.status,
-        waitingFor: outcome.session.waitingFor ? (outcome.session.waitingFor as object) : undefined,
-      },
-      update: {
-        flowId: version.flowId,
-        flowVersionId: version.id,
-        currentNodeId: outcome.session.currentNodeId,
-        variables: outcome.session.variables as object,
-        status: outcome.session.status,
-        waitingFor: outcome.session.waitingFor ? (outcome.session.waitingFor as object) : undefined,
-      },
-    })
-  }
+  await prisma.flowSession.upsert({
+    where: { conversationId },
+    create: {
+      id: outcome.session.id,
+      tenantId,
+      conversationId,
+      botId,
+      flowId: version.flowId,
+      flowVersionId: version.id,
+      currentNodeId: outcome.session.currentNodeId,
+      variables: outcome.session.variables as object,
+      status: outcome.session.status,
+      waitingFor: outcome.session.waitingFor ? (outcome.session.waitingFor as object) : undefined,
+    },
+    update: {
+      flowId: version.flowId,
+      flowVersionId: version.id,
+      currentNodeId: outcome.session.currentNodeId,
+      variables: outcome.session.variables as object,
+      status: outcome.session.status,
+      waitingFor: outcome.session.waitingFor ? (outcome.session.waitingFor as object) : undefined,
+    },
+  })
 
   if (outcome.handover) {
     await prisma.conversation.update({ where: { id: conversationId }, data: { status: 'escalated' } }).catch(() => {})
@@ -256,6 +340,17 @@ async function entryVersion(botId: string) {
     include: { flow: true },
   })
   return pickWorkingCopy(versions)
+}
+
+async function chaptersForBot(botId: string): Promise<Array<{ name: string; graph: FlowGraph }>> {
+  const versions = await prisma.flowVersion.findMany({
+    where: { flow: { botId } },
+    include: { flow: true },
+  })
+  return newestByFlow(versions).map((row) => ({
+    name: row.flow.name,
+    graph: row.graph as unknown as FlowGraph,
+  }))
 }
 
 async function runVersion(opts: {

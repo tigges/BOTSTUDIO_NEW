@@ -36,6 +36,7 @@ export async function executeAskQuestion(ctx: NodeContext): Promise<NodeResult> 
       variable: String(config['variable'] ?? 'answer'),
       type: String(config['validate'] ?? 'text'),
       choices: config['choices'] as string[] | undefined,
+      question,
     },
   }
 }

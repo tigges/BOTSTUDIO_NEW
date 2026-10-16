@@ -9,7 +9,8 @@ const NOT_A_NAME = new Set([
   'help', 'feature', 'features', 'inbox', 'plan', 'start', 'free',
   'book', 'booking', 'colour', 'color', 'price', 'prices', 'hours',
   'yes', 'no', 'ok', 'okay', 'thanks', 'thank', 'please',
-  'want', 'need', 'appointment', 'haircut',
+  'want', 'need', 'appointment', 'haircut', 'cut', 'trim', 'fringe',
+  'services', 'service', 'catalog', 'salon',
   'what', 'how', 'when', 'where', 'today', 'can', 'could',
 ])
 

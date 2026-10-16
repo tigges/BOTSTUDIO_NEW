@@ -6,3 +6,5 @@ export type { Session, SessionVariables, NodeContext, NodeResult, ExecutionServi
 export { interpolate, evaluateCondition } from './utils.js'
 export { copyJumpVariables, missingChapterLine } from './handoff.js'
 export { matchCatalog } from './catalog-lookup.js'
+export { listenForChapter, offerOnMap, isSmallTalk, sameQuestion, questionFrom } from './map-listen.js'
+export { matchTopic, listenables } from './topic-route.js'

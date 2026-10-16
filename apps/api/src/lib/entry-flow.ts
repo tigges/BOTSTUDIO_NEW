@@ -21,11 +21,16 @@ export function pickEntry<T extends EntryCandidate>(versions: T[]): T | undefine
   return [...pool].sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0))[0]
 }
 
-/** Newest saved graph per chapter, then the welcome. Drafts count. */
-export function pickWorkingCopy<T extends WorkingCopyCandidate>(versions: T[]): T | undefined {
+/** Newest saved graph for each chapter. Drafts count. */
+export function newestByFlow<T extends WorkingCopyCandidate>(versions: T[]): T[] {
   const newest = new Map<string, T>()
   for (const row of [...versions].sort((a, b) => b.version - a.version)) {
     if (!newest.has(row.flowId)) newest.set(row.flowId, row)
   }
-  return pickEntry([...newest.values()])
+  return [...newest.values()]
+}
+
+/** Newest saved graph per chapter, then the welcome. Drafts count. */
+export function pickWorkingCopy<T extends WorkingCopyCandidate>(versions: T[]): T | undefined {
+  return pickEntry(newestByFlow(versions))
 }
