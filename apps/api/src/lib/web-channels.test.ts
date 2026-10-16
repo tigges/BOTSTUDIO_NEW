@@ -2,9 +2,9 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { canRemoveWebChannel, environmentsMissingWeb, webChannelName } from './web-channels.js'
 
-test('sandbox is the test widget, production is the live embed', () => {
-  assert.equal(webChannelName('sandbox'), 'Website Chat (Test)')
-  assert.equal(webChannelName('production'), 'Website Chat')
+test('website chat has one name — sandbox and production are the top-bar layer', () => {
+  assert.equal(webChannelName('sandbox'), 'Website chat')
+  assert.equal(webChannelName('production'), 'Website chat')
 })
 
 test('each environment gets its own website chat', () => {

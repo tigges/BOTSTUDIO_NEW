@@ -1,7 +1,7 @@
 import { prisma } from '@ybot/db'
 
-export function webChannelName(kind: string): string {
-  return kind === 'sandbox' ? 'Website Chat (Test)' : 'Website Chat'
+export function webChannelName(_kind?: string): string {
+  return 'Website chat'
 }
 
 export function environmentsMissingWeb(
@@ -48,7 +48,7 @@ export async function ensureOptionalChannels(tenantId: string, botId: string, ki
           environmentId: env.id,
           name: OPTIONAL_CHANNEL_NAMES[kind] ?? kind,
           kind,
-          isActive: true,
+          isActive: false,
           config: {},
         },
       })

@@ -127,10 +127,10 @@ export const DEMO_SOURCES: KnowledgeSource[] = [
 ]
 
 export const DEMO_CHANNELS: Channel[] = [
-  { id: 'ch_demo_web_test', name: 'Website Chat (Test)', kind: 'web', environmentId: 'demo-env-sandbox', config: { accentColor: '#6366f1', title: 'Chat with us' }, isActive: true, botId: 'demo', createdAt: new Date(Date.now() - 7 * 86400_000).toISOString() },
-  { id: 'ch_demo_web', name: 'Website Chat', kind: 'web', environmentId: 'demo-env-prod', config: { accentColor: '#6366f1', title: 'Chat with us' }, isActive: true, botId: 'demo', createdAt: new Date(Date.now() - 7 * 86400_000).toISOString() },
-  { id: 'ch_demo_wa', name: 'WhatsApp Business', kind: 'whatsapp', config: { phoneNumberId: '15550001234' }, isActive: true, botId: 'demo', createdAt: new Date(Date.now() - 14 * 86400_000).toISOString() },
-  { id: 'ch_demo_email', name: 'Support Email', kind: 'email', config: { address: 'support@acme.com' }, isActive: false, botId: 'demo', createdAt: new Date(Date.now() - 30 * 86400_000).toISOString() },
+  { id: 'ch_demo_web_test', name: 'Website chat', kind: 'web', environmentId: 'demo-env-sandbox', config: { accentColor: '#6366f1', title: 'Chat with us' }, isActive: true, botId: 'demo', createdAt: new Date(Date.now() - 7 * 86400_000).toISOString() },
+  { id: 'ch_demo_web', name: 'Website chat', kind: 'web', environmentId: 'demo-env-prod', config: { accentColor: '#6366f1', title: 'Chat with us' }, isActive: true, botId: 'demo', createdAt: new Date(Date.now() - 7 * 86400_000).toISOString() },
+  { id: 'ch_demo_wa', name: 'WhatsApp', kind: 'whatsapp', environmentId: 'demo-env-sandbox', config: { phoneNumberId: '15550001234' }, isActive: true, botId: 'demo', createdAt: new Date(Date.now() - 14 * 86400_000).toISOString() },
+  { id: 'ch_demo_email', name: 'Email', kind: 'email', environmentId: 'demo-env-sandbox', config: { address: 'support@acme.com' }, isActive: false, botId: 'demo', createdAt: new Date(Date.now() - 30 * 86400_000).toISOString() },
 ]
 
 export const DEMO_TRAINING: LlmConfig = {

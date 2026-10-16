@@ -23,8 +23,8 @@ export async function channelsRoutes(app: FastifyInstance) {
     const { botId } = request.params as { botId: string }
     const body = z.object({ name: z.string().min(1), kind: z.string(), environmentId: z.string(), config: z.record(z.any()).default({}) }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
-    const isActive = body.data.kind === 'web' ? true : undefined
-    return reply.status(201).send({ data: await prisma.channel.create({ data: { ...body.data, tenantId, botId, ...(isActive ? { isActive } : {}) } }) })
+    const isActive = body.data.kind === 'web'
+    return reply.status(201).send({ data: await prisma.channel.create({ data: { ...body.data, tenantId, botId, isActive } }) })
   })
 
   app.patch('/:botId/channels/:id', async (request, reply) => {
