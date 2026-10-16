@@ -3,6 +3,7 @@ import { prisma } from '@ybot/db'
 import { requireRole } from '../middleware/auth.js'
 import { z } from 'zod'
 import { sendEmail, inviteEmail } from '../lib/email.js'
+import { canRemoveWebChannel, ensureWebChannels } from '../lib/web-channels.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -13,6 +14,7 @@ export async function channelsRoutes(app: FastifyInstance) {
   app.get('/:botId/channels', async (request) => {
     const { tenantId } = request.user as JWT
     const { botId } = request.params as { botId: string }
+    await ensureWebChannels(tenantId, botId)
     return { data: await prisma.channel.findMany({ where: { botId, tenantId }, orderBy: { createdAt: 'asc' } }) }
   })
 
@@ -21,19 +23,26 @@ export async function channelsRoutes(app: FastifyInstance) {
     const { botId } = request.params as { botId: string }
     const body = z.object({ name: z.string().min(1), kind: z.string(), environmentId: z.string(), config: z.record(z.any()).default({}) }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
-    return reply.status(201).send({ data: await prisma.channel.create({ data: { ...body.data, tenantId, botId } }) })
+    const isActive = body.data.kind === 'web' ? true : undefined
+    return reply.status(201).send({ data: await prisma.channel.create({ data: { ...body.data, tenantId, botId, ...(isActive ? { isActive } : {}) } }) })
   })
 
   app.patch('/:botId/channels/:id', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { botId, id } = request.params as { botId: string; id: string }
     const body = z.object({ name: z.string().optional(), config: z.record(z.any()).optional(), isActive: z.boolean().optional(), allowedDomains: z.array(z.string()).optional() }).parse(request.body)
+    const existing = await prisma.channel.findFirst({ where: { id, botId, tenantId } })
+    if (existing?.kind === 'web' && body.isActive === false) body.isActive = true
     return { data: await prisma.channel.updateMany({ where: { id, botId, tenantId }, data: body }) }
   })
 
   app.delete('/:botId/channels/:id', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { botId, id } = request.params as { botId: string; id: string }
+    const channels = await prisma.channel.findMany({ where: { botId, tenantId }, select: { id: true, kind: true, environmentId: true } })
+    if (!canRemoveWebChannel(channels, id)) {
+      return reply.status(409).send({ error: { code: 'WEBCHAT_REQUIRED', message: 'Website chat stays on so guests can walk the journey.' } })
+    }
     await prisma.channel.deleteMany({ where: { id, botId, tenantId } })
     return reply.status(204).send()
   })

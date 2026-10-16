@@ -2,9 +2,9 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { visitorTurn } from './widget-open.js'
 
-test('opening an empty chat is a greeting, not a visitor line', () => {
-  assert.deepEqual(visitorTurn({ opening: true }), { text: 'hi', showVisitor: false })
-  assert.deepEqual(visitorTurn({ message: '   ', opening: true }), { text: 'hi', showVisitor: false })
+test('opening an empty chat greets without burning a fake hi', () => {
+  assert.deepEqual(visitorTurn({ opening: true }), { text: '', showVisitor: false })
+  assert.deepEqual(visitorTurn({ message: '   ', opening: true }), { text: '', showVisitor: false })
 })
 
 test('a typed message stays in the transcript', () => {

@@ -8,6 +8,7 @@ import { installCorporatePack, installHairStudioPack, removeStarterPack } from '
 import { installDraftWelcome, installStarterFlows } from '../lib/install-starter-flows.js'
 import { installWebsiteScan } from '../lib/install-website-scan.js'
 import { PublicSiteError, readPublicSite } from '../lib/public-site.js'
+import { ensureWebChannels } from '../lib/web-channels.js'
 
 const BOT_STARTS = ['hair-studio', 'corporate', 'sample', 'blank', 'website'] as const
 type BotStart = (typeof BOT_STARTS)[number]
@@ -128,6 +129,7 @@ export async function botsRoutes(app: FastifyInstance) {
       },
       include: { environments: true },
     })
+    await ensureWebChannels(tenantId, bot.id)
 
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
     const sandbox = bot.environments.find((env) => env.kind === 'sandbox')

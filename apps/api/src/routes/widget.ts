@@ -20,6 +20,7 @@ import { proposeDraftFlows, textMightStartDraft } from '../lib/draft-flows.js'
 import { runFlowIfPublished } from '../lib/flow-runner.js'
 import { appBuildLabel, BELLA_PUBLIC_CHANNEL, resolveDemoChannel } from '../lib/demo-page.js'
 import { visitorTurn } from '../lib/widget-open.js'
+import { loadPublicChannel } from '../lib/web-channels.js'
 import { streamDoneEvent } from '../lib/widget-rating.js'
 import { onInboundCustomerMessage, onOutboundReply } from '../lib/sla.js'
 import { fileURLToPath } from 'node:url'
@@ -218,7 +219,7 @@ export async function widgetRoutes(app: FastifyInstance) {
   // ── GET /widget-test/:channelId — browser test page ────────────────────────
   app.get<{ Params: { channelId: string }; Querystring: { title?: string; color?: string } }>('/widget-test/:channelId', async (request, reply) => {
     const { channelId } = request.params
-    const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
+    const channel = await loadPublicChannel(channelId)
     const botLabel   = channel?.bot?.name ?? 'BotStudio'
     const personaName = channel?.bot?.personaName ?? botLabel
     // Allow wizard/embed overrides via query params
@@ -261,10 +262,10 @@ export async function widgetRoutes(app: FastifyInstance) {
   app.get<{ Params: { channelId: string } }>('/public/demo/:channelId', async (request, reply) => {
     const { channelId } = request.params
     const origin = requestOrigin(request)
-    const requested = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
+    const requested = await loadPublicChannel(channelId)
     const fallback = requested
       ? null
-      : await prisma.channel.findFirst({ where: { id: BELLA_PUBLIC_CHANNEL, isActive: true }, include: { bot: true } })
+      : await loadPublicChannel(BELLA_PUBLIC_CHANNEL)
     const active = new Set<string>()
     if (requested) active.add(requested.id)
     if (fallback) active.add(fallback.id)
@@ -403,7 +404,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     if (!turn) return reply.status(400).send({ error: 'message required' })
     const userText = turn.text
 
-    const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
+    const channel = await loadPublicChannel(channelId)
     if (!channel?.bot) return reply.status(404).send({ error: 'Channel not found' })
 
     // ── Domain allowlist check ─────────────────────────────────────────────
@@ -518,7 +519,14 @@ export async function widgetRoutes(app: FastifyInstance) {
       }
     }
 
-    // ── RAG/LLM fallback (no published flow) ─────────────────────────────
+    if (!userText) {
+      send({ chunk: 'I don’t have a next line for that.' })
+      send(streamDoneEvent(false))
+      reply.raw.end()
+      return
+    }
+
+    // ── RAG/LLM fallback (no journey map) ────────────────────────────────
     const cfg = await prisma.botConfig.findUnique({ where: { botId } }).catch(() => null)
     const systemPrompt = cfg?.systemPrompt ?? `You are a helpful assistant for ${bot.name}. Answer using the knowledge base context.`
     const model = cfg?.model ?? undefined

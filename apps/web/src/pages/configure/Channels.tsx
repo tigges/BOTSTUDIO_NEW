@@ -23,7 +23,7 @@ const SUBNAV = [
 ]
 
 const KIND_META: Record<string, { label: string; description: string; icon: React.ReactNode; docsUrl?: string }> = {
-  web:       { label: 'Web Widget',          description: 'Embeddable chat widget for your website', icon: <Globe size={22} /> },
+  web:       { label: 'Web Widget',          description: 'Always-on chat that walks the journey map', icon: <Globe size={22} /> },
   whatsapp:  { label: 'WhatsApp Business',   description: 'Connect via WhatsApp Business API',       icon: <MessageSquare size={22} />, docsUrl: 'https://developers.facebook.com/docs/whatsapp' },
   sms:       { label: 'SMS (Twilio)',        description: 'Send and receive SMS via Twilio',          icon: <Phone size={22} />, docsUrl: 'https://www.twilio.com/docs' },
   email:     { label: 'Email',               description: 'Receive and reply to emails',             icon: <Mail size={22} /> },
@@ -55,8 +55,18 @@ function getDemoUrl(channelId: string): string {
   return `${base}/api/v1/public/demo/${channelId}`
 }
 
+function webRole(
+  channel: Channel,
+  environments: Array<{ id: string; kind: string }>,
+): 'test' | 'live' | null {
+  if (channel.kind !== 'web') return null
+  const env = environments.find((item) => item.id === channel.environmentId)
+  return env?.kind === 'sandbox' ? 'test' : 'live'
+}
+
 export function ChannelsPage() {
   const selectedBotId = useAppStore((s: { selectedBotId: string | null }) => s.selectedBotId) ?? ''
+  const environments = useAppStore((s) => s.bots.find((bot) => bot.id === s.selectedBotId)?.environments) ?? []
   const { data: channels = [], isLoading } = useChannels()
   const createChannel = useCreateChannel()
   const deleteChannel = useDeleteChannel()
@@ -92,7 +102,7 @@ export function ChannelsPage() {
     const patch: Parameters<typeof updateChannel.mutateAsync>[0] = {
       id: selected.id,
       name: editName.trim() || selected.name,
-      isActive: editActive,
+      isActive: selected.kind === 'web' ? true : editActive,
     }
     if (selected.kind === 'whatsapp') {
       patch.config = { phoneNumberId: waPhoneNumberId.trim(), accessToken: waAccessToken.trim(), verifyToken: waVerifyToken.trim() }
@@ -140,7 +150,7 @@ export function ChannelsPage() {
               <Plus size={14} /> Add Channel
             </Button>
             <Button size="sm" className="gap-1.5" onClick={() => setShowWizard(true)}>
-              <Wand2 size={14} /> Widget wizard
+              <Wand2 size={14} /> Embed widget
             </Button>
           </div>
         </div>
@@ -172,12 +182,12 @@ export function ChannelsPage() {
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <Globe size={40} className="text-[var(--text-muted)]" />
             <div className="text-center">
-              <p className="font-semibold text-[var(--text-primary)] mb-1">No channels yet</p>
-              <p className="text-sm text-[var(--text-muted)]">Add a channel to start receiving conversations.</p>
+              <p className="font-semibold text-[var(--text-primary)] mb-1">Website chat is always on</p>
+              <p className="text-sm text-[var(--text-muted)]">Test and live both walk the journey map. Add another channel if you need one.</p>
             </div>
             <div className="flex items-center gap-2 mt-2">
               <Button size="sm" className="gap-1.5" onClick={() => setShowWizard(true)}>
-                <Wand2 size={14} /> Set up web widget
+                <Wand2 size={14} /> Embed widget
               </Button>
               <Button size="sm" variant="ghost" className="gap-1.5" onClick={handleAddChannel}>
                 <Plus size={14} /> Other channel
@@ -238,20 +248,26 @@ export function ChannelsPage() {
                         {ch.kind === 'web' && <DropdownMenuItem onClick={() => { setShowWizard(true) }}><Wand2 size={13} /> Setup wizard</DropdownMenuItem>}
                         {ch.kind === 'web' && <DropdownMenuItem onClick={() => window.open(getTestUrl(ch.id), '_blank')}><FlaskConical size={13} /> Test widget</DropdownMenuItem>}
                         {ch.kind === 'web' && <DropdownMenuItem onClick={() => setShowEmbed(ch)}><Code2 size={13} /> Embed code</DropdownMenuItem>}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem destructive onClick={() => deleteChannel.mutate(ch.id)}><Trash2 size={13} /> Delete</DropdownMenuItem>
+                        {ch.kind !== 'web' && <DropdownMenuSeparator />}
+                        {ch.kind !== 'web' && <DropdownMenuItem destructive onClick={() => deleteChannel.mutate(ch.id)}><Trash2 size={13} /> Delete</DropdownMenuItem>}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
                 </div>
 
                 <h3 className="font-semibold text-[var(--text-primary)] mb-0.5">{ch.name}</h3>
-                <p className="text-xs text-[var(--text-muted)] mb-3">{meta.description}</p>
+                <p className="text-xs text-[var(--text-muted)] mb-3">
+                  {webRole(ch, environments) === 'test'
+                    ? 'Test widget — same journey map as live'
+                    : webRole(ch, environments) === 'live'
+                      ? 'Live embed — walks the journey map'
+                      : meta.description}
+                </p>
 
                 <div className="flex items-center justify-between">
-                  <span className={cn('flex items-center gap-1.5 text-xs font-medium', ch.isActive ? 'text-[var(--success)]' : 'text-[var(--text-muted)]')}>
-                    {ch.isActive ? <CheckCircle2 size={12} /> : <Circle size={12} />}
-                    {ch.isActive ? 'Active' : 'Inactive'}
+                  <span className={cn('flex items-center gap-1.5 text-xs font-medium', (ch.kind === 'web' || ch.isActive) ? 'text-[var(--success)]' : 'text-[var(--text-muted)]')}>
+                    {ch.kind === 'web' || ch.isActive ? <CheckCircle2 size={12} /> : <Circle size={12} />}
+                    {ch.kind === 'web' ? (webRole(ch, environments) === 'test' ? 'Test · always on' : 'Live · always on') : ch.isActive ? 'Active' : 'Inactive'}
                   </span>
                   <Badge variant="muted" className="text-[10px] uppercase tracking-wide">{ch.kind}</Badge>
                 </div>
@@ -281,7 +297,19 @@ export function ChannelsPage() {
                   />
                 </div>
 
-                {/* Active toggle */}
+                {selected.kind === 'web' ? (
+                  <div className="flex items-center justify-between p-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)]">
+                    <div className="flex items-center gap-3">
+                      <span className="p-2 rounded-[var(--radius-md)] bg-[var(--accent-muted)] text-[var(--accent)]">
+                        {meta.icon}
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium text-[var(--text-primary)]">Always on</p>
+                        <p className="text-xs text-[var(--text-muted)]">Test and live both walk the journey map. Guests do not wait on a wizard.</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
                 <div className="flex items-center justify-between p-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)]">
                   <div className="flex items-center gap-3">
                     <span className={cn('p-2 rounded-[var(--radius-md)]', editActive ? 'bg-[var(--accent-muted)] text-[var(--accent)]' : 'bg-[var(--bg-overlay)] text-[var(--text-muted)]')}>
@@ -304,6 +332,7 @@ export function ChannelsPage() {
                     <span className={cn('pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform', editActive ? 'translate-x-4' : 'translate-x-0')} />
                   </button>
                 </div>
+                )}
 
                 {selected.kind === 'web' && (
                   <div>
