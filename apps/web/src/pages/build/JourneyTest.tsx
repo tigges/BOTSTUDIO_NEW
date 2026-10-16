@@ -3,6 +3,7 @@ import { Loader2, RotateCcw, Send, X } from 'lucide-react'
 import { Avatar, Button, cn } from '@ybot/ui'
 import { runJourneyPreview, type FlowGraph, type JourneyPreviewSnapshot } from '@ybot/runtime'
 import type { StudioCatalog } from '@ybot/shared'
+import { ChatText } from '../../components/ChatText'
 
 export interface JourneyTestChapter {
   name: string
@@ -169,7 +170,7 @@ export function JourneyTest({
                   : 'rounded-tl-sm border border-[var(--border)] bg-[var(--bg-overlay)] text-[var(--text-primary)]',
               )}
             >
-              {line.content || (loading && (
+              {line.content ? <ChatText text={line.content} /> : (loading && (
                 <span className="flex items-center gap-1.5 text-[var(--text-muted)]">
                   <Loader2 size={12} className="animate-spin" />
                   Thinking…

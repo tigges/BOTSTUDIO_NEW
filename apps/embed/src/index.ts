@@ -59,6 +59,50 @@
     return node
   }
 
+  const BOOKING_HOSTS: Record<string, string> = {
+    'phorest.com': 'Phorest', 'fresha.com': 'Fresha', 'booksy.com': 'Booksy',
+    'calendly.com': 'Calendly', 'setmore.com': 'Setmore', 'simplybook.me': 'SimplyBook',
+    'vagaro.com': 'Vagaro', 'squareup.com': 'Square', 'square.site': 'Square',
+  }
+
+  function hostLabel(url: string): string | undefined {
+    try {
+      const host = new URL(url).hostname.replace(/^www\./, '').toLowerCase()
+      for (const [known, label] of Object.entries(BOOKING_HOSTS)) {
+        if (host === known || host.endsWith(`.${known}`)) return label
+      }
+    } catch { /* ignore */ }
+    return undefined
+  }
+
+  function fillChat(node: HTMLElement, text: string) {
+    node.textContent = ''
+    const placeholders: string[] = []
+    let next = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (full) => {
+      placeholders.push(full)
+      return `\u0000${placeholders.length - 1}\u0000`
+    })
+    next = next.replace(/\bBook on ([A-Za-z][\w .'-]*):\s*(https?:\/\/[^\s]+)/gi, (_all, label: string, url: string) => `[${String(label).trim()}](${url})`)
+    next = next.replace(/https?:\/\/[^\s<>]+/g, (url) => {
+      const cleaned = url.replace(/[),.;]+$/, '')
+      const label = hostLabel(cleaned)
+      return label ? `[${label}](${cleaned})` : url
+    })
+    next = next.replace(/\u0000(\d+)\u0000/g, (_, index: string) => placeholders[Number(index)] ?? '')
+    const matcher = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g
+    let last = 0
+    for (const match of next.matchAll(matcher)) {
+      const index = match.index ?? 0
+      if (index > last) node.appendChild(document.createTextNode(next.slice(last, index)))
+      const link = el('a', { href: match[2] ?? '', target: '_blank', rel: 'noopener noreferrer' })
+      link.textContent = match[1] ?? ''
+      css(link, { color: 'inherit', textDecoration: 'underline' })
+      node.appendChild(link)
+      last = index + match[0].length
+    }
+    if (last < next.length) node.appendChild(document.createTextNode(next.slice(last)))
+  }
+
   // ── Build UI ───────────────────────────────────────────────────────────────
   const root = el('div')
   css(root, { position: 'fixed', bottom: '24px', right: '24px', zIndex: '2147483647', fontFamily: 'system-ui,sans-serif' })
@@ -149,7 +193,7 @@
         background: m.role === 'user' ? ACCENT : '#f3f4f6', color: m.role === 'user' ? '#fff' : '#111',
         fontSize: '14px', lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
       })
-      bubble.textContent = m.text + (m.streaming ? '▋' : '')
+      fillChat(bubble, m.text + (m.streaming ? '▋' : ''))
       row.appendChild(bubble)
       msgArea.appendChild(row)
     }

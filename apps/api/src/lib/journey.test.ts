@@ -20,6 +20,7 @@ test('salon chapters hang off the welcome, and parked charts stay loose', () => 
   ])
   const book = layout.roots[0]?.children.find((chapter) => chapter.name === 'Book an appointment')
   assert.deepEqual(layout.roots[0]?.children.find((chapter) => chapter.name === 'Location')?.looksUp, ['Catalog'])
+  assert.deepEqual(book?.workflows, [])
   assert.equal(book?.children.some((chapter) => chapter.name === 'Consultation'), true)
   assert.equal(layout.loose.some((chapter) => chapter.name === 'Gift voucher'), true)
   assert.equal(layout.suggested.length, 0)

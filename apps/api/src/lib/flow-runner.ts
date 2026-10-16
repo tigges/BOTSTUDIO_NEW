@@ -8,7 +8,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { SessionMachine, copyJumpVariables, missingChapterLine, listenForChapter, offerOnMap, isSmallTalk, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn } from '@ybot/runtime'
+import { SessionMachine, copyJumpVariables, missingChapterLine, listenForChapter, offerOnMap, isSmallTalk, isTopicSwitch, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn } from '@ybot/runtime'
 import type { Session, SessionVariables, FlowGraph } from '@ybot/runtime'
 import { prisma } from '@ybot/db'
 import { CATALOG_ENTITY, catalogFromValues } from '@ybot/shared'
@@ -230,7 +230,11 @@ export async function runFlowIfPublished(opts: {
         }
       }
     }
-  } else if (!isSmallTalk(userText)) {
+  } else if (
+    !isSmallTalk(userText)
+    && !/^book/i.test(version.flow.name)
+    && (!fsRecord?.waitingFor || isTopicSwitch(userText))
+  ) {
     const map = await loadChapters()
     const nextName = listenForChapter({ chapters: map, catalog, text: userText, current: version.flow.name })
     const target = nextName

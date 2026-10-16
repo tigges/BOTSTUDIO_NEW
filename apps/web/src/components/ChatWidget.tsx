@@ -10,6 +10,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, Loader2, Sparkles, Database, X, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button, Avatar } from '@ybot/ui'
 import { cn } from '@ybot/ui'
+import { ChatText } from './ChatText'
 import { preview } from '../lib/api'
 import { useAppStore } from '../store/app'
 
@@ -325,7 +326,7 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
                     : 'rounded-tl-sm bg-[var(--bg-overlay)] text-[var(--text-primary)] border border-[var(--border)]'
                 )}
               >
-                {msg.content || (msg.streaming && (
+                {msg.content ? <ChatText text={msg.content} /> : (msg.streaming && (
                   <span className="flex items-center gap-1.5 text-[var(--text-muted)]">
                     <Loader2 size={12} className="animate-spin" />
                     Thinking…

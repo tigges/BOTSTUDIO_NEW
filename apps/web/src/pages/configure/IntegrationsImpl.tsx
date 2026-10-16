@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import {
   Plug, Search, CheckCircle2, Plus, ExternalLink,
   Zap, BarChart2, MessageSquare, Package, FileText,
-  AlertCircle, ChevronRight, RefreshCw,
+  AlertCircle, ChevronRight, RefreshCw, Calendar,
 } from 'lucide-react'
 import { Badge, Button, Input } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
@@ -18,7 +18,7 @@ const SUBNAV = [
   { label: 'Webhooks', path: '/configure/webhooks' },
 ]
 
-type IntegrationCategory = 'CRM' | 'Ticketing' | 'Analytics' | 'Messaging' | 'Automation' | 'Commerce'
+type IntegrationCategory = 'CRM' | 'Ticketing' | 'Analytics' | 'Messaging' | 'Automation' | 'Commerce' | 'Booking'
 type IntegrationStatus = 'connected' | 'available' | 'coming_soon'
 
 interface Integration {
@@ -33,7 +33,7 @@ interface Integration {
 
 const LOGOS: Record<string, string> = {
   hubspot: '🟠', salesforce: '🔵', zendesk: '🟢', jira: '🔷', slack: '💜', teams: '🟣',
-  zapier: '🟡', n8n: '🔴', ga4: '📊', mixpanel: '🎯', shopify: '🛍️', stripe: '💳',
+  zapier: '🟡', n8n: '🔴', ga4: '📊', mixpanel: '🎯', shopify: '🛍️', stripe: '💳', phorest: '📒',
 }
 
 const INTEGRATIONS: Integration[] = [
@@ -49,6 +49,7 @@ const INTEGRATIONS: Integration[] = [
   { id: 'mixpanel', name: 'Mixpanel', description: 'Send custom events to Mixpanel for product analytics', category: 'Analytics', status: 'available', logo: '🎯' },
   { id: 'shopify', name: 'Shopify', description: 'Look up orders, products, and customers from Shopify', category: 'Commerce', status: 'available', logo: '🛍️' },
   { id: 'stripe', name: 'Stripe', description: 'Retrieve payment and subscription data from Stripe', category: 'Commerce', status: 'coming_soon', logo: '💳' },
+  { id: 'phorest', name: 'Phorest', description: 'Send an already confirmed booking to Phorest. The guest stays in chat until then.', category: 'Booking', status: 'coming_soon', logo: '📒' },
 ]
 
 const CATEGORY_ICONS: Record<IntegrationCategory, React.ReactNode> = {
@@ -58,6 +59,7 @@ const CATEGORY_ICONS: Record<IntegrationCategory, React.ReactNode> = {
   Messaging: <MessageSquare size={13} />,
   Automation: <Zap size={13} />,
   Commerce: <Package size={13} />,
+  Booking: <Calendar size={13} />,
 }
 
 export function IntegrationsPage() {

@@ -26,7 +26,10 @@ const INTEGRATION_CATALOG = [
   { id: 'mixpanel', name: 'Mixpanel', description: 'Send custom events to Mixpanel for product analytics', category: 'Analytics' },
   { id: 'shopify', name: 'Shopify', description: 'Look up orders, products, and customers from Shopify', category: 'Commerce' },
   { id: 'stripe', name: 'Stripe', description: 'Retrieve payment and subscription data from Stripe', category: 'Commerce' },
+  { id: 'phorest', name: 'Phorest', description: 'Send an already confirmed booking to Phorest. The guest stays in chat until then.', category: 'Booking' },
 ] as const
+
+const COMING_SOON = new Set<string>(['stripe', 'phorest'])
 
 export async function cannedRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
@@ -260,7 +263,7 @@ export async function integrationsRoutes(app: FastifyInstance) {
     return {
       data: INTEGRATION_CATALOG.map((item) => {
         const row = byProvider.get(item.id)
-        const comingSoon = item.id === 'stripe'
+        const comingSoon = COMING_SOON.has(item.id)
         return {
           ...item,
           status: comingSoon ? 'coming_soon' : row ? 'connected' : 'available',
@@ -277,8 +280,8 @@ export async function integrationsRoutes(app: FastifyInstance) {
     if (!INTEGRATION_CATALOG.some((item) => item.id === provider)) {
       return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
     }
-    if (provider === 'stripe') {
-      return reply.status(409).send({ error: { code: 'COMING_SOON', message: 'Stripe will become a real feature.' } })
+    if (COMING_SOON.has(provider)) {
+      return reply.status(409).send({ error: { code: 'COMING_SOON', message: 'This connection will become a real feature.' } })
     }
     const body = z.object({ apiKey: z.string().min(1) }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })

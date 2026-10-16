@@ -4,6 +4,7 @@
  * sits beside the welcome. Anything with no line in stays loose.
  */
 
+import { bookingWorkflowsIn } from './chat-links.js'
 import { LEARNING_TAG } from './learn-from-chats.js'
 import { spokenLines, welcomeDoors } from './conversation-map.js'
 
@@ -24,6 +25,7 @@ export interface JourneyChapter {
   suggested: boolean
   published: boolean
   looksUp: string[]
+  workflows: string[]
   children: JourneyChapter[]
 }
 
@@ -55,6 +57,7 @@ function chapterFrom(flow: JourneyFlowInput, welcome: boolean, suggested: boolea
     suggested,
     published: flow.published,
     looksUp: looksUpCatalog(flow.graph) ? ['Catalog'] : [],
+    workflows: bookingWorkflowsIn(flow.graph),
     children: [],
   }
 }

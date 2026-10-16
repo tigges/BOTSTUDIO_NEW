@@ -43,7 +43,16 @@ function nodeById(graph: FlowGraph): Map<string, GraphNode> {
   return new Map(graph.nodes.map((node) => [node.id, node]))
 }
 
-/** Phrases that stay on this chart, not the doors that leave it. */
+const INSIDE_ANSWERS = new Set([
+  'yes', 'yeah', 'yep', 'no', 'nope', 'ok', 'okay', 'please', 'both',
+])
+
+function keepOpenPhrase(phrase: string): boolean {
+  const needle = phrase.toLowerCase().trim()
+  return Boolean(needle) && needle.length >= 3 && !INSIDE_ANSWERS.has(needle)
+}
+
+/** Phrases that stay on this chart, not the doors that leave it, and not yes/no answers inside the walk. */
 export function phrasesFromGraph(graph: FlowGraph, extra: string[] = []): string[] {
   const nodes = nodeById(graph)
   const phrases = [...extra]
@@ -52,7 +61,7 @@ export function phrasesFromGraph(graph: FlowGraph, extra: string[] = []): string
       const edge = outgoing(graph, node.id).find((item) => item.sourceHandle === route.handle)
       const target = jumpName(nodes.get(edge?.target ?? ''))
       if (target) continue
-      phrases.push(...route.phrases)
+      phrases.push(...route.phrases.filter(keepOpenPhrase))
     }
   }
   return phrases
@@ -177,6 +186,42 @@ export function shapeTurn(text: string, chapter?: string): string {
   return spoken
 }
 
+const COLOUR_SERVICE = /\b(colou?rs?|highlights?|balayage|foiliage)\b/i
+const PRICE_ASK = /\b(how much|price|prices|cost|pricing)\b/i
+const HOURS_ASK = /\b(hours?|opening|when are you open)\b/i
+const WHERE_ASK = /\b(where|address|location|directions)\b/i
+const CANCEL_ASK = /\b(cancel|cancellation)\b/i
+const BOOK_ASK = /\b(book|booking|appointment)\b/i
+const CUT_ASK = /\b(haircuts?|a cut|a trim|cut|fringe|services?)\b/i
+
+/** A deal only when they ask for one. A weekday is a time, not a promotion. */
+export function wantsOffer(text: string): boolean {
+  return /\b(offers?|discounts?|promo|promotion|percent off|% off|half price|special offer)\b/i.test(text.trim())
+}
+
+/** A colour service word without a price or offer ask belongs on Book, not Offers. */
+export function colourWantsBooking(text: string): boolean {
+  const heard = text.trim()
+  if (!COLOUR_SERVICE.test(heard)) return false
+  if (PRICE_ASK.test(heard)) return false
+  if (wantsOffer(heard)) return false
+  return true
+}
+
+/** Leave the current question only when they clearly start something else. */
+export function isTopicSwitch(text: string): boolean {
+  const heard = text.trim()
+  if (!heard || isSmallTalk(heard)) return false
+  return colourWantsBooking(heard)
+    || wantsOffer(heard)
+    || PRICE_ASK.test(heard)
+    || HOURS_ASK.test(heard)
+    || WHERE_ASK.test(heard)
+    || CANCEL_ASK.test(heard)
+    || BOOK_ASK.test(heard)
+    || CUT_ASK.test(heard)
+}
+
 /**
  * Hear a chapter from the whole map: its name, the words that open it, and catalog facts.
  * The welcome is a hub, not a destination.
@@ -189,10 +234,15 @@ export function listenForChapter(input: {
 }): string | undefined {
   const heard = input.text.trim()
   if (!heard || isSmallTalk(heard)) return undefined
+  const book = input.chapters.find((chapter) => chapter.name === 'Book an appointment')
+  if (book && colourWantsBooking(heard)) {
+    return book.name === input.current ? undefined : book.name
+  }
   const withFacts: TopicRoute[] = []
   const withoutFacts: TopicRoute[] = []
   for (const chapter of input.chapters) {
     if (isWelcomeName(chapter.name) || chapter.name === input.current) continue
+    if (/^offers?$/i.test(chapter.name) && !wantsOffer(heard)) continue
     const facts = catalogPhrases(input.catalog, chapter.name)
     const route = {
       handle: chapter.name,

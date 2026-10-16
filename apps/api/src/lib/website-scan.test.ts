@@ -82,7 +82,9 @@ test('yuzu.hair becomes Bella at Yuzu with four doors and no invented cancellati
   assert.ok(serviceMessages.some((text) => /£29/.test(text) && !/£58/.test(text)))
   assert.equal(serviceMessages.some((text) => /£58/.test(text) && /£75/.test(text)), false)
   assert.ok(serviceMessages.some((text) => /48 hours/.test(text)) || draft.facts.some((fact) => /48 hours/.test(fact.text)))
-  assert.match(draft.doors[3]!.answer, /phorest\.com\/salon\/yuzuhairandbeauty/)
+  assert.match(draft.doors[3]!.answer, /\[Phorest\]\(https:\/\/www\.phorest\.com\/salon\/yuzuhairandbeauty\)/)
+  assert.equal(/Book on Phorest: https:/.test(draft.doors[3]!.answer), false)
+  assert.equal(draft.booking?.label, 'Phorest')
   assert.match(draft.note, /cancellation rule/)
   assert.equal(draft.facts.some((fact) => fact.label === 'Offers'), true)
   assert.equal(draft.documents[0]?.content.includes('Dickens Yard'), true)
@@ -131,6 +133,7 @@ test('yuzu.hair becomes Bella at Yuzu with four doors and no invented cancellati
   assert.deepEqual(layout.roots[0]?.children.map((chapter) => chapter.name), [
     'Location', 'Salon hours', 'Services and prices', 'Book an appointment',
   ])
+  assert.deepEqual(layout.roots[0]?.children.find((chapter) => chapter.name === 'Book an appointment')?.workflows, ['Phorest'])
   assert.deepEqual(layout.suggested, [])
   assert.deepEqual(layout.loose, [])
 })
@@ -216,6 +219,10 @@ test('linked pages become separate conversations instead of one price paragraph'
   const offerMessages = messageTexts(draft.flows.find((flow) => flow.name === 'Offers'))
   assert.equal(offerMessages.filter((text) => /Tuesday/.test(text)).length, 1)
   assert.match(offerMessages.find((text) => /Tuesday/.test(text)) ?? '', /50% off/)
+  assert.equal(
+    draft.catalog.facts.filter((fact) => fact.source === 'Offers').every((fact) => !fact.phrases.some((phrase) => /colou?r|cut/.test(phrase))),
+    true,
+  )
 
   const names = draft.flows.map((flow) => flow.name)
   for (const flow of draft.flows) {
