@@ -40,6 +40,15 @@ test('every screen opens', { tag: '@smoke' }, async ({ page }) => {
     await page.goto(path)
     await expect(page).toHaveURL(new RegExp(path.replaceAll('/', '\\/')))
     await expectNoCrash(page)
+    if (path === '/build/journey') {
+      await expect(page.getByRole('heading', { name: 'Journey' })).toBeVisible()
+    }
+    if (path === '/build/flows') {
+      await expect(page.getByText('Flows').first()).toBeVisible()
+    }
+    if (path === '/build/workflows') {
+      await expect(page.getByRole('heading', { name: 'Workflows' })).toBeVisible()
+    }
     if (path === '/help') {
       await expect(page.getByRole('heading', { name: 'Help' })).toBeVisible()
       await expect(page.getByRole('img', { name: 'Flows list' })).toBeVisible()

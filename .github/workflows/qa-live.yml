@@ -54,48 +54,6 @@ jobs:
           echo "Live site did not report $EXPECTED_SHA within 20 minutes"
           exit 1
 
-      - name: Fill any missing demo data
-        env:
-          LIVE_URL: https://app.botstudio.uk
-          SEED_DEMO_SECRET: ${{ secrets.SEED_DEMO_SECRET }}
-          QA_EMAIL: qa@acme.com
-          QA_PASSWORD: ${{ secrets.QA_ACCOUNT_PASSWORD }}
-        run: |
-          set -euo pipefail
-          auth_header=""
-          if [ -n "$SEED_DEMO_SECRET" ]; then
-            auth_header="Authorization: Bearer $SEED_DEMO_SECRET"
-          else
-            # qa@acme.com is an admin on Acme. Its password is not the human
-            # admin password, which can change without breaking this job.
-            if [ -z "$QA_PASSWORD" ]; then
-              QA_PASSWORD='QaDemo1234!'
-            fi
-            code="$(curl -sS -o /tmp/qa-login.json -w '%{http_code}' -X POST "$LIVE_URL/api/v1/auth/login" \
-              -H "Content-Type: application/json" \
-              -d "{\"email\":\"$QA_EMAIL\",\"password\":\"$QA_PASSWORD\"}" \
-              --max-time 30)"
-            if [ "$code" != "200" ]; then
-              echo "login HTTP $code"
-              cat /tmp/qa-login.json
-              echo
-              exit 1
-            fi
-            token="$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('/tmp/qa-login.json','utf8')); if(!j.data||!j.data.token) process.exit(1); process.stdout.write(j.data.token)")"
-            rm -f /tmp/qa-login.json
-            auth_header="Authorization: Bearer $token"
-          fi
-          # Fastify rejects an empty body when Content-Type is application/json.
-          code="$(curl -sS -o /tmp/ensure.json -w '%{http_code}' -X POST "$LIVE_URL/api/v1/system/ensure-demos" \
-            -H "$auth_header" \
-            -H "Content-Type: application/json" \
-            -d '{}' \
-            --max-time 180)"
-          echo "ensure-demos HTTP $code"
-          cat /tmp/ensure.json
-          echo
-          test "$code" = "200"
-
       - name: Run live tests
         env:
           LIVE_URL: https://app.botstudio.uk
@@ -103,7 +61,6 @@ jobs:
           QA_PASSWORD: ${{ secrets.QA_ACCOUNT_PASSWORD }}
           BELLA_EMAIL: demo@bella.com
           BELLA_PASSWORD: Demo1234!
-          QA_SUITE: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'full' || 'smoke' }}
         run: |
           set -euo pipefail
           if [ -z "$QA_PASSWORD" ]; then

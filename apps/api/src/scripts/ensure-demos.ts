@@ -10,7 +10,7 @@
  *   charles@bella.com / password123
  *   demo@bella.com    / Demo1234!
  *
- * QA Lab (created here if missing, used by the night suite only):
+ * QA Lab (created here if missing; live QA does not write to it):
  *   qa@qalab.com      / QaDemo1234!
  *
  * Running this again does not duplicate chats, does not edit an existing
@@ -19,7 +19,7 @@
  * Sandbox and Production. The retail shop menu is not her widget.
  * Owned Bella demo chats keep their names and move to the top of the inbox.
  * A clash on (flowId, version) from two seeds is retried.
- * QA Lab has a Sandbox so a new chart can be saved.
+ * Live QA only reads the named use cases. Demo traffic is a separate run.
  */
 
 import bcrypt from 'bcryptjs'

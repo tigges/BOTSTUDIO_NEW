@@ -110,6 +110,21 @@ export async function systemRoutes(app: FastifyInstance) {
     }
   })
 
+  // Inbox traffic only. Does not create or edit journeys, flows, or workflows.
+  app.post('/demo-traffic', async (request, reply) => {
+    if (!(await seedAuthorized(app, request.headers.authorization))) {
+      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Admin login or SEED_DEMO_SECRET is required' } })
+    }
+    try {
+      const { addDemoTraffic } = await import('../lib/demo-traffic.js')
+      return { data: await addDemoTraffic() }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      request.log.error({ err }, 'demo-traffic failed')
+      return reply.status(500).send({ error: { code: 'TRAFFIC_FAILED', message: msg } })
+    }
+  })
+
   await app.register(async function adminSystemRoutes(scope) {
     scope.addHook('preHandler', app.authenticate)
     scope.addHook('preHandler', requireRole('ADMIN'))
