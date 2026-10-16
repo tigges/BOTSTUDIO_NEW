@@ -8,15 +8,17 @@
 import React, { useState } from 'react'
 import {
   Sparkles, CheckCircle2, XCircle, ChevronDown, ChevronUp,
-  BookMarked, BarChart3, Loader2, RefreshCcw,
+  BookMarked, BarChart3, Loader2, RefreshCcw, Globe,
 } from 'lucide-react'
 import { Button, Badge } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { useOptimizations, useApplyOptimization, useDismissOptimization } from '../../lib/hooks'
 import { useAppStore } from '../../store/app'
 import { cn } from '@ybot/ui'
-import type { TemplateOptimization } from '../../lib/api'
+import { bots as botsApi, type LearnedSiteTemplate, type TemplateOptimization } from '../../lib/api'
 import { LearnFromChats } from '../build/LearnFromChats'
+import { JourneyPreview } from '../../components/JourneyPreview'
+import { START_CLUSTERS, type ClusterId } from '@ybot/shared'
 
 const SUBNAV = [
   { label: 'Channels',      path: '/configure/channels' },
@@ -192,7 +194,7 @@ export function OptimizationsPage() {
           <div>
             <h1 className="text-base font-semibold text-[var(--text-primary)]">Configure</h1>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
-              Learn from real chats, then review prompt suggestions. Changes stay supervised — review before they go live.
+              Learn from chats, read public sites into starter templates, then review prompt suggestions. Changes stay supervised.
             </p>
           </div>
           <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => refetch()}>
@@ -203,6 +205,10 @@ export function OptimizationsPage() {
       </div>
 
       <div className="flex-1 overflow-auto p-6">
+        <div className="mb-6">
+          <TemplatesFromSites />
+        </div>
+
         <div className="mb-6">
           <LearnFromChats />
         </div>
@@ -272,6 +278,123 @@ export function OptimizationsPage() {
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+function TemplatesFromSites() {
+  const tenantName = useAppStore((s) => s.bots.find((bot) => bot.id === s.selectedBotId)?.name) ?? ''
+  const [url, setUrl] = useState('')
+  const [clusterId, setClusterId] = useState<ClusterId | ''>('')
+  const [reading, setReading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [preview, setPreview] = useState<LearnedSiteTemplate | null>(null)
+  const [savedNote, setSavedNote] = useState<string | null>(null)
+
+  async function readSite() {
+    const address = url.trim()
+    if (!address) return
+    setReading(true)
+    setError(null)
+    setSavedNote(null)
+    try {
+      const result = await botsApi.previewSiteTemplate({
+        url: address,
+        companyName: tenantName,
+        clusterId: clusterId || undefined,
+      })
+      setPreview(result.data)
+      if (!clusterId) setClusterId(result.data.clusterId as ClusterId)
+    } catch (err: unknown) {
+      if (err instanceof Error) setError(err.message)
+    } finally {
+      setReading(false)
+    }
+  }
+
+  async function saveTemplate() {
+    const address = url.trim()
+    if (!address) return
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await botsApi.saveSiteTemplate({
+        url: address,
+        companyName: tenantName,
+        clusterId: clusterId || preview?.clusterId,
+      })
+      setPreview(result.data)
+      setSavedNote(`${result.data.title} is in the start wizard under ${START_CLUSTERS.find((item) => item.id === result.data.clusterId)?.title ?? result.data.clusterId}.`)
+    } catch (err: unknown) {
+      if (err instanceof Error) setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-surface)] p-5">
+      <div className="flex items-start gap-3 mb-3">
+        <div className="p-2 rounded-[var(--radius-md)] bg-[var(--accent-muted)] text-[var(--accent)] shrink-0">
+          <Globe size={16} />
+        </div>
+        <div>
+          <h2 className="font-semibold text-[var(--text-primary)] text-sm">Templates from sites</h2>
+          <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-2xl">
+            Read a public site, drop brand names, and save a starter in a cluster — hair studios, software vendors, CRM, email, or commerce.
+            Over time each cluster improves from every site you add, the same way every hair studio can tighten the salon map.
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <input
+          value={url}
+          onChange={(event) => { setUrl(event.target.value); setPreview(null); setSavedNote(null) }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              void readSite()
+            }
+          }}
+          placeholder="https://www.cevro.ai"
+          aria-label="Website address"
+          className="min-w-[220px] flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg-base)] px-3 py-2 text-sm text-[var(--text-primary)]"
+        />
+        <select
+          value={clusterId}
+          onChange={(event) => setClusterId(event.target.value as ClusterId | '')}
+          className="rounded-lg border border-[var(--border)] bg-[var(--bg-base)] px-2 py-2 text-xs text-[var(--text-primary)]"
+          aria-label="Cluster"
+        >
+          <option value="">Guess the cluster</option>
+          {START_CLUSTERS.filter((item) => item.id !== 'custom').map((item) => (
+            <option key={item.id} value={item.id}>{item.title}</option>
+          ))}
+        </select>
+        <Button size="sm" disabled={reading || !url.trim()} onClick={() => { void readSite() }}>
+          {reading ? <Loader2 size={12} className="animate-spin" /> : null}
+          {reading ? 'Reading…' : 'Read site'}
+        </Button>
+      </div>
+      {error && <p className="mt-3 text-xs text-[var(--error)]">{error}</p>}
+      {preview && (
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr]">
+          <JourneyPreview
+            greeting={preview.greeting}
+            doors={preview.topics.map((topic) => ({ title: topic.choice, blurb: topic.blurb }))}
+          />
+          <div>
+            <p className="text-xs font-semibold text-[var(--text-primary)]">{preview.title}</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{preview.body}</p>
+            <p className="mt-2 text-[11px] text-[var(--text-secondary)]">From {preview.sourceHost || 'the site'}. Brand names are left off.</p>
+            <Button size="sm" className="mt-3" disabled={saving} onClick={() => { void saveTemplate() }}>
+              {saving ? 'Saving…' : 'Add to start wizard'}
+            </Button>
+            {savedNote && <p className="mt-2 text-xs text-emerald-700">{savedNote}</p>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -65,10 +65,27 @@ export const me = {
 export const bots = {
   list: () => apiFetch<{ data: BotSummary[] }>('/bots'),
   get: (id: string) => apiFetch<{ data: BotSummary }>(`/bots/${id}`),
-  create: (body: { name: string; description?: string; personaName?: string; start: 'hair-studio' | 'corporate' | 'sample' | 'blank' | 'website'; sample?: string; websiteUrl?: string }) =>
+  create: (body: {
+    name: string
+    description?: string
+    personaName?: string
+    start: string
+    sample?: string
+    websiteUrl?: string
+    templateId?: string
+    channels?: string[]
+  }) =>
     apiFetch<{ data: BotSummary }>('/bots', { method: 'POST', body: JSON.stringify(body) }),
   scanWebsite: (body: { url: string; personaName?: string; companyName?: string }) =>
     apiFetch<{ data: WebsiteScanPreview }>('/bots/scan', { method: 'POST', body: JSON.stringify(body) }),
+  startCatalog: () =>
+    apiFetch<{ data: { clusters: Array<{ id: string; title: string; body: string }>; templates: Array<{ id: string; templateId?: string; clusterId: string; title: string; body: string; tag: string; source?: { host: string; note: string } }> } }>('/bots/start-catalog'),
+  previewSiteTemplate: (body: { url: string; personaName?: string; companyName?: string; clusterId?: string }) =>
+    apiFetch<{ data: LearnedSiteTemplate }>('/bots/start-templates/preview', { method: 'POST', body: JSON.stringify(body) }),
+  saveSiteTemplate: (body: { url: string; personaName?: string; companyName?: string; clusterId?: string }) =>
+    apiFetch<{ data: LearnedSiteTemplate & { id: string } }>('/bots/start-templates', { method: 'POST', body: JSON.stringify(body) }),
+  deleteSiteTemplate: (id: string) =>
+    apiFetch<{ data: { id: string } }>(`/bots/start-templates/${id}`, { method: 'DELETE' }),
   update: (id: string, body: Partial<{ name: string; personaName: string | null; description: string | null; avatarUrl: string | null }>) =>
     apiFetch<{ data: BotSummary }>(`/bots/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (id: string) => apiFetch<void>(`/bots/${id}`, { method: 'DELETE' }),
@@ -102,6 +119,27 @@ export const flows = {
     apiFetch<{ data: FlowVersion }>(`/bots/${botId}/flows/${flowId}/publish`, { method: 'POST', body: JSON.stringify({ environmentId, ...(version ? { version } : {}) }) }),
   traffic: (botId: string) =>
     apiFetch<{ data: { days: number; chats: Record<string, number> } }>(`/bots/${botId}/journey-traffic`),
+}
+
+export interface LearnedSiteDoor {
+  title: string
+  flowName: string
+  blurb: string
+}
+
+export interface LearnedSiteTemplate {
+  id?: string
+  clusterId: string
+  title: string
+  body: string
+  welcomeName: string
+  packTag: string
+  greeting: string
+  followUp: string
+  menu: string
+  topics: Array<{ flowName: string; choice: string; phrases: string[]; question: string; answer: string; blurb: string }>
+  sourceUrl: string
+  sourceHost: string
 }
 
 export interface WebsiteScanPreview {

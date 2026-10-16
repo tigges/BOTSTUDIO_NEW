@@ -1,13 +1,24 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Input, Card } from '@ybot/ui'
 import type { FlowGraph } from '@ybot/runtime'
-import { SALON_WELCOME_NAME, type StudioCatalog } from '@ybot/shared'
+import {
+  BAKED_TEMPLATES,
+  SALON_WELCOME_NAME,
+  START_CLUSTERS,
+  WIZARD_CHANNELS,
+  startPreview,
+  type BotStart,
+  type ClusterId,
+  type StartTemplate,
+  type StudioCatalog,
+} from '@ybot/shared'
 import { useAppStore } from '../store/app'
-import { apiFetch, type WebsiteScanPreview } from '../lib/api'
+import { apiFetch, bots as botsApi, type WebsiteScanPreview } from '../lib/api'
 import type { Bot } from '../store/app'
 import { JourneyTest } from './build/JourneyTest'
+import { ClusterSketch, JourneyPreview } from '../components/JourneyPreview'
 
 const isDemoMode = () => import.meta.env.VITE_DEMO_MODE === 'true'
 
@@ -19,50 +30,18 @@ function siteHost(url: string): string {
   }
 }
 
-type StartChoice = 'hair-studio' | 'corporate' | 'website' | 'sample' | 'blank'
-
-const CHOICES: Array<{ id: StartChoice; title: string; body: string; tag: string; warm?: boolean }> = [
-  {
-    id: 'hair-studio',
-    title: 'Hair studio',
-    body: 'The same kind of conversation as Bella. A greeting, then a booking, a price, the hours, or where the studio is.',
-    tag: 'Template · like Bella',
-  },
-  {
-    id: 'website',
-    title: 'Scan my website',
-    body: 'We read the public pages it links to, then draft a greeting that asks one thing at a time.',
-    tag: 'Draft only',
-  },
-  {
-    id: 'corporate',
-    title: 'Corporate services',
-    body: 'Orders, shipping, returns, plans and pricing, and a handoff to the team.',
-    tag: 'What create does now',
-    warm: true,
-  },
-  {
-    id: 'sample',
-    title: 'An example conversation',
-    body: 'Paste a chat. It becomes the welcome guests hear.',
-    tag: 'Draft only',
-  },
-  {
-    id: 'blank',
-    title: 'A blank welcome',
-    body: 'One empty chart. You write the first line in the editor.',
-    tag: 'Editor',
-  },
-]
+type CatalogTemplate = StartTemplate & { templateId?: string }
 
 export function BotNewPage() {
   const navigate = useNavigate()
   const { setBots, bots, selectBot, setEnv } = useAppStore()
-  const [step, setStep] = useState<1 | 2>(1)
+  const [step, setStep] = useState<1 | 2 | 3>(1)
   const [name, setName] = useState('')
   const [personaName, setPersonaName] = useState('')
   const [description, setDescription] = useState('')
-  const [start, setStart] = useState<StartChoice>('hair-studio')
+  const [clusterId, setClusterId] = useState<ClusterId | null>(null)
+  const [start, setStart] = useState<BotStart | null>(null)
+  const [templateId, setTemplateId] = useState<string | null>(null)
   const [sample, setSample] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [scan, setScan] = useState<WebsiteScanPreview | null>(null)
@@ -70,18 +49,38 @@ export function BotNewPage() {
   const [trying, setTrying] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [channels, setChannels] = useState<string[]>([])
   const tenant = useQuery({
     queryKey: ['tenant-me'],
     queryFn: () => apiFetch<{ data: { name?: string } | null }>('/tenants/me').then((res) => res.data),
     enabled: !isDemoMode(),
   })
+  const catalog = useQuery({
+    queryKey: ['start-catalog'],
+    queryFn: () => botsApi.startCatalog().then((res) => res.data),
+    enabled: !isDemoMode(),
+  })
 
-  const voice = personaName.trim() || 'Bella'
-  const salon = name.trim() || 'the studio'
-  const place = tenant.data?.name?.trim() || 'the studio'
-  const greeting = `Hi, I'm ${voice} at ${start === 'website' ? salon : place}. What's your name?`
+  const clusters = catalog.data?.clusters ?? START_CLUSTERS
+  const templates: CatalogTemplate[] = (catalog.data?.templates as CatalogTemplate[] | undefined) ?? BAKED_TEMPLATES
+  const clusterTemplates = clusterId ? templates.filter((item) => item.clusterId === clusterId) : []
+  const selectedTemplate = templates.find((item) => (
+    start === 'learned' ? item.templateId === templateId : item.id === start && !item.templateId
+  )) ?? clusterTemplates.find((item) => item.id === start)
+
+  const voice = personaName.trim() || (start === 'hair-studio' ? 'Bella' : '')
+  const salon = name.trim() || tenant.data?.name?.trim() || 'the studio'
+  const preview = startPreview({
+    start: start ?? 'blank',
+    companyName: salon,
+    personaName: voice || null,
+    scanDoors: scan?.doors,
+    scanGreeting: start === 'website' ? `Hi, I'm ${voice || 'Bella'} at ${salon}. What's your name?` : undefined,
+    sample,
+  })
   const needsSample = start === 'sample' && !sample.trim()
   const needsWebsite = start === 'website' && !scan
+  const canCreate = Boolean(start) && !needsSample && !needsWebsite
 
   async function readSite() {
     const url = websiteUrl.trim()
@@ -102,7 +101,34 @@ export function BotNewPage() {
     }
   }
 
+  function pickCluster(id: ClusterId) {
+    setClusterId(id)
+    const first = templates.find((item) => item.clusterId === id && !item.templateId)
+    setStart(first ? first.id as BotStart : null)
+    setTemplateId(null)
+    setTrying(false)
+    setStep(3)
+  }
+
+  function pickTemplate(item: CatalogTemplate) {
+    setTrying(false)
+    if (item.templateId) {
+      setStart('learned')
+      setTemplateId(item.templateId)
+      return
+    }
+    setStart(item.id as BotStart)
+    setTemplateId(null)
+    if (item.id !== 'website') setScan(null)
+  }
+
+  function toggleChannel(id: string, action: string) {
+    if (action !== 'connect') return
+    setChannels((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  }
+
   async function createBot() {
+    if (!start) return
     setLoading(true)
     setError(null)
     if (isDemoMode()) {
@@ -133,6 +159,8 @@ export function BotNewPage() {
           start,
           sample: start === 'sample' ? sample.trim() : undefined,
           websiteUrl: start === 'website' ? websiteUrl.trim() : undefined,
+          templateId: start === 'learned' ? templateId : undefined,
+          channels,
         }),
       })
       const botsRes = await apiFetch<{ data: Bot[] }>('/bots')
@@ -147,14 +175,20 @@ export function BotNewPage() {
     }
   }
 
+  const stepLabel = useMemo(() => (
+    <p className="mb-3 text-xs text-[var(--text-muted)]">
+      <b className="text-[var(--text-primary)]">1 Name</b>
+      {' · '}
+      <b className={step >= 2 ? 'text-[var(--text-primary)]' : ''}>2 Cluster</b>
+      {' · '}
+      <b className={step === 3 ? 'text-[var(--text-primary)]' : ''}>3 Template</b>
+      {' · 4 Map'}
+    </p>
+  ), [step])
+
   return (
     <div className="mx-auto max-w-5xl p-6">
-      <p className="mb-3 text-xs text-[var(--text-muted)]">
-        <b className="text-[var(--text-primary)]">1 Name</b>
-        {' · '}
-        <b className={step === 2 ? 'text-[var(--text-primary)]' : ''}>2 Starting conversation</b>
-        {' · 3 Map'}
-      </p>
+      {stepLabel}
       {step === 1 ? (
         <div className="max-w-md">
           <h1 className="mb-4 text-xl font-bold text-[var(--text-primary)]">Name this bot</h1>
@@ -176,7 +210,7 @@ export function BotNewPage() {
               />
               <Input
                 label="Persona name (customer-facing)"
-                placeholder="Bella"
+                placeholder={clusterId === 'hair' ? 'Bella' : 'Optional'}
                 value={personaName}
                 onChange={(e) => setPersonaName(e.target.value)}
                 hint="The greeting uses this name. Hair studio says Bella when you leave it empty."
@@ -198,28 +232,61 @@ export function BotNewPage() {
             </form>
           </Card>
         </div>
+      ) : step === 2 ? (
+        <>
+          <h1 className="text-xl font-bold text-[var(--text-primary)]">What kind of conversation is {name.trim()}?</h1>
+          <p className="mb-4 mt-1 text-sm text-[var(--text-muted)]">
+            Pick a cluster first. Hair studio and corporate services are templates inside those clusters, not the first choice.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {clusters.map((cluster) => {
+              const selected = clusterId === cluster.id
+              const count = templates.filter((item) => item.clusterId === cluster.id).length
+              return (
+                <button
+                  key={cluster.id}
+                  type="button"
+                  onClick={() => pickCluster(cluster.id as ClusterId)}
+                  className={`rounded-xl border bg-[var(--bg-surface)] p-4 text-left ${
+                    selected ? 'border-[var(--accent)] shadow-[0_0_0_3px_rgba(109,94,252,0.15)]' : 'border-[var(--border)]'
+                  }`}
+                >
+                  <ClusterSketch accent={selected} />
+                  <p className="mt-3 text-sm font-semibold text-[var(--text-primary)]">{cluster.title}</p>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">{cluster.body}</p>
+                  <p className="mt-2 text-[11px] text-[var(--text-secondary)]">{count} {count === 1 ? 'template' : 'templates'}</p>
+                </button>
+              )
+            })}
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button variant="secondary" type="button" onClick={() => setStep(1)}>Back</Button>
+          </div>
+        </>
       ) : (
         <>
-          <h1 className="text-xl font-bold text-[var(--text-primary)]">How should {name.trim()} start?</h1>
+          <h1 className="text-xl font-bold text-[var(--text-primary)]">
+            {clusters.find((item) => item.id === clusterId)?.title ?? 'Template'} for {name.trim()}
+          </h1>
           <p className="mb-4 mt-1 text-sm text-[var(--text-muted)]">
             {name.trim()} is a new bot. Charts already on this account stay on their own bots.
           </p>
-          <div className="grid items-start gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="grid gap-2" role="radiogroup" aria-label="Starting conversation">
-              {CHOICES.map((choice) => {
-                const selected = start === choice.id
+          <div className="grid items-start gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="grid gap-2" role="radiogroup" aria-label="Template">
+              {clusterTemplates.map((choice) => {
+                const selected = start === 'learned' ? choice.templateId === templateId : start === choice.id && !choice.templateId
                 return (
                   <div
-                    key={choice.id}
+                    key={choice.templateId ?? choice.id}
                     role="radio"
                     aria-checked={selected}
                     tabIndex={0}
-                    onClick={() => { setStart(choice.id); setTrying(false) }}
+                    onClick={() => pickTemplate(choice)}
                     onKeyDown={(event) => {
                       if (event.target !== event.currentTarget) return
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault()
-                        setStart(choice.id)
+                        pickTemplate(choice)
                       }
                     }}
                     className={`grid cursor-pointer grid-cols-[18px_1fr] gap-3 rounded-xl border bg-[var(--bg-surface)] px-4 py-3 text-left ${
@@ -234,7 +301,7 @@ export function BotNewPage() {
                     <span>
                       <span className="block text-sm font-semibold text-[var(--text-primary)]">{choice.title}</span>
                       <span className="mt-0.5 block text-xs text-[var(--text-muted)]">{choice.body}</span>
-                      <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[11px] ${choice.warm ? 'bg-amber-50 text-amber-800' : 'bg-[var(--bg-base)] text-[var(--text-secondary)]'}`}>
+                      <span className="mt-2 inline-block rounded-full bg-[var(--bg-base)] px-2 py-0.5 text-[11px] text-[var(--text-secondary)]">
                         {choice.tag}
                       </span>
                       {choice.id === 'website' && selected && (
@@ -281,103 +348,70 @@ export function BotNewPage() {
               <h2 className="text-sm font-semibold text-[var(--text-primary)]">
                 {start === 'website' && scan
                   ? `${name.trim()}’s map, from ${siteHost(scan.pages[0] ?? scan.url)}`
-                  : `${name.trim()}’s map, if you choose ${CHOICES.find((choice) => choice.id === start)?.title}`}
+                  : `${name.trim()}’s map${selectedTemplate ? `, if you choose ${selectedTemplate.title}` : ''}`}
               </h2>
               <p className="mb-3 mt-1 text-xs text-[var(--text-muted)]">
-                {start === 'website'
-                  ? 'Nothing is saved until you use this draft.'
-                  : start === 'hair-studio' || start === 'corporate'
-                    ? 'Nothing is published until you use this. Other bots keep their charts.'
-                    : 'This is the working copy. Sandbox and Production share it for now.'}
+                Nothing is saved until you use this. Website chat is already on. Connect the others the same way as integrations.
               </p>
-              {start === 'hair-studio' && (
-                <>
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
-                    <p className="text-[11px] font-bold text-emerald-800">Visitors start here</p>
-                    <p className="mt-1 text-sm text-emerald-950">{greeting}</p>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    {[
-                      ['Where we are', 'Address'],
-                      ['Hours', 'When we are open'],
-                      ['Services', 'Cuts, colour, prices'],
-                      ['Book', 'A time, then a confirmation'],
-                    ].map(([title, blurb]) => (
-                      <div key={title} className="rounded-lg border border-[var(--border)] px-2 py-2">
-                        <p className="text-xs font-semibold text-[var(--text-primary)]">{title}</p>
-                        <p className="text-[11px] text-[var(--text-muted)]">{blurb}</p>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-              {start === 'website' && scan && (
-                <>
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
-                    <p className="text-[11px] font-bold text-emerald-800">Visitors start here</p>
-                    <p className="mt-1 text-sm text-emerald-950">{greeting}</p>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    {scan.doors.map((door) => (
-                      <div key={door.flowName} className="rounded-lg border border-[var(--border)] px-2 py-2">
-                        <p className="text-xs font-semibold text-[var(--text-primary)]">{door.title}</p>
-                        <p className="text-[11px] text-[var(--text-muted)]">{door.blurb}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3">
-                    <p className="text-xs font-semibold text-[var(--text-primary)]">Knowledge</p>
-                    {scan.facts.map((fact) => (
-                      <div key={`${fact.label}-${fact.text}`} className="mt-1 flex items-start justify-between gap-3 text-[11px]">
-                        <span className="text-[var(--text-secondary)]">{fact.text}</span>
-                        <span className="shrink-0 text-[var(--text-muted)]">{fact.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {scan.note && <p className="mt-3 text-[11px] text-[var(--text-muted)]">{scan.note}</p>}
-                  {scan.chapters && scan.chapters.length > 0 && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="mt-3"
-                      onClick={() => setTrying(true)}
-                    >
-                      Try this walk
-                    </Button>
-                  )}
-                </>
-              )}
-              {start === 'website' && !scan && (
+              {start === 'website' && !scan ? (
                 <p className="text-sm text-[var(--text-secondary)]">
                   {scanning ? 'Reading the public pages.' : 'Paste a public site, then read it. The map appears here before anything is saved.'}
                 </p>
+              ) : (
+                <JourneyPreview
+                  greeting={preview.greeting}
+                  doors={preview.doors}
+                  empty={start === 'blank' ? 'Write the first line on the chart.' : undefined}
+                />
               )}
-              {start === 'corporate' && (
-                <p className="text-sm text-[var(--text-secondary)]">
-                  Orders, shipping, returns, plans and pricing, and a handoff. This is the script a new bot used to receive on its own.
-                </p>
-              )}
-              {start === 'sample' && (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
-                  <p className="text-[11px] font-bold text-emerald-800">Draft welcome</p>
-                  <p className="mt-1 text-sm text-emerald-950">{sample.trim() || 'Paste a line from the conversation.'}</p>
+              {start === 'website' && scan?.facts && scan.facts.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold text-[var(--text-primary)]">Knowledge</p>
+                  {scan.facts.map((fact) => (
+                    <div key={`${fact.label}-${fact.text}`} className="mt-1 flex items-start justify-between gap-3 text-[11px]">
+                      <span className="text-[var(--text-secondary)]">{fact.text}</span>
+                      <span className="shrink-0 text-[var(--text-muted)]">{fact.label}</span>
+                    </div>
+                  ))}
                 </div>
               )}
-              {start === 'blank' && (
-                <div className="rounded-xl border border-[var(--border)] px-3 py-3">
-                  <p className="text-sm font-semibold text-[var(--text-primary)]">Welcome</p>
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">Write the first line.</p>
-                </div>
+              {scan?.note && start === 'website' && <p className="mt-3 text-[11px] text-[var(--text-muted)]">{scan.note}</p>}
+              {start === 'website' && scan?.chapters && scan.chapters.length > 0 && (
+                <Button type="button" size="sm" variant="secondary" className="mt-3" onClick={() => setTrying(true)}>
+                  Try this walk
+                </Button>
               )}
+              <p className="mb-2 mt-5 text-xs font-semibold text-[var(--text-primary)]">Channels</p>
+              <div className="grid grid-cols-2 gap-2">
+                {WIZARD_CHANNELS.map((channel) => {
+                  const connected = channel.action === 'on' || channels.includes(channel.id)
+                  return (
+                    <div key={channel.id} className={`rounded-lg border px-2 py-2 ${connected && channel.action !== 'soon' ? 'border-emerald-200 bg-emerald-50' : 'border-[var(--border)]'}`}>
+                      <p className="text-xs font-semibold text-[var(--text-primary)]">{channel.label}</p>
+                      <p className="text-[11px] text-[var(--text-muted)]">{channel.body}</p>
+                      {channel.action === 'on' && <p className="mt-1 text-[11px] font-medium text-emerald-800">On</p>}
+                      {channel.action === 'soon' && <p className="mt-1 text-[11px] text-[var(--text-muted)]">Soon</p>}
+                      {channel.action === 'connect' && (
+                        <button
+                          type="button"
+                          className="mt-1 text-[11px] font-semibold text-[var(--accent)]"
+                          onClick={() => toggleChannel(channel.id, channel.action)}
+                        >
+                          {connected ? 'Connected' : 'Connect'}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
               {error && <p className="mt-3 text-xs text-[var(--error)]">{error}</p>}
               <div className="mt-4 flex flex-col gap-3">
                 <span className="text-xs font-semibold text-emerald-700">Other bots stay as they are</span>
                 <span className="flex justify-end gap-2">
-                  <Button variant="secondary" type="button" onClick={() => setStep(1)}>
+                  <Button variant="secondary" type="button" onClick={() => setStep(2)}>
                     Back
                   </Button>
-                  <Button type="button" className="whitespace-nowrap" disabled={loading || scanning || needsSample || needsWebsite} onClick={() => { void createBot() }}>
+                  <Button type="button" className="whitespace-nowrap" disabled={loading || scanning || !canCreate} onClick={() => { void createBot() }}>
                     {loading ? 'Creating…' : start === 'website' ? `Use this draft on ${name.trim()}` : `Use this on ${name.trim()}`}
                   </Button>
                 </span>

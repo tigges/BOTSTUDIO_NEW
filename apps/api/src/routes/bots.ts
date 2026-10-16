@@ -3,15 +3,24 @@ import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { normalizedBotName } from '../lib/bot-name.js'
 import { deleteBotRecords } from '../lib/delete-bot.js'
-import { draftWebsiteChat } from '@ybot/shared'
-import { installCorporatePack, installHairStudioPack, removeStarterPack } from '../lib/install-corporate-pack.js'
+import {
+  BAKED_TEMPLATES,
+  BOT_STARTS,
+  START_CLUSTERS,
+  bakedPack,
+  draftClusteredTemplate,
+  draftWebsiteChat,
+  packFromLearned,
+  type BotStart,
+  type ClusterId,
+  type LearnedTemplateSpec,
+  type StarterPackId,
+} from '@ybot/shared'
+import { installCorporatePack, installHairStudioPack, installSitePack, removeStarterPack } from '../lib/install-corporate-pack.js'
 import { installDraftWelcome, installStarterFlows } from '../lib/install-starter-flows.js'
 import { installWebsiteScan } from '../lib/install-website-scan.js'
 import { PublicSiteError, readPublicSite } from '../lib/public-site.js'
-import { ensureWebChannels } from '../lib/web-channels.js'
-
-const BOT_STARTS = ['hair-studio', 'corporate', 'sample', 'blank', 'website'] as const
-type BotStart = (typeof BOT_STARTS)[number]
+import { ensureOptionalChannels, ensureWebChannels } from '../lib/web-channels.js'
 
 
 interface JwtPayload {
@@ -64,6 +73,90 @@ export async function botsRoutes(app: FastifyInstance) {
     }
   })
 
+  app.get('/start-catalog', async (request) => {
+    const { tenantId } = request.user as JwtPayload
+    const saved = await prisma.startTemplate.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+    })
+    const learned = saved.map((item) => ({
+      id: 'learned' as const,
+      templateId: item.id,
+      clusterId: item.clusterId as ClusterId,
+      title: item.title,
+      body: item.body,
+      tag: item.sourceHost ? `From ${item.sourceHost}` : 'From a site',
+      source: item.sourceHost ? { host: item.sourceHost, note: item.body } : undefined,
+    }))
+    return {
+      data: {
+        clusters: START_CLUSTERS,
+        templates: [...BAKED_TEMPLATES, ...learned],
+      },
+    }
+  })
+
+  app.post('/start-templates/preview', { preHandler: canBuild }, async (request, reply) => {
+    const body = request.body as { url?: string; personaName?: string; companyName?: string; clusterId?: ClusterId }
+    try {
+      const pages = await readPublicSite(body.url ?? '')
+      const spec = draftClusteredTemplate({
+        pages,
+        companyName: body.companyName ?? '',
+        personaName: body.personaName,
+        clusterId: body.clusterId,
+      })
+      return { data: spec }
+    } catch (err) {
+      if (err instanceof PublicSiteError) {
+        const status = err.code === 'UNREADABLE' ? 422 : 400
+        return reply.status(status).send({ error: { code: err.code, message: err.message } })
+      }
+      throw err
+    }
+  })
+
+  app.post('/start-templates', { preHandler: canBuild }, async (request, reply) => {
+    const { tenantId } = request.user as JwtPayload
+    const body = request.body as { url?: string; personaName?: string; companyName?: string; clusterId?: ClusterId }
+    try {
+      const pages = await readPublicSite(body.url ?? '')
+      const spec = draftClusteredTemplate({
+        pages,
+        companyName: body.companyName ?? '',
+        personaName: body.personaName,
+        clusterId: body.clusterId,
+      })
+      const saved = await prisma.startTemplate.create({
+        data: {
+          tenantId,
+          clusterId: spec.clusterId,
+          title: spec.title,
+          body: spec.body,
+          sourceUrl: spec.sourceUrl,
+          sourceHost: spec.sourceHost,
+          spec: spec as unknown as object,
+        },
+      })
+      return reply.status(201).send({ data: { id: saved.id, ...spec } })
+    } catch (err) {
+      if (err instanceof PublicSiteError) {
+        const status = err.code === 'UNREADABLE' ? 422 : 400
+        return reply.status(status).send({ error: { code: err.code, message: err.message } })
+      }
+      throw err
+    }
+  })
+
+  app.delete('/start-templates/:id', { preHandler: canBuild }, async (request, reply) => {
+    const { tenantId } = request.user as JwtPayload
+    const { id } = request.params as { id: string }
+    const found = await prisma.startTemplate.findFirst({ where: { id, tenantId } })
+    if (!found) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Template not found' } })
+    await prisma.startTemplate.delete({ where: { id } })
+    return { data: { id } }
+  })
+
   app.get('/:botId', async (request, reply) => {
     const { tenantId } = request.user as JwtPayload
     const { botId } = request.params as { botId: string }
@@ -86,6 +179,8 @@ export async function botsRoutes(app: FastifyInstance) {
       start?: string
       sample?: string
       websiteUrl?: string
+      templateId?: string
+      channels?: string[]
     }
     const parsedName = normalizedBotName(body.name ?? '')
     if (!parsedName.ok) {
@@ -93,10 +188,21 @@ export async function botsRoutes(app: FastifyInstance) {
     }
     const name = parsedName.name
     const start = (body.start ?? 'blank') as BotStart
-    if (!BOT_STARTS.includes(start)) {
+    if (!(BOT_STARTS as string[]).includes(start)) {
       return reply.status(400).send({ error: { code: 'INVALID_START', message: 'Choose how this bot should start.' } })
     }
     const personaName = (body.personaName ?? '').trim() || null
+    let learnedSpec: LearnedTemplateSpec | null = null
+    if (start === 'learned') {
+      const templateId = (body.templateId ?? '').trim()
+      const saved = templateId
+        ? await prisma.startTemplate.findFirst({ where: { id: templateId, tenantId } })
+        : null
+      if (!saved) {
+        return reply.status(400).send({ error: { code: 'INVALID_TEMPLATE', message: 'Choose a saved template from a site.' } })
+      }
+      learnedSpec = saved.spec as unknown as LearnedTemplateSpec
+    }
     let websitePages: Awaited<ReturnType<typeof readPublicSite>> | null = null
     if (start === 'website') {
       const websiteUrl = (body.websiteUrl ?? '').trim()
@@ -130,6 +236,7 @@ export async function botsRoutes(app: FastifyInstance) {
       include: { environments: true },
     })
     await ensureWebChannels(tenantId, bot.id)
+    await ensureOptionalChannels(tenantId, bot.id, Array.isArray(body.channels) ? body.channels : [])
 
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
     const sandbox = bot.environments.find((env) => env.kind === 'sandbox')
@@ -142,6 +249,12 @@ export async function botsRoutes(app: FastifyInstance) {
     } else if (start === 'corporate') {
       await installCorporatePack(tenantId, bot.id, companyName, sandbox?.id ?? null)
       await installStarterFlows(tenantId, bot.id, companyName, sandbox?.id ?? null)
+    } else if (start === 'product-support' || start === 'crm-platform' || start === 'inbox-assistant') {
+      const pack = bakedPack(start, companyName, personaName)
+      if (pack) await installSitePack(tenantId, bot.id, companyName, sandbox?.id ?? null, pack)
+    } else if (start === 'learned' && learnedSpec) {
+      const pack = packFromLearned(learnedSpec, companyName, personaName)
+      await installSitePack(tenantId, bot.id, companyName, sandbox?.id ?? null, pack)
     } else if (start === 'sample' || start === 'blank') {
       await installDraftWelcome(tenantId, bot.id, start === 'sample' ? (body.sample ?? '') : '')
     }
@@ -190,12 +303,13 @@ export async function botsRoutes(app: FastifyInstance) {
   app.delete('/:botId/packs/:packId', { preHandler: canBuild }, async (request, reply) => {
     const { tenantId } = request.user as JwtPayload
     const { botId, packId } = request.params as { botId: string; packId: string }
-    if (packId !== 'corporate-services' && packId !== 'hair-studio') {
+    const known: StarterPackId[] = ['corporate-services', 'hair-studio', 'product-support', 'crm-platform', 'inbox-assistant']
+    if (!known.includes(packId as StarterPackId)) {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Unknown starter pack' } })
     }
     const bot = await prisma.bot.findFirst({ where: { id: botId, tenantId } })
     if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
-    const result = await removeStarterPack(tenantId, bot.id, packId)
+    const result = await removeStarterPack(tenantId, bot.id, packId as StarterPackId)
     return { data: result }
   })
 

@@ -35,7 +35,14 @@ export interface JourneyLayout {
   loose: JourneyChapter[]
 }
 
-const WELCOME_NAMES = new Set(['Welcome & Routing', 'Product welcome', 'Salon welcome', 'Corporate welcome'])
+const WELCOME_NAMES = new Set([
+  'Welcome & Routing',
+  'Product welcome',
+  'Salon welcome',
+  'Corporate welcome',
+  'CRM welcome',
+  'Inbox welcome',
+])
 
 function isWelcome(flow: JourneyFlowInput): boolean {
   return (flow.tags ?? []).includes('welcome') || WELCOME_NAMES.has(flow.name)

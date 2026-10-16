@@ -1,5 +1,16 @@
 import { prisma } from '@ybot/db'
-import { hairStudioCatalog, planCorporateImport, planHairStudioImport, selectPackRemoval, starterPackScope, type StarterPackId } from '@ybot/shared'
+import {
+  bakedPack,
+  hairStudioCatalog,
+  planCorporateImport,
+  planHairStudioImport,
+  planSiteImport,
+  selectPackRemoval,
+  starterPackScope,
+  type BotStart,
+  type SiteTemplatePack,
+  type StarterPackId,
+} from '@ybot/shared'
 import { upsertStudioCatalog } from './studio-catalog.js'
 
 export interface CorporateInstallResult {
@@ -40,6 +51,25 @@ export async function installHairStudioPack(
   return result
 }
 
+/** Adds a clustered site template (software, CRM, inbox, or a learned crawl). */
+export async function installSitePack(
+  tenantId: string,
+  botId: string,
+  companyName: string,
+  environmentId: string | null,
+  pack: SiteTemplatePack,
+): Promise<CorporateInstallResult> {
+  return installPlannedPack(tenantId, botId, companyName, environmentId, (input) =>
+    planSiteImport({
+      pack,
+      existingFlowNames: input.existingFlowNames,
+      existingIntentNames: input.existingIntentNames,
+      existingQuestions: input.existingQuestions,
+      publishedWelcome: input.publishedWelcome,
+    }),
+  )
+}
+
 async function installPlannedPack(
   tenantId: string,
   botId: string,
@@ -57,7 +87,14 @@ async function installPlannedPack(
         flow: {
           botId,
           tenantId,
-          OR: [{ tags: { has: 'welcome' } }, { name: 'Welcome & Routing' }, { name: 'Product welcome' }],
+          OR: [
+            { tags: { has: 'welcome' } },
+            { name: 'Welcome & Routing' },
+            { name: 'Product welcome' },
+            { name: 'CRM welcome' },
+            { name: 'Inbox welcome' },
+            { name: 'Salon welcome' },
+          ],
         },
       },
       select: { id: true },
@@ -143,7 +180,11 @@ export interface PackRemovalResult {
 
 /** Deletes the flows, intents, and FAQs that belong to the pack. Other flows stay. */
 export async function removeStarterPack(tenantId: string, botId: string, pack: StarterPackId): Promise<PackRemovalResult> {
-  const scope = starterPackScope(pack)
+  let scope = starterPackScope(pack)
+  if (scope.intentNames.length === 0) {
+    const built = bakedPack(pack as BotStart, 'company')
+    if (built) scope = { tag: built.tag, intentNames: built.intents.map((intent) => intent.name) }
+  }
   const [flows, intents, faqs] = await Promise.all([
     prisma.flow.findMany({ where: { tenantId, botId }, select: { id: true, name: true, tags: true } }),
     prisma.intent.findMany({ where: { tenantId, botId }, select: { id: true, name: true } }),
