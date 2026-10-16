@@ -17,14 +17,15 @@
  * Order Status graph, and does not reset passwords.
  * Bella gains a Sandbox. The hair studio pack is her live welcome on
  * Sandbox and Production. The retail shop menu is not her widget.
- * Owned Bella demo chats are rewritten when they still contain the old
- * Sunday hours or a booked slot.
+ * Owned Bella demo chats keep their names and move to the top of the inbox.
+ * A clash on (flowId, version) from two seeds is retried.
+ * QA Lab has a Sandbox so a new chart can be saved.
  */
 
 import bcrypt from 'bcryptjs'
 import { prisma } from '@ybot/db'
 import { hairStudioPack } from '@ybot/shared'
-import { environmentsToRefresh, isShopWelcomeGraph } from '../lib/bella-salon-sync.js'
+import { environmentsToRefresh, isShopWelcomeGraph, retryOnUnique } from '../lib/bella-salon-sync.js'
 import { publishedSource } from '../lib/copy-graphs.js'
 import { installStarterFlows } from '../lib/install-starter-flows.js'
 import { installHairStudioPack } from '../lib/install-corporate-pack.js'
@@ -404,29 +405,38 @@ async function refreshBellaSalonGraphs(tenantId: string, botId: string, environm
         })
       }
     }
-    const versions = await prisma.flowVersion.findMany({ where: { flowId: flow.id }, orderBy: { version: 'desc' } })
+    published += await publishPackGraph(tenantId, flow.id, starter.graph, environmentIds)
+  }
+  return published
+}
+
+/** Writes the next version. A concurrent seed may already have taken that number. */
+async function publishPackGraph(tenantId: string, flowId: string, graph: unknown, environmentIds: string[]) {
+  return retryOnUnique(async () => {
+    const versions = await prisma.flowVersion.findMany({ where: { flowId }, orderBy: { version: 'desc' } })
     const latest = environmentIds.flatMap((environmentId) => {
       const current = publishedSource(versions, environmentId)
       return current ? [{ environmentId, graph: current.graph }] : []
     })
+    const needed = environmentsToRefresh(graph, latest, environmentIds)
+    if (needed.length === 0) return 0
     let version = versions[0]?.version ?? 0
-    for (const environmentId of environmentsToRefresh(starter.graph, latest, environmentIds)) {
+    for (const environmentId of needed) {
       version += 1
       await prisma.flowVersion.create({
         data: {
           tenantId,
-          flowId: flow.id,
+          flowId,
           version,
           status: 'published',
           environmentId,
-          graph: starter.graph as object,
+          graph: graph as object,
           publishedAt: new Date(),
         },
       })
-      published += 1
     }
-  }
-  return published
+    return needed.length
+  })
 }
 
 async function retireBellaShopWelcome(botId: string) {
@@ -532,6 +542,18 @@ async function ensureQaLab() {
       maxTokens: 512,
       systemPrompt: 'You are the QA Lab bot. Keep answers short.',
       inboxConfig: {},
+    },
+  })
+  await prisma.environment.upsert({
+    where: { botId_kind: { botId: bot.id, kind: 'sandbox' } },
+    update: { name: 'Sandbox', isActive: true },
+    create: {
+      id: 'qa-lab-env-sandbox',
+      tenantId: tenant.id,
+      botId: bot.id,
+      kind: 'sandbox',
+      name: 'Sandbox',
+      isActive: true,
     },
   })
   const env = await prisma.environment.upsert({
@@ -649,7 +671,18 @@ async function ensureChats(opts: {
       : `Alex ${i + 1}`
     const id = `${opts.prefix}-convo-${i + 1}`
     const existing = await prisma.conversation.findUnique({ where: { id } })
-    if (existing) continue
+    const contactId = `${opts.prefix}-contact-${i + 1}`
+    if (existing) {
+      await prisma.contact.updateMany({
+        where: { id: existing.contactId ?? contactId },
+        data: { displayName: person },
+      })
+      await prisma.conversation.update({
+        where: { id },
+        data: { updatedAt: new Date(Date.now() - i * 1000) },
+      })
+      continue
+    }
 
     const daysAgo = total - i
     const createdAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
@@ -657,10 +690,9 @@ async function ensureChats(opts: {
     const status = i % 5 === 0 ? 'escalated' : i % 2 === 0 ? 'resolved' : 'active'
     const resolvedAt = status === 'resolved' ? new Date(createdAt.getTime() + 30 * 60 * 1000) : null
 
-    const contactId = `${opts.prefix}-contact-${i + 1}`
     const contact = await prisma.contact.upsert({
       where: { id: contactId },
-      update: {},
+      update: { displayName: person },
       create: {
         id: contactId,
         tenantId: opts.tenantId,

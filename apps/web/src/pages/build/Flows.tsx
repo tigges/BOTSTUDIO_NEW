@@ -58,6 +58,7 @@ export function FlowsPage() {
   const environments = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments) ?? NO_ENVIRONMENTS
   const botName = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.name ?? '')
   const selectedEnv = useAppStore((s) => s.selectedEnv)
+  const setEnv = useAppStore((s) => s.setEnv)
   const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((env) => env.kind === s.selectedEnv)?.id ?? '')
   const envLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
   const shown = (flow: Flow) => versionForEnvironment(flow.versions, environmentId, selectedEnv)
@@ -101,6 +102,7 @@ export function FlowsPage() {
         graph: input.graph,
       })
       await saveCanvas.mutateAsync({ flowId: flow.id, version: flow.versions?.[0]?.version ?? 1, graph: input.graph })
+      if (environments.some((env) => env.kind === 'sandbox')) setEnv('sandbox')
       setShowNew(false)
       navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id }, search: { from: undefined } })
     } catch (err) {
