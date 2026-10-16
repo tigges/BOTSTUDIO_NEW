@@ -6,10 +6,10 @@ test('show the Bella demo', { tag: '@smoke' }, async ({ page }) => {
 
   await page.goto('/build/journey')
   await expect(page.getByRole('heading', { name: 'Journey' })).toBeVisible()
-  await expect(page.getByText('Salon welcome')).toBeVisible()
-  await expect(page.getByText('Book an appointment', { exact: true })).toBeVisible()
+  await expect(page.locator('[data-chapter="Salon welcome"]')).toBeVisible()
+  await expect(page.locator('[data-chapter="Book an appointment"]')).toBeVisible()
 
-  await page.getByRole('button', { name: /Salon welcome/ }).click()
+  await page.locator('[data-chapter="Salon welcome"]').getByRole('button').first().click()
   await expect(page.getByText("Hi, I'm Bella at Bella Hair Studio.").first()).toBeVisible()
 
   await page.goto('/inbox/chats')

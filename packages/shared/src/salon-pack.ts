@@ -158,7 +158,7 @@ function topicsFor(companyName: string): Topic[] {
     {
       flowName: 'Services and prices',
       choice: 'Services and prices',
-      phrases: ['how much', 'how much is', 'how much are', 'how much does', 'prices', 'price list', 'the price', 'pricing', 'what does it cost'],
+      phrases: ['how much', 'how much is', 'how much are', 'how much does', 'prices', 'price list', 'the price', 'pricing', 'what does it cost', 'services', 'service', 'haircut', 'a cut', 'cut', 'trim'],
       question: 'How much is a haircut?',
       answer: `${company} cuts start from £35, colour from £70, treatments from £45, balayage from £90, a skin scrub from £200, and keratin smoothing from £120.`,
       kind: 'answer',
@@ -292,7 +292,7 @@ export function hairStudioCatalog(companyName: string): StudioCatalog {
 
 const NEXT_DOORS = [
   { handle: 'hours', phrases: ['hours', 'opening hours', 'when are you open'], flowName: 'Salon hours' },
-  { handle: 'prices', phrases: ['price', 'prices', 'how much', 'haircut'], flowName: 'Services and prices' },
+  { handle: 'prices', phrases: ['price', 'prices', 'how much', 'haircut', 'services', 'cut', 'a cut', 'trim'], flowName: 'Services and prices' },
   { handle: 'location', phrases: ['where', 'address', 'location'], flowName: 'Location' },
   { handle: 'book', phrases: ['book', 'booking', 'yes', 'please', 'ok', 'okay', 'yeah'], flowName: 'Book an appointment' },
 ]
@@ -566,9 +566,10 @@ const WELCOME_DOORS = ['Location', 'Salon hours', 'Services and prices', 'Book a
 function phrasesForWelcome(topic: Topic, parked: Topic[]): string[] {
   return topic.phrases.filter((phrase) => {
     const needle = phrase.toLowerCase()
+    const needleWords = ` ${needle} `
     return !parked.some((other) => other.phrases.some((item) => {
       const hay = item.toLowerCase()
-      return hay !== needle && hay.includes(needle)
+      return hay !== needle && ` ${hay} `.includes(needleWords)
     }))
   })
 }

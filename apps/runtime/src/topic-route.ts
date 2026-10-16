@@ -3,8 +3,68 @@ export interface TopicRoute {
   phrases: string[]
 }
 
+const STOP = new Set([
+  'a', 'an', 'the', 'to', 'for', 'and', 'or', 'of', 'at', 'in', 'on',
+  'my', 'your', 'our', 'is', 'are', 'am', 'do', 'does', 'did', 'you', 'we', 'me',
+  'it', 'be', 'if', 'not', 'so', 'with', 'from', 'that', 'this', 'have', 'has',
+  'had', 'what', 'when', 'how', 'much', 'would', 'could', 'should', 'please',
+  'like', 'want', 'need', 'done', 'they', 'them', 'their', 'can', 'will', 'just',
+  'also', 'about',
+])
+
+const RELATED: Record<string, string[]> = {
+  haircut: ['cut'],
+  haircuts: ['cut', 'haircut'],
+  colouring: ['colour', 'color'],
+  coloring: ['colour', 'color'],
+  colours: ['colour', 'color'],
+  colors: ['colour', 'color'],
+  colour: ['color'],
+  color: ['colour'],
+  treatments: ['treatment'],
+  prices: ['price', 'pricing'],
+  price: ['prices'],
+  pricing: ['price', 'prices'],
+  hours: ['hour', 'opening'],
+  opening: ['hours'],
+  services: ['service'],
+  service: ['services'],
+  location: ['address'],
+  address: ['location'],
+  directions: ['location', 'address'],
+}
+
 function tokens(text: string): string[] {
   return text.match(/[a-z0-9']+/g) ?? []
+}
+
+function relatedTokens(word: string): string[] {
+  const related = RELATED[word] ?? []
+  if (word.length > 4 && word.endsWith('s')) return [...related, word.slice(0, -1)]
+  return related
+}
+
+/** Words a chart wrote, plus the useful bits inside them ("a cut" also hears "cut"). */
+export function listenables(phrases: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  const add = (value: string) => {
+    const needle = value.toLowerCase().trim()
+    if (!needle || seen.has(needle)) return
+    seen.add(needle)
+    out.push(needle)
+  }
+  for (const phrase of phrases) {
+    add(phrase)
+    for (const token of tokens(phrase.toLowerCase())) {
+      if (STOP.has(token)) continue
+      if (token.length >= 3) add(token)
+      for (const related of relatedTokens(token)) {
+        if (!STOP.has(related) && related.length >= 3) add(related)
+      }
+    }
+  }
+  return out
 }
 
 /** One adjacent swap, or one insert, delete, or substitution. */
@@ -59,11 +119,15 @@ function closeWord(left: string, right: string): boolean {
   if (!kind) return false
   const longer = Math.max(left.length, right.length)
   if (kind === 'swap') return longer >= 3
-  return longer >= 5
+  return left.length >= 5 && right.length >= 5
+}
+
+function spaced(text: string): string {
+  return ` ${tokens(text).join(' ')} `
 }
 
 function phraseHit(hay: string, needle: string): 'exact' | 'fuzzy' | null {
-  if (hay.includes(needle)) return 'exact'
+  if (needle.trim() && spaced(hay).includes(spaced(needle))) return 'exact'
   const wanted = tokens(needle)
   const heard = tokens(hay)
   if (wanted.length === 0 || heard.length < wanted.length) return null
@@ -91,7 +155,7 @@ export function matchTopic(text: string, routes: TopicRoute[]): string {
   const hay = text.toLowerCase()
   let best: { handle: string; score: number } | undefined
   for (const route of routes) {
-    for (const phrase of route.phrases) {
+    for (const phrase of listenables(route.phrases)) {
       const needle = phrase.toLowerCase().trim()
       if (!needle) continue
       const hit = phraseHit(hay, needle)

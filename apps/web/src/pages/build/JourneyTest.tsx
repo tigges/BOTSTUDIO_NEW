@@ -55,7 +55,7 @@ export function JourneyTest({
   }, [messages])
 
   async function turn(text: string, opening: boolean) {
-    if (!text || busyRef.current) return
+    if ((!text && !opening) || busyRef.current) return
     busyRef.current = true
     setLoading(true)
     const assistantId = `a_${Date.now()}`
@@ -98,7 +98,7 @@ export function JourneyTest({
         const result = await runJourneyPreview({
           chapters: chaptersRef.current,
           startChapter,
-          message: 'hi',
+          message: '',
           environmentLabel,
           catalog: catalogRef.current,
         })
@@ -135,7 +135,7 @@ export function JourneyTest({
     setInput('')
     setMessages([])
     onChapter(startChapter)
-    void turn('hi', true)
+    void turn('', true)
   }
 
   return (

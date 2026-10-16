@@ -68,7 +68,7 @@ const DOORS: Array<{ flowName: string; title: string; phrases: string[]; questio
   {
     flowName: 'Services and prices',
     title: 'Services',
-    phrases: ['how much', 'prices', 'price list', 'how much is a haircut', 'services', 'what does it cost'],
+    phrases: ['how much', 'prices', 'price list', 'how much is a haircut', 'services', 'service', 'what does it cost', 'cut', 'a cut', 'trim', 'haircut'],
     question: 'How much is a haircut?',
   },
   {
@@ -195,7 +195,7 @@ function answerFlow(name: string, answer: string, ticket?: { subject: string; de
 
 const SCAN_NEXT_DOORS = [
   { handle: 'hours', phrases: ['hours', 'opening hours', 'when are you open'], flowName: 'Salon hours' },
-  { handle: 'prices', phrases: ['price', 'prices', 'how much', 'haircut'], flowName: 'Services and prices' },
+  { handle: 'prices', phrases: ['price', 'prices', 'how much', 'haircut', 'services', 'cut', 'a cut', 'trim'], flowName: 'Services and prices' },
   { handle: 'location', phrases: ['where', 'address', 'location'], flowName: 'Location' },
   { handle: 'book', phrases: ['book', 'booking', 'yes', 'please', 'ok', 'okay', 'yeah'], flowName: 'Book an appointment' },
 ]

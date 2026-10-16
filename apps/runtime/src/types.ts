@@ -18,7 +18,7 @@ export interface Session {
   currentNodeId: string
   variables: SessionVariables
   status: 'running' | 'waiting_input' | 'completed' | 'failed' | 'handed_over'
-  waitingFor?: { nodeId: string; variable: string; type: string; choices?: string[] }
+  waitingFor?: { nodeId: string; variable: string; type: string; choices?: string[]; question?: string }
   createdAt: Date
   updatedAt: Date
 }

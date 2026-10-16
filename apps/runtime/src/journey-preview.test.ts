@@ -15,6 +15,20 @@ function salonWalk(company = 'Yuzu') {
   }
 }
 
+test('the test chat opens on the greeting and does not burn a fake hi', async () => {
+  const { chapters, catalog } = salonWalk()
+  const open = await runJourneyPreview({
+    chapters,
+    catalog,
+    startChapter: 'Salon welcome',
+    message: '',
+    environmentLabel: 'Sandbox',
+  })
+  assert.match(open.text, /What's your name\?/)
+  assert.equal(open.chapter, 'Salon welcome')
+  assert.equal(open.session?.status, 'waiting_input')
+})
+
 test('a request on the welcome continues in that chapter and keeps the name', async () => {
   const { chapters, catalog } = salonWalk()
   const hello = await runJourneyPreview({
@@ -24,47 +38,84 @@ test('a request on the welcome continues in that chapter and keeps the name', as
     message: 'where are you',
     environmentLabel: 'Sandbox',
   })
-  assert.match(hello.text, /What's your name\?/)
-  assert.equal(hello.chapter, 'Salon welcome')
-  assert.equal(hello.text.includes('Rosewood'), false)
+  assert.match(hello.text, /14 Rosewood Lane/)
+  assert.equal(hello.chapter, 'Location')
+  assert.equal(hello.text.includes("What's your name"), false)
+})
 
-  const named = await runJourneyPreview({
+test('cut opens the price, and services after hours does not dead-end', async () => {
+  const { chapters, catalog } = salonWalk()
+  const open = await runJourneyPreview({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
-    message: 'Ada',
+    message: '',
     environmentLabel: 'Sandbox',
-    session: hello.session,
   })
-  assert.match(named.text, /14 Rosewood Lane/)
-  assert.equal(named.chapter, 'Location')
-  assert.equal(named.session?.variables.contact['name'], 'Ada')
-  assert.equal(named.session?.variables.flow['guest_name'], 'Ada')
+  const cut = await runJourneyPreview({
+    chapters,
+    catalog,
+    startChapter: 'Salon welcome',
+    message: 'cut',
+    environmentLabel: 'Sandbox',
+    session: open.session,
+  })
+  assert.match(cut.text, /£35/)
+  assert.equal(cut.chapter, 'Services and prices')
+  assert.equal(cut.text.includes("What would you like done"), false)
+
+  const hours = await runJourneyPreview({
+    chapters,
+    catalog,
+    startChapter: 'Salon welcome',
+    message: 'salon hours',
+    environmentLabel: 'Sandbox',
+    session: cut.session,
+  })
+  assert.match(hours.text, /Monday to Saturday/)
+  assert.equal(hours.chapter, 'Salon hours')
+
+  const services = await runJourneyPreview({
+    chapters,
+    catalog,
+    startChapter: 'Salon welcome',
+    message: 'services',
+    environmentLabel: 'Sandbox',
+    session: hours.session,
+  })
+  assert.match(services.text, /thinking of|£/)
+  assert.equal(services.chapter, 'Services and prices')
+  assert.equal(services.text.includes('I can also help with hours, prices, or a booking.'), false)
 })
 
-test('a price named before the name is answered in the prices chapter', async () => {
+test('a finished chapter offers the map instead of greeting again', async () => {
   const { chapters, catalog } = salonWalk()
-  const hello = await runJourneyPreview({
+  const priced = await runJourneyPreview({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
     message: 'how much is a haircut',
     environmentLabel: 'Sandbox',
   })
-  assert.match(hello.text, /What's your name\?/)
-  assert.equal(hello.chapter, 'Salon welcome')
-
-  const priced = await runJourneyPreview({
+  const booked = await runJourneyPreview({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
-    message: 'Ada',
+    message: 'no',
     environmentLabel: 'Sandbox',
-    session: hello.session,
+    session: priced.session,
   })
-  assert.match(priced.text, /£35/)
-  assert.equal(priced.chapter, 'Services and prices')
-  assert.equal(priced.text.includes("What's your name"), false)
+  const again = await runJourneyPreview({
+    chapters,
+    catalog,
+    startChapter: 'Salon welcome',
+    message: 'catalog',
+    environmentLabel: 'Sandbox',
+    session: booked.session,
+  })
+  assert.match(again.text, /What would you like/)
+  assert.equal(again.text.includes("What's your name"), false)
+  assert.equal(again.text.includes("Hi, I'm Bella"), false)
 })
 
 test('a handoff to a chapter that is not on this map stops', async () => {

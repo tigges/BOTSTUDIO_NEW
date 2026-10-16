@@ -2,6 +2,7 @@ import type { StudioCatalog } from '@ybot/shared'
 import { usableContactName } from './contact-speech.js'
 import { SessionMachine, type FlowGraph } from './engine.js'
 import { copyJumpVariables, missingChapterLine } from './handoff.js'
+import { isSmallTalk, listenForChapter, offerOnMap, questionFrom, sameQuestion } from './map-listen.js'
 import type { ExecutionServices, Session, SessionVariables } from './types.js'
 
 export interface JourneyPreviewSnapshot {
@@ -10,6 +11,7 @@ export interface JourneyPreviewSnapshot {
   status: Session['status']
   waitingFor?: Session['waitingFor']
   variables: SessionVariables
+  lastQuestion?: string
 }
 
 export interface JourneyTurn {
@@ -55,21 +57,22 @@ function startNodeId(graph: FlowGraph): string | undefined {
   return graph.nodes.find((node) => START_KINDS.has(node.data.kind))?.id
 }
 
-function snapshot(session: Session, chapter: string): JourneyPreviewSnapshot {
+function snapshot(session: Session, chapter: string, lastQuestion?: string): JourneyPreviewSnapshot {
   return {
     chapter,
     currentNodeId: session.currentNodeId,
     status: session.status,
     waitingFor: session.waitingFor,
     variables: session.variables,
+    lastQuestion,
   }
 }
 
 function sessionFrom(graph: FlowGraph, message: string, chapter: string, saved?: JourneyPreviewSnapshot): Session | null {
   const start = startNodeId(graph)
   if (!start) return null
-  const restart = !saved || saved.status === 'completed' || saved.status === 'handed_over' || saved.status === 'failed'
-  const variables: SessionVariables = restart
+  const fresh = !saved
+  const variables: SessionVariables = fresh
     ? { flow: {}, global: {}, contact: { name: 'there' } }
     : {
         flow: { ...saved.variables.flow },
@@ -87,12 +90,32 @@ function sessionFrom(graph: FlowGraph, message: string, chapter: string, saved?:
     tenantId: 'preview',
     flowId: chapter,
     flowVersionId: 'preview',
-    currentNodeId: restart ? start : saved.currentNodeId,
+    currentNodeId: fresh ? start : saved.currentNodeId,
     variables,
-    status: restart ? 'running' : saved.status,
-    waitingFor: restart ? undefined : saved.waitingFor,
+    status: fresh ? 'running' : saved.status,
+    waitingFor: fresh ? undefined : saved.waitingFor,
     createdAt: new Date(),
     updatedAt: new Date(),
+  }
+}
+
+function beginChapter(
+  graph: FlowGraph,
+  name: string,
+  message: string,
+  previous?: JourneyPreviewSnapshot,
+): JourneyPreviewSnapshot | undefined {
+  const start = startNodeId(graph)
+  if (!start) return undefined
+  const variables = previous
+    ? copyJumpVariables(previous.variables, message, String(previous.variables.contact['name'] ?? ''))
+    : { flow: { _last_user_message: message }, global: {}, contact: { name: 'there' } }
+  return {
+    chapter: name,
+    currentNodeId: start,
+    status: 'running',
+    waitingFor: undefined,
+    variables,
   }
 }
 
@@ -112,9 +135,36 @@ export async function runJourneyPreview(input: {
   for (const chapter of input.chapters) {
     if (!byName.has(chapter.name)) byName.set(chapter.name, chapter.graph)
   }
-  const savedSession = input.session
-  const restart = !savedSession || savedSession.status === 'completed' || savedSession.status === 'handed_over' || savedSession.status === 'failed'
-  let chapterName = restart || !savedSession ? input.startChapter : savedSession.chapter
+  const heard = input.message.trim()
+  const opening = !heard && !input.session
+  let chapterName = input.startChapter
+  let saved: JourneyPreviewSnapshot | undefined
+  const previous = input.session
+
+  if (!previous || previous.status === 'handed_over' || previous.status === 'failed') {
+    chapterName = input.startChapter
+    saved = undefined
+  } else if (previous.status === 'completed') {
+    const nextName = heard && !isSmallTalk(heard)
+      ? listenForChapter({ chapters: input.chapters, catalog: input.catalog, text: heard, current: previous.chapter })
+      : undefined
+    const nextGraph = nextName ? byName.get(nextName) : undefined
+    if (nextName && nextGraph) {
+      chapterName = nextName
+      saved = beginChapter(nextGraph, nextName, input.message, previous)
+    } else {
+      return {
+        handled: true,
+        text: offerOnMap(input.chapters, previous.chapter),
+        chapter: previous.chapter,
+        session: { ...previous, lastQuestion: offerOnMap(input.chapters, previous.chapter) },
+      }
+    }
+  } else {
+    chapterName = previous.chapter
+    saved = previous
+  }
+
   let graph = byName.get(chapterName)
   if (!graph) {
     const missing = chapterName || 'The welcome'
@@ -127,15 +177,16 @@ export async function runJourneyPreview(input: {
 
   const machine = new SessionMachine(previewServices(input.catalog))
   const lines: string[] = []
-  let saved: JourneyPreviewSnapshot | undefined = restart ? undefined : input.session
   let stopped = false
   const seen = new Set<string>()
+  const originChapter = chapterName
 
   for (let hop = 0; hop < MAX_HOPS; hop++) {
     if (seen.has(chapterName)) break
     seen.add(chapterName)
     const session = sessionFrom(graph, input.message, chapterName, saved)
     if (!session) return { handled: false, text: '', chapter: chapterName, session: saved }
+    const hopStart = lines.length
     const result = await machine.run(session, graph, input.message)
     const given = spokenFirstName(String(result.session.variables.flow['guest_name'] ?? ''))
     if (given) result.session.variables.contact['name'] = given
@@ -143,7 +194,8 @@ export async function runJourneyPreview(input: {
       const line = message.content.text.trim()
       if (line) lines.push(line)
     }
-    saved = snapshot(result.session, chapterName)
+    saved = snapshot(result.session, chapterName, result.session.waitingFor?.question ?? questionFrom(lines.at(-1) ?? ''))
+
     if (result.jumpToFlow) {
       const nextName = result.jumpToFlow
       const next = byName.get(nextName)
@@ -153,8 +205,8 @@ export async function runJourneyPreview(input: {
         stopped = true
         break
       }
-      const start = startNodeId(next)
-      if (!start) {
+      const jumped = beginChapter(next, nextName, input.message, saved)
+      if (!jumped) {
         lines.push(missingChapterLine(nextName, input.environmentLabel))
         saved = { ...saved, status: 'completed' }
         stopped = true
@@ -162,16 +214,40 @@ export async function runJourneyPreview(input: {
       }
       chapterName = nextName
       graph = next
-      saved = {
-        chapter: chapterName,
-        currentNodeId: start,
-        status: 'running',
-        variables: copyJumpVariables(result.session.variables, input.message, String(result.session.variables.contact['name'] ?? '')),
-      }
+      saved = jumped
       continue
     }
+
+    if (chapterName === originChapter && !opening && heard && !isSmallTalk(heard)) {
+      const nextName = listenForChapter({
+        chapters: input.chapters,
+        catalog: input.catalog,
+        text: heard,
+        current: chapterName,
+      })
+      const next = nextName ? byName.get(nextName) : undefined
+      if (nextName && next) {
+        const jumped = beginChapter(next, nextName, input.message, saved)
+        if (jumped) {
+          lines.length = hopStart
+          chapterName = nextName
+          graph = next
+          saved = jumped
+          continue
+        }
+      }
+    }
+
     if (result.handover && lines.length === 0) {
       lines.push('A person on the team will follow up.')
+    }
+
+    const asked = result.session.waitingFor?.question ?? questionFrom(lines.at(-1) ?? '')
+    if (!opening && asked && sameQuestion(asked, previous?.lastQuestion)) {
+      const offer = offerOnMap(input.chapters, chapterName)
+      if (lines.length > hopStart) lines[lines.length - 1] = offer
+      else lines.push(offer)
+      saved = { ...saved, lastQuestion: offer }
     }
     break
   }
