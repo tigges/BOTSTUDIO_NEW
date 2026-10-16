@@ -24,18 +24,15 @@ export function versionsForEnvironmentList<T extends ListedVersion>(versions: T[
 }
 
 /**
- * The canvas and the connection check open this version.
- * Sandbox can show a draft. Production shows only a version published there.
+ * The canvas, map, and Test Bot open this version.
+ * Sandbox and Production share the newest saved graph until a client
+ * needs a separate live copy.
  */
 export function versionForEnvironment<T extends ListedVersion>(
   versions: T[] | undefined,
-  environmentId: string | null | undefined,
-  kind: string,
+  _environmentId?: string | null,
+  _kind?: string,
 ): T | undefined {
   const list = [...(versions ?? [])].sort((a, b) => b.version - a.version)
-  if (list.length === 0 || !environmentId) return list[0]
-  const published = list.find((item) => item.status === 'published' && item.environmentId === environmentId)
-  if (published) return published
-  if (kind === 'sandbox') return list.find((item) => item.status !== 'published')
-  return undefined
+  return list[0]
 }

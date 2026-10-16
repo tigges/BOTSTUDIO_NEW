@@ -33,7 +33,7 @@ export async function installStarterFlows(tenantId: string, botId: string, compa
   return added
 }
 
-/** A draft welcome only. Visitors hear it after it is published to Sandbox. */
+/** A draft welcome. The widget speaks the working copy. */
 export async function installDraftWelcome(tenantId: string, botId: string, sample: string) {
   const found = await prisma.flow.findFirst({ where: { tenantId, botId, name: 'Welcome' } })
   if (found) return

@@ -546,12 +546,8 @@ export function FlowCanvasPage() {
           {canvasVersion === 0 && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--bg-base)] px-6">
               <div className="max-w-sm text-center">
-                <p className="text-sm font-medium text-[var(--text-primary)]">Nothing is published to {envLabel} yet.</p>
-                <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                  {selectedEnv === 'production'
-                    ? 'Switch to Sandbox to open the working copy.'
-                    : 'This flow has no Sandbox version to edit.'}
-                </p>
+                <p className="text-sm font-medium text-[var(--text-primary)]">This flow has no chart yet.</p>
+                <p className="mt-1 text-xs text-[var(--text-secondary)]">Add a step from the palette, then Save. Sandbox and Production share this copy for now.</p>
               </div>
             </div>
           )}

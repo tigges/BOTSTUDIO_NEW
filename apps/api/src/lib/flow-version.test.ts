@@ -14,13 +14,13 @@ test('the list keeps the newest published graph for each environment', () => {
   assert.deepEqual(listed.map((item) => item.version), [14, 4, 2])
 })
 
-test('sandbox opens its published graph and production does not open the sandbox one', () => {
+test('sandbox and production open the same newest graph', () => {
   assert.equal(versionForEnvironment(versions, 'sandbox', 'sandbox')?.version, 14)
-  assert.equal(versionForEnvironment(versions, 'production', 'production')?.version, 4)
+  assert.equal(versionForEnvironment(versions, 'production', 'production')?.version, 14)
 })
 
-test('a draft stays in sandbox and production shows nothing until it is published', () => {
+test('a draft is the working copy on production too', () => {
   const draft = [{ version: 1, status: 'draft', environmentId: null }]
   assert.equal(versionForEnvironment(draft, 'sandbox', 'sandbox')?.version, 1)
-  assert.equal(versionForEnvironment(draft, 'production', 'production'), undefined)
+  assert.equal(versionForEnvironment(draft, 'production', 'production')?.version, 1)
 })

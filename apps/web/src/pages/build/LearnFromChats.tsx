@@ -181,7 +181,7 @@ export function LearnFromChats({
     <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-4">
       <p className="text-sm font-medium text-[var(--text-primary)]">{botName || 'This bot'} · {envLabel}</p>
       <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">Learn from chats</p>
-      <p className="mt-1 text-xs text-[var(--text-muted)]">Sample chats and helpful ratings draft a shorter chart. Visitors hear it when you publish that draft to Sandbox.</p>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">Sample chats and helpful ratings draft a shorter chart. That draft is the copy guests hear.</p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button size="sm" variant="secondary" onClick={() => { setError(''); setPasteOpen(true) }}>Paste sample chats</Button>
         <Button size="sm" variant="secondary" disabled={busy === 'rated'} onClick={() => { void readRated() }}>

@@ -44,7 +44,7 @@ const CHOICES: Array<{ id: StartChoice; title: string; body: string; tag: string
   {
     id: 'sample',
     title: 'An example conversation',
-    body: 'Paste a chat. It becomes a draft welcome. Visitors hear it after you publish it to Sandbox.',
+    body: 'Paste a chat. It becomes the welcome guests hear.',
     tag: 'Draft only',
   },
   {
@@ -288,7 +288,7 @@ export function BotNewPage() {
                   ? 'Nothing is saved until you use this draft.'
                   : start === 'hair-studio' || start === 'corporate'
                     ? 'Nothing is published until you use this. Other bots keep their charts.'
-                    : 'This stays a draft. Visitors hear it after you publish it to Sandbox.'}
+                    : 'This is the working copy. Sandbox and Production share it for now.'}
               </p>
               {start === 'hair-studio' && (
                 <>
