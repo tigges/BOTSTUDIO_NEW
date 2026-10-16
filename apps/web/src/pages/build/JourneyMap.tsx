@@ -199,7 +199,8 @@ export function JourneyMap({
   onOpen: (id: string) => void
   onConnect: (id: string) => void
 }) {
-Wait, I need to insert sortedChapters before JourneyMap export, not replace the export. Let me read the current JourneyMap around the export.
+  const welcome = layout.roots.find((chapter) => chapter.welcome) ?? null
+  const otherRoots = layout.roots.filter((chapter) => !chapter.welcome)
   const shared = {
     lens,
     chats,
