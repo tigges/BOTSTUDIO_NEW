@@ -8,7 +8,6 @@ import {
   SALON_WELCOME_NAME,
   START_CLUSTERS,
   START_OPTIONS,
-  WIZARD_CHANNELS,
   identityFor,
   personaAvatar,
   startPreview,
@@ -55,7 +54,6 @@ export function BotNewPage() {
   const [trying, setTrying] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [channels, setChannels] = useState<string[]>([])
   const catalog = useQuery({
     queryKey: ['start-catalog'],
     queryFn: () => botsApi.startCatalog().then((res) => res.data),
@@ -134,11 +132,6 @@ export function BotNewPage() {
     setTemplateId(null)
   }
 
-  function toggleChannel(id: string, action: string) {
-    if (action !== 'connect') return
-    setChannels((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
-  }
-
   async function createBot() {
     const chosen = path === 'template' ? start : path
     if (!chosen) return
@@ -174,7 +167,6 @@ export function BotNewPage() {
           sample: chosen === 'sample' ? sample.trim() : undefined,
           websiteUrl: chosen === 'website' ? websiteUrl.trim() : undefined,
           templateId: chosen === 'learned' ? templateId : undefined,
-          channels,
         }),
       })
       const botsRes = await apiFetch<{ data: Bot[] }>('/bots')
@@ -214,7 +206,7 @@ export function BotNewPage() {
             : `${name.trim()}’s map`}
       </h2>
       <p className="mb-3 mt-1 text-xs text-[var(--text-muted)]">
-        {voice ? `${voice} is who guests hear. Website chat is already on.` : 'Nothing is saved until you use this. Website chat is already on.'}
+        {voice ? `${voice} is who guests hear. Nothing is saved until you use this.` : 'Nothing is saved until you use this.'}
       </p>
       {path === 'website' && !scan ? (
         <p className="text-sm text-[var(--text-secondary)]">
@@ -246,29 +238,6 @@ export function BotNewPage() {
           Try this walk
         </Button>
       )}
-      <p className="mb-2 mt-5 text-xs font-semibold text-[var(--text-primary)]">Channels</p>
-      <div className="grid grid-cols-2 gap-2">
-        {WIZARD_CHANNELS.map((channel) => {
-          const connected = channel.action === 'on' || channels.includes(channel.id)
-          return (
-            <div key={channel.id} className={`rounded-lg border px-2 py-2 ${connected && channel.action !== 'soon' ? 'border-emerald-200 bg-emerald-50' : 'border-[var(--border)]'}`}>
-              <p className="text-xs font-semibold text-[var(--text-primary)]">{channel.label}</p>
-              <p className="text-[11px] text-[var(--text-muted)]">{channel.body}</p>
-              {channel.action === 'on' && <p className="mt-1 text-[11px] font-medium text-emerald-800">On</p>}
-              {channel.action === 'soon' && <p className="mt-1 text-[11px] text-[var(--text-muted)]">Soon</p>}
-              {channel.action === 'connect' && (
-                <button
-                  type="button"
-                  className="mt-1 text-[11px] font-semibold text-[var(--accent)]"
-                  onClick={() => toggleChannel(channel.id, channel.action)}
-                >
-                  {connected ? 'Connected' : 'Connect'}
-                </button>
-              )}
-            </div>
-          )
-        })}
-      </div>
       {error && <p className="mt-3 text-xs text-[var(--error)]">{error}</p>}
       <div className="mt-4 flex flex-col gap-3">
         <span className="text-xs font-semibold text-emerald-700">Other bots stay as they are</span>

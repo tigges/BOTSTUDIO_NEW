@@ -16,7 +16,6 @@ import {
   startPreview,
   suggestCluster,
   templatesInCluster,
-  WIZARD_CHANNELS,
 } from '@ybot/shared'
 
 function session(text: string, name = 'Ada'): Session {
@@ -76,15 +75,6 @@ test('crawled brand names come off so the map can sit as a template', () => {
   assert.equal(suggestCluster('Ladies wash cut and style at the salon'), 'hair')
 })
 
-test('website chat is on in the wizard; WhatsApp SMS and email are Connect', () => {
-  const byId = Object.fromEntries(WIZARD_CHANNELS.map((item) => [item.id, item.action]))
-  assert.equal(byId['web'], 'on')
-  assert.equal(byId['whatsapp'], 'connect')
-  assert.equal(byId['sms'], 'connect')
-  assert.equal(byId['email'], 'connect')
-  assert.equal(byId['facebook'], 'soon')
-})
-
 test('the software pack from cevro.ai answers without brand names', async () => {
   const pack = bakedPack('product-support', 'Northwind')
   assert.ok(pack)
@@ -126,14 +116,25 @@ test('crm and inbox packs keep a visual map of doors', () => {
   const crm = startPreview({ start: 'crm-platform', companyName: 'Northwind' })
   assert.ok(crm.doors.some((door) => door.title === 'Marketing'))
   assert.ok(crm.doors.some((door) => door.title === 'A demo'))
+  assert.ok(crm.doors.some((door) => door.title === 'Contacts'))
+  assert.ok(crm.doors.some((door) => door.title === 'Tickets'))
+  assert.ok(crm.doors.some((door) => door.title === 'Billing'))
+  assert.ok(crm.doors.length >= 12)
   assert.match(crm.greeting, /Maya at Northwind/)
   const inbox = startPreview({ start: 'inbox-assistant', companyName: 'Northwind' })
   assert.ok(inbox.doors.some((door) => /inbox/i.test(door.title)))
   assert.ok(inbox.doors.some((door) => /security/i.test(door.title)))
+  assert.ok(inbox.doors.some((door) => door.title === 'Labels'))
+  assert.ok(inbox.doors.some((door) => door.title === 'Filters'))
+  assert.ok(inbox.doors.length >= 12)
   assert.match(inbox.greeting, /Jules at Northwind/)
+  const software = startPreview({ start: 'product-support', companyName: 'Northwind' })
+  assert.ok(software.doors.some((door) => door.title === 'Accounts'))
+  assert.ok(software.doors.some((door) => door.title === 'Pricing'))
+  assert.ok(software.doors.length >= 12)
   const hair = startPreview({ start: 'hair-studio', companyName: 'Yuzu', personaName: 'Bella' })
   assert.match(hair.greeting, /Bella/)
-  assert.equal(hair.doors.length, 4)
+  assert.ok(hair.doors.length >= 8)
 })
 
 test('a vendor homepage becomes a software template with brand names off', () => {
@@ -151,4 +152,9 @@ test('a vendor homepage becomes a software template with brand names off', () =>
   assert.equal(/Cevro/i.test(JSON.stringify(spec.topics)), false)
   assert.ok(spec.topics.some((topic) => topic.flowName === 'Product'))
   assert.ok(spec.topics.some((topic) => topic.flowName === 'Talk to a person'))
+  assert.ok(spec.topics.some((topic) => topic.flowName === 'Accounts'))
+  assert.ok(spec.topics.some((topic) => topic.flowName === 'Pricing'))
+  assert.ok(spec.topics.length >= 12)
+  assert.match(spec.menu, /accounts/i)
+  assert.match(spec.menu, /pricing/i)
 })

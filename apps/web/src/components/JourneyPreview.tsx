@@ -38,7 +38,9 @@ export function JourneyPreview({
             {doors.map((door) => (
               <div key={door.title} className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-2">
                 <p className="text-xs font-semibold text-[var(--text-primary)]">{door.title}</p>
-                <p className="text-[11px] text-[var(--text-muted)]">{door.blurb}</p>
+                <p className="mt-1 rounded-md border border-[var(--border)] bg-white px-1.5 py-0.5 text-[11px] leading-snug text-[var(--text-secondary)]">
+                  {door.blurb}
+                </p>
               </div>
             ))}
           </div>

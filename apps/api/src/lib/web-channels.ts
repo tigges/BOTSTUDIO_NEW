@@ -30,7 +30,7 @@ const OPTIONAL_CHANNEL_NAMES: Record<string, string> = {
   email: 'Email',
 }
 
-/** WhatsApp, SMS, and email chosen in the start wizard. Website chat stays always-on. */
+/** Optional WhatsApp, SMS, and email. Website chat stays always-on. Channels are connected in settings. */
 export async function ensureOptionalChannels(tenantId: string, botId: string, kinds: string[]): Promise<void> {
   const wanted = [...new Set(kinds)].filter((kind) => OPTIONAL_CHANNEL_NAMES[kind])
   if (wanted.length === 0) return
