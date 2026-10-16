@@ -13,7 +13,7 @@ import { returnRequestFlow, starterFlows, supportUseCaseFlows, SUPPORT_USE_CASES
 import { hairStudioPack } from './salon-pack.js'
 
 export const CORPORATE_PACK_ID = 'corporate-services'
-export type StarterPackId = 'corporate-services' | 'hair-studio'
+export type StarterPackId = 'corporate-services' | 'hair-studio' | 'product-support' | 'crm-platform' | 'inbox-assistant'
 export const CORPORATE_WELCOME_NAME = 'Welcome & Routing'
 export const CORPORATE_WELCOME_DRAFT = 'Corporate welcome'
 
@@ -256,12 +256,15 @@ export function corporateServicesPack(companyName: string): CorporatePack {
 }
 
 /** Tag and intent names a remove uses. Flows and FAQs carry the tag. Intents match by name. */
-export function starterPackScope(pack: StarterPackId): { tag: 'corporate' | 'salon'; intentNames: string[] } {
-  const built = pack === 'hair-studio' ? hairStudioPack('studio') : corporateServicesPack('company')
-  return {
-    tag: pack === 'hair-studio' ? 'salon' : 'corporate',
-    intentNames: built.intents.map((intent) => intent.name),
+export function starterPackScope(pack: StarterPackId): { tag: string; intentNames: string[] } {
+  if (pack === 'hair-studio') {
+    return { tag: 'salon', intentNames: hairStudioPack('studio').intents.map((intent) => intent.name) }
   }
+  if (pack === 'corporate-services') {
+    return { tag: 'corporate', intentNames: corporateServicesPack('company').intents.map((intent) => intent.name) }
+  }
+  const tag = pack === 'crm-platform' ? 'crm' : pack === 'inbox-assistant' ? 'inbox' : 'software'
+  return { tag, intentNames: [] }
 }
 
 export function selectPackRemoval<TFlow extends { id: string; tags: string[] }, TIntent extends { id: string; name: string }, TFaq extends { id: string; tags: string[] }>(
@@ -276,7 +279,7 @@ export function selectPackRemoval<TFlow extends { id: string; tags: string[] }, 
   }
 }
 
-/** Templates shown when someone starts one flow. Corporate answers come first, then the salon. */
+/** Templates shown when someone starts one flow. Corporate answers come first, then the salon, then vendor maps. */
 export function flowCatalog(companyName: string): StarterFlow[] {
   const pack = [...corporateServicesPack(companyName).flows, ...hairStudioPack(companyName).flows]
   const seen = new Set<string>()

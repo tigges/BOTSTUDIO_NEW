@@ -33,8 +33,26 @@ model Tenant {
   cannedReplies      CannedReply[]
   dataTables         DataTable[]
   integrations       IntegrationConnection[]
+  startTemplates     StartTemplate[]
 
   @@map("tenants")
+}
+
+model StartTemplate {
+  id          String   @id @default(cuid())
+  tenantId    String
+  clusterId   String
+  title       String
+  body        String
+  sourceUrl   String?
+  sourceHost  String?
+  spec        Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("start_templates")
 }
 
 model User {

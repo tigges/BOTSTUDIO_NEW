@@ -24,6 +24,38 @@ export function canRemoveWebChannel(
   ))
 }
 
+const OPTIONAL_CHANNEL_NAMES: Record<string, string> = {
+  whatsapp: 'WhatsApp',
+  sms: 'SMS',
+  email: 'Email',
+}
+
+/** WhatsApp, SMS, and email chosen in the start wizard. Website chat stays always-on. */
+export async function ensureOptionalChannels(tenantId: string, botId: string, kinds: string[]): Promise<void> {
+  const wanted = [...new Set(kinds)].filter((kind) => OPTIONAL_CHANNEL_NAMES[kind])
+  if (wanted.length === 0) return
+  const [environments, channels] = await Promise.all([
+    prisma.environment.findMany({ where: { botId, tenantId }, orderBy: { createdAt: 'asc' } }),
+    prisma.channel.findMany({ where: { botId, tenantId }, select: { kind: true, environmentId: true } }),
+  ])
+  for (const env of environments) {
+    for (const kind of wanted) {
+      if (channels.some((channel) => channel.kind === kind && channel.environmentId === env.id)) continue
+      await prisma.channel.create({
+        data: {
+          tenantId,
+          botId,
+          environmentId: env.id,
+          name: OPTIONAL_CHANNEL_NAMES[kind] ?? kind,
+          kind,
+          isActive: true,
+          config: {},
+        },
+      })
+    }
+  }
+}
+
 /** One active website chat per environment. Test and live both walk the journey map. */
 export async function ensureWebChannels(tenantId: string, botId: string): Promise<void> {
   const [environments, channels] = await Promise.all([

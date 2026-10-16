@@ -35,4 +35,5 @@ export type {
   Report,
   Webhook,
   Activity,
+  StartTemplate,
 } from '@prisma/client'
