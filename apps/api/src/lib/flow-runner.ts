@@ -8,7 +8,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { SessionMachine, copyJumpVariables, missingChapterLine, listenForChapter, offerOnMap, isSmallTalk, sameQuestion, questionFrom } from '@ybot/runtime'
+import { SessionMachine, copyJumpVariables, missingChapterLine, listenForChapter, offerOnMap, isSmallTalk, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn } from '@ybot/runtime'
 import type { Session, SessionVariables, FlowGraph } from '@ybot/runtime'
 import { prisma } from '@ybot/db'
 import { CATALOG_ENTITY, catalogFromValues } from '@ybot/shared'
@@ -260,9 +260,30 @@ export async function runFlowIfPublished(opts: {
 
   const asked = outcome.session.waitingFor?.question ?? questionFrom(outcome.messages.at(-1) ?? '')
   if (!first.jumpToFlow && asked && sameQuestion(asked, previousAsked)) {
-    const map = await loadChapters()
-    outcome = { ...outcome, messages: [offerOnMap(map, version.flow.name)] }
+    const retried = await runVersion({
+      machine,
+      version,
+      fsRecord: null,
+      conversationId,
+      botId,
+      tenantId,
+      userText,
+      contactName: named.spoken,
+      seedVariables: copyJumpVariables(outcome.session.variables, userText, named.spoken),
+    })
+    const retryAsked = retried
+      ? (retried.session.waitingFor?.question ?? questionFrom(retried.messages.at(-1) ?? ''))
+      : undefined
+    if (retried && retried.messages.some((line) => line.trim()) && !sameQuestion(retryAsked, asked)) {
+      outcome = retried
+    } else {
+      const map = await loadChapters()
+      outcome = { ...outcome, messages: [offerOnMap(map, version.flow.name)] }
+    }
   }
+
+  const shaped = shapeTurn(keepFirstQuestion(outcome.messages.filter((line) => line.trim()).join('\n\n')), version.flow.name)
+  if (shaped) outcome = { ...outcome, messages: [shaped] }
 
   const visible = outcome.messages.some((message) => message.trim().length > 0)
   if (visible) {

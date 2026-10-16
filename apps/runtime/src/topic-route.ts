@@ -32,6 +32,14 @@ const RELATED: Record<string, string[]> = {
   location: ['address'],
   address: ['location'],
   directions: ['location', 'address'],
+  gents: ['gent', 'men', 'man', 'male'],
+  gent: ['gents', 'men'],
+  ladies: ['lady', 'women', 'woman'],
+  lady: ['ladies', 'women'],
+  women: ['woman', 'ladies'],
+  woman: ['women', 'ladies'],
+  kids: ['kid', 'children', 'child'],
+  children: ['kids', 'child'],
 }
 
 function tokens(text: string): string[] {

@@ -2,7 +2,7 @@ import type { StudioCatalog } from '@ybot/shared'
 import { usableContactName } from './contact-speech.js'
 import { SessionMachine, type FlowGraph } from './engine.js'
 import { copyJumpVariables, missingChapterLine } from './handoff.js'
-import { isSmallTalk, listenForChapter, offerOnMap, questionFrom, sameQuestion } from './map-listen.js'
+import { isSmallTalk, listenForChapter, offerOnMap, questionFrom, sameQuestion, shapeTurn } from './map-listen.js'
 import type { ExecutionServices, Session, SessionVariables } from './types.js'
 
 export interface JourneyPreviewSnapshot {
@@ -41,16 +41,6 @@ const MAX_HOPS = 6
 function spokenFirstName(raw: string | null | undefined): string | undefined {
   const name = usableContactName(raw)
   return name ? name.split(' ')[0] : undefined
-}
-
-/** A reply may explain and then ask once. A second question is the next turn. */
-function keepFirstQuestion(text: string): string {
-  const trimmed = text.trim()
-  const first = trimmed.indexOf('?')
-  if (first < 0) return trimmed
-  const later = trimmed.indexOf('?', first + 1)
-  if (later < 0) return trimmed
-  return trimmed.slice(0, first + 1).trim()
 }
 
 function startNodeId(graph: FlowGraph): string | undefined {
@@ -180,6 +170,7 @@ export async function runJourneyPreview(input: {
   let stopped = false
   const seen = new Set<string>()
   const originChapter = chapterName
+  let retriedSameQuestion = false
 
   for (let hop = 0; hop < MAX_HOPS; hop++) {
     if (seen.has(chapterName)) break
@@ -243,6 +234,16 @@ export async function runJourneyPreview(input: {
     }
 
     const asked = result.session.waitingFor?.question ?? questionFrom(lines.at(-1) ?? '')
+    if (!opening && asked && sameQuestion(asked, previous?.lastQuestion) && !retriedSameQuestion) {
+      const restarted = beginChapter(graph, chapterName, input.message, saved)
+      if (restarted) {
+        retriedSameQuestion = true
+        lines.length = hopStart
+        saved = restarted
+        seen.delete(chapterName)
+        continue
+      }
+    }
     if (!opening && asked && sameQuestion(asked, previous?.lastQuestion)) {
       const offer = offerOnMap(input.chapters, chapterName)
       if (lines.length > hopStart) lines[lines.length - 1] = offer
@@ -256,10 +257,10 @@ export async function runJourneyPreview(input: {
   let text: string
   if (stopped) {
     const stop = spoken.pop() ?? ''
-    const body = keepFirstQuestion(spoken.join('\n\n'))
+    const body = shapeTurn(spoken.join('\n\n'), chapterName)
     text = [body, stop].filter((line) => line.length > 0).join('\n\n')
   } else {
-    text = keepFirstQuestion(spoken.join('\n\n'))
+    text = shapeTurn(spoken.join('\n\n'), chapterName)
   }
   if (!text) return { handled: false, text: '', chapter: chapterName, session: saved }
   return { handled: true, text, chapter: chapterName, session: saved }

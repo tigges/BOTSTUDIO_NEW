@@ -41,6 +41,18 @@ test('matchTopic picks the longest phrase', () => {
     { handle: 'prices', phrases: ['how much', 'prices', 'services'] },
     { handle: 'book', phrases: ['book'] },
   ]), 'prices')
+  assert.equal(matchTopic('men', [
+    { handle: 'gents', phrases: ['gents wash, cut and style'] },
+    { handle: 'ladies', phrases: ['ladies wash, cut and style'] },
+  ]), 'gents')
+  assert.equal(matchTopic('man', [
+    { handle: 'gents', phrases: ['gents wash, cut and style'] },
+    { handle: 'ladies', phrases: ['ladies wash, cut and style'] },
+  ]), 'gents')
+  assert.equal(matchTopic('ladies', [
+    { handle: 'gents', phrases: ['gents wash, cut and style'] },
+    { handle: 'ladies', phrases: ['ladies wash, cut and style'] },
+  ]), 'ladies')
   assert.equal(
     matchTopic('Please change the delivery address', [
       { handle: 'orders', phrases: ['order', 'delivery'] },

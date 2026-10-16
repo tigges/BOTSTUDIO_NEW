@@ -151,8 +151,11 @@ const PRICE_LIST = `<title>Price list</title>
 <table>
 <tr><th>Service</th><th>Senior</th><th>Stylist</th></tr>
 <tr><th>Ladies wash, cut &amp; style</th><td data-label="Senior">£87</td><td data-label="Stylist">£58</td></tr>
+<tr><th>Gents wash, cut &amp; style</th><td data-label="Senior">£45</td><td data-label="Stylist">£38</td></tr>
 <tr><th>Kids (12 &amp; under)</th><td data-label="Senior">£29</td><td data-label="Stylist">£23</td></tr>
 <tr><th>Long hair</th><td data-label="Senior">+£41</td><td data-label="Stylist">+£41</td></tr>
+<tr><th>Teens (13-16) boys</th><td data-label="Senior">£35</td><td data-label="Stylist">£29</td></tr>
+<tr><th>Blow-dry</th><td data-label="Senior">£28</td><td data-label="Stylist">£22</td></tr>
 </table>
 <h2>Colour</h2>
 <table>
@@ -236,10 +239,22 @@ test('linked pages become separate conversations instead of one price paragraph'
   const kidsText = kids.newMessages.map((message) => message.content.text).join('\n')
   assert.match(kidsText, /£29/)
   assert.equal(/£58/.test(kidsText), false)
-  const named = await machine.run(topicSession('haircut'), graph, 'Ada')
+  const named = await machine.run(topicSession('cut'), graph, 'Ada')
   const namedText = named.newMessages.map((message) => message.content.text).join('\n')
   assert.match(namedText, /which cut/i)
+  assert.match(namedText, /Ladies/)
+  assert.match(namedText, /Gents/)
+  assert.match(namedText, /Kids/)
+  assert.match(namedText, /or another/)
+  assert.equal(/Ladies wash/.test(namedText), false)
+  assert.equal(/Blow-dry/.test(namedText), false)
   assert.equal(/£75/.test(namedText), false)
+  named.session.variables.flow['_last_user_message'] = 'men'
+  const men = await machine.run(named.session, graph, 'men')
+  const menText = men.newMessages.map((message) => message.content.text).join('\n')
+  assert.match(menText, /£45|£38/)
+  assert.equal(/£87/.test(menText), false)
+  assert.equal(/where we are/.test(menText), false)
 })
 
 test('chooseSitePages keeps a price list, questions, and the team page once', () => {
