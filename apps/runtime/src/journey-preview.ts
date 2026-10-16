@@ -1,5 +1,7 @@
+import type { StudioCatalog } from '@ybot/shared'
 import { usableContactName } from './contact-speech.js'
 import { SessionMachine, type FlowGraph } from './engine.js'
+import { copyJumpVariables, missingChapterLine } from './handoff.js'
 import type { ExecutionServices, Session, SessionVariables } from './types.js'
 
 export interface JourneyPreviewSnapshot {
@@ -17,16 +19,19 @@ export interface JourneyTurn {
   session?: JourneyPreviewSnapshot
 }
 
-const services = {
-  llm: {
-    classify: async () => ({ category: 'other', confidence: 0 }),
-    embed: async () => ({ embeddings: [[]] }),
-    complete: async () => ({ content: '' }),
-    stream: async () => {},
-  },
-  db: {},
-  httpFetch: fetch,
-} as unknown as ExecutionServices
+function previewServices(catalog?: StudioCatalog): ExecutionServices {
+  return {
+    llm: {
+      classify: async () => ({ category: 'other', confidence: 0 }),
+      embed: async () => ({ embeddings: [[]] }),
+      complete: async () => ({ content: '' }),
+      stream: async () => {},
+    },
+    db: {},
+    httpFetch: fetch,
+    catalog,
+  } as unknown as ExecutionServices
+}
 
 const START_KINDS = new Set(['trigger_start', 'start', 'trigger'])
 const MAX_HOPS = 6
@@ -101,6 +106,7 @@ export async function runJourneyPreview(input: {
   message: string
   environmentLabel: string
   session?: JourneyPreviewSnapshot
+  catalog?: StudioCatalog
 }): Promise<JourneyTurn> {
   const byName = new Map<string, FlowGraph>()
   for (const chapter of input.chapters) {
@@ -114,12 +120,12 @@ export async function runJourneyPreview(input: {
     const missing = chapterName || 'The welcome'
     return {
       handled: true,
-      text: `${missing} is not on this ${input.environmentLabel} map.`,
+      text: missingChapterLine(missing, input.environmentLabel),
       chapter: chapterName,
     }
   }
 
-  const machine = new SessionMachine(services)
+  const machine = new SessionMachine(previewServices(input.catalog))
   const lines: string[] = []
   let saved: JourneyPreviewSnapshot | undefined = restart ? undefined : input.session
   let stopped = false
@@ -142,14 +148,14 @@ export async function runJourneyPreview(input: {
       const nextName = result.jumpToFlow
       const next = byName.get(nextName)
       if (!next) {
-        lines.push(`${nextName} is not on this ${input.environmentLabel} map.`)
+        lines.push(missingChapterLine(nextName, input.environmentLabel))
         saved = { ...saved, status: 'completed' }
         stopped = true
         break
       }
       const start = startNodeId(next)
       if (!start) {
-        lines.push(`${nextName} is not on this ${input.environmentLabel} map.`)
+        lines.push(missingChapterLine(nextName, input.environmentLabel))
         saved = { ...saved, status: 'completed' }
         stopped = true
         break
@@ -160,11 +166,7 @@ export async function runJourneyPreview(input: {
         chapter: chapterName,
         currentNodeId: start,
         status: 'running',
-        variables: {
-          flow: { ...result.session.variables.flow },
-          global: { ...result.session.variables.global },
-          contact: { ...result.session.variables.contact },
-        },
+        variables: copyJumpVariables(result.session.variables, input.message, String(result.session.variables.contact['name'] ?? '')),
       }
       continue
     }

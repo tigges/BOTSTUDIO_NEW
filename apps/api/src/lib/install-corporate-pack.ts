@@ -1,5 +1,6 @@
 import { prisma } from '@ybot/db'
-import { planCorporateImport, planHairStudioImport, selectPackRemoval, starterPackScope, type StarterPackId } from '@ybot/shared'
+import { hairStudioCatalog, planCorporateImport, planHairStudioImport, selectPackRemoval, starterPackScope, type StarterPackId } from '@ybot/shared'
+import { upsertStudioCatalog } from './studio-catalog.js'
 
 export interface CorporateInstallResult {
   flowsAdded: string[]
@@ -32,9 +33,11 @@ export async function installHairStudioPack(
   personaName?: string | null,
 ): Promise<CorporateInstallResult> {
   const persona = personaName?.trim() || undefined
-  return installPlannedPack(tenantId, botId, companyName, environmentId, (input) =>
+  const result = await installPlannedPack(tenantId, botId, companyName, environmentId, (input) =>
     planHairStudioImport({ ...input, personaName: persona }),
   )
+  await upsertStudioCatalog(tenantId, botId, hairStudioCatalog(companyName))
+  return result
 }
 
 async function installPlannedPack(

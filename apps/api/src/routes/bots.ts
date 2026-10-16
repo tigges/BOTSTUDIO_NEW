@@ -50,6 +50,8 @@ export async function botsRoutes(app: FastifyInstance) {
           doors: draft.doors.map(({ title, flowName, blurb, found }) => ({ title, flowName, blurb, found })),
           facts: draft.facts,
           note: draft.note,
+          catalog: draft.catalog,
+          chapters: draft.flows.map((flow) => ({ name: flow.name, graph: flow.graph })),
         },
       }
     } catch (err) {

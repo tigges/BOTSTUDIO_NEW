@@ -86,6 +86,9 @@ test('yuzu.hair becomes Bella at Yuzu with four doors and no invented cancellati
   assert.match(draft.note, /cancellation rule/)
   assert.equal(draft.facts.some((fact) => fact.label === 'Offers'), true)
   assert.equal(draft.documents[0]?.content.includes('Dickens Yard'), true)
+  assert.ok(draft.catalog.facts.some((fact) => fact.id === 'location' && /Dickens Yard/.test(fact.fact)))
+  assert.ok(draft.catalog.facts.some((fact) => fact.id === 'hours' && /Tuesday to Friday/.test(fact.fact)))
+  assert.ok(draft.catalog.facts.some((fact) => /£58/.test(fact.fact) && !/£75/.test(fact.fact)))
 
   const names = draft.flows.map((flow) => flow.name)
   assert.equal(welcomeGreeting(draft.flows[0]?.graph), draft.greeting)
@@ -140,6 +143,7 @@ test('a page with no facts still has four doors and does not invent an address',
   assert.match(draft.doors[0]!.answer, /did not state an address/)
   assert.equal(draft.doors[0]!.answer.includes('Rosewood'), false)
   assert.equal(draft.doors[2]!.answer.includes('£'), false)
+  assert.equal(draft.catalog.facts.length, 0)
 })
 
 const PRICE_LIST = `<title>Price list</title>

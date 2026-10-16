@@ -43,6 +43,7 @@ export interface NodeResult {
   handover?: { team?: string; priority?: string; note?: string }
   /** Leave this graph and continue in the published flow with this name. */
   jumpToFlow?: string
+  ticket?: { subject: string; description?: string }
   newMessages?: Array<{ direction: 'outbound'; content: { text: string } }>
   error?: string
 }
@@ -53,4 +54,5 @@ export interface ExecutionServices {
   db: import('@ybot/db').PrismaClient
   redis?: import('ioredis').Redis
   httpFetch: typeof fetch
+  catalog?: import('@ybot/shared').StudioCatalog
 }

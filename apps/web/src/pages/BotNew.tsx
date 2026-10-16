@@ -2,9 +2,12 @@ import React, { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Input, Card } from '@ybot/ui'
+import type { FlowGraph } from '@ybot/runtime'
+import { SALON_WELCOME_NAME, type StudioCatalog } from '@ybot/shared'
 import { useAppStore } from '../store/app'
 import { apiFetch, type WebsiteScanPreview } from '../lib/api'
 import type { Bot } from '../store/app'
+import { JourneyTest } from './build/JourneyTest'
 
 const isDemoMode = () => import.meta.env.VITE_DEMO_MODE === 'true'
 
@@ -64,6 +67,7 @@ export function BotNewPage() {
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [scan, setScan] = useState<WebsiteScanPreview | null>(null)
   const [scanning, setScanning] = useState(false)
+  const [trying, setTrying] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const tenant = useQuery({
@@ -210,7 +214,7 @@ export function BotNewPage() {
                     role="radio"
                     aria-checked={selected}
                     tabIndex={0}
-                    onClick={() => setStart(choice.id)}
+                    onClick={() => { setStart(choice.id); setTrying(false) }}
                     onKeyDown={(event) => {
                       if (event.target !== event.currentTarget) return
                       if (event.key === 'Enter' || event.key === ' ') {
@@ -237,7 +241,7 @@ export function BotNewPage() {
                         <span className="mt-3 flex gap-2" onClick={(event) => event.stopPropagation()}>
                           <input
                             value={websiteUrl}
-                            onChange={(event) => { setWebsiteUrl(event.target.value); setScan(null) }}
+                            onChange={(event) => { setWebsiteUrl(event.target.value); setScan(null); setTrying(false) }}
                             onKeyDown={(event) => {
                               if (event.key === 'Enter') {
                                 event.preventDefault()
@@ -331,6 +335,17 @@ export function BotNewPage() {
                     ))}
                   </div>
                   {scan.note && <p className="mt-3 text-[11px] text-[var(--text-muted)]">{scan.note}</p>}
+                  {scan.chapters && scan.chapters.length > 0 && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="mt-3"
+                      onClick={() => setTrying(true)}
+                    >
+                      Try this walk
+                    </Button>
+                  )}
                 </>
               )}
               {start === 'website' && !scan && (
@@ -370,6 +385,20 @@ export function BotNewPage() {
             </Card>
           </div>
         </>
+      )}
+      {trying && scan?.chapters && (
+        <div className="fixed inset-y-0 right-0 z-40 shadow-xl">
+          <JourneyTest
+            botName={name.trim() || 'Bot'}
+            chapters={scan.chapters.map((chapter) => ({ name: chapter.name, graph: chapter.graph as unknown as FlowGraph }))}
+            startChapter={scan.chapters.find((chapter) => chapter.name === SALON_WELCOME_NAME)?.name ?? scan.chapters[0]?.name ?? ''}
+            environmentLabel="Draft"
+            chapterKey={scan.url}
+            catalog={scan.catalog as StudioCatalog | undefined}
+            onChapter={() => {}}
+            onClose={() => setTrying(false)}
+          />
+        </div>
       )}
     </div>
   )

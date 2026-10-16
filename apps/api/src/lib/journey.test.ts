@@ -19,6 +19,7 @@ test('salon chapters hang off the welcome, and parked charts stay loose', () => 
     'Book an appointment',
   ])
   const book = layout.roots[0]?.children.find((chapter) => chapter.name === 'Book an appointment')
+  assert.deepEqual(layout.roots[0]?.children.find((chapter) => chapter.name === 'Location')?.looksUp, ['Catalog'])
   assert.equal(book?.children.some((chapter) => chapter.name === 'Consultation'), true)
   assert.equal(layout.loose.some((chapter) => chapter.name === 'Gift voucher'), true)
   assert.equal(layout.suggested.length, 0)
@@ -28,6 +29,32 @@ test('salon chapters hang off the welcome, and parked charts stay loose', () => 
   const bookTrail = journeyTrail(layout, book?.id ?? '')
   assert.deepEqual(bookTrail.path.map((chapter) => chapter.name), ['Salon welcome', 'Book an appointment'])
   assert.equal(bookTrail.next.includes('Consultation'), true)
+})
+
+test('an unpublished learning chapter sits beside the welcome', () => {
+  const layout = journeyLayout([
+    {
+      id: 'welcome',
+      name: 'Salon welcome',
+      tags: ['welcome'],
+      published: true,
+      graph: { nodes: [], edges: [] },
+    },
+    {
+      id: 'learned',
+      name: 'Book a colour',
+      tags: ['learning'],
+      published: false,
+      graph: {
+        nodes: [
+          { id: 'ask', data: { kind: 'ask_question', config: { question: 'What colour is your hair now?' } } },
+        ],
+        edges: [],
+      },
+    },
+  ])
+  assert.deepEqual(layout.suggested.map((chapter) => chapter.name), ['Book a colour'])
+  assert.equal(layout.loose.length, 0)
 })
 
 test('an unpublished proposed chapter stays suggested until a chart opens it', () => {

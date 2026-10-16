@@ -3,13 +3,13 @@ import { Play, Plus } from 'lucide-react'
 import { useNavigate } from '@tanstack/react-router'
 import { Button, PageHeader, Skeleton } from '@ybot/ui'
 import { cn } from '@ybot/ui'
-import { journeyLayout, versionForEnvironment } from '@ybot/shared'
+import { CATALOG_ENTITY, catalogFromValues, journeyLayout, versionForEnvironment } from '@ybot/shared'
 import type { FlowGraph as RuntimeGraph } from '@ybot/runtime'
 import { FlowWizard } from './FlowWizard'
 import { JourneyMap, type ChapterHealth, type JourneyLens } from './JourneyMap'
 import { JourneyTest } from './JourneyTest'
 import { reviewFlow } from './PublishCheck'
-import { useCreateFlow, useFlows, useJourneyTraffic, usePublishFlow, useSaveCanvas, useWorkflows } from '../../lib/hooks'
+import { useCreateFlow, useEntities, useFlows, useJourneyTraffic, usePublishFlow, useSaveCanvas, useWorkflows } from '../../lib/hooks'
 import type { Flow, FlowGraph } from '../../lib/api'
 import { useAppStore } from '../../store/app'
 
@@ -61,7 +61,8 @@ export function JourneyPage() {
   const [testing, setTesting] = useState(false)
   const [guestChapterId, setGuestChapterId] = useState('')
   const { data: flows = [], isLoading, isError, error, refetch } = useFlows()
-  const traffic = useJourneyTraffic(lens === 'traffic')
+  const traffic = useJourneyTraffic(lens === 'traffic' || lens === 'health')
+  const entities = useEntities()
   const { data: workflows = [] } = useWorkflows()
   const createFlow = useCreateFlow()
   const saveCanvas = useSaveCanvas()
@@ -74,14 +75,19 @@ export function JourneyPage() {
   const shown = (flow: Flow) => versionForEnvironment(flow.versions, environmentId, selectedEnv)
   const named = useMemo(() => flows.flatMap((flow) => {
     const version = shown(flow)
+    if (!version) return []
     return [{
       id: flow.id,
       name: flow.name,
       tags: flow.tags,
-      published: version?.status === 'published',
-      graph: version?.graph,
+      published: version.status === 'published',
+      graph: version.graph,
     }]
   }), [flows, environmentId, selectedEnv])
+  const catalog = useMemo(() => {
+    const row = entities.data?.find((entity) => entity.name === CATALOG_ENTITY)
+    return catalogFromValues(row?.values)
+  }, [entities.data])
   const layout = useMemo(() => journeyLayout(named), [named])
   const suggestedIds = useMemo(() => new Set(layout.suggested.map((chapter) => chapter.id)), [layout])
   const guestChapters = useMemo(() => named.flatMap((flow) => {
@@ -203,6 +209,7 @@ export function JourneyPage() {
           startChapter={welcome.name}
           environmentLabel={environmentLabel}
           chapterKey={chapterKey}
+          catalog={catalog}
           onChapter={(name) => {
             const match = named.find((flow) => flow.name === name)
             setGuestChapterId(match?.id ?? '')

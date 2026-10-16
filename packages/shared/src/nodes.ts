@@ -24,6 +24,7 @@ export type NodeKind =
   | 'classify_intent'
   | 'create_ticket'
   | 'route_topic'
+  | 'lookup_catalog'
 
 export interface NodePort {
   id: string
@@ -310,6 +311,19 @@ export const NODE_DEFINITIONS: Record<NodeKind, NodeDefinition> = {
     color: '#f59e0b',
     ports: [
       { id: 'in', type: 'target' },
+      { id: 'other', label: 'Other', type: 'source' },
+    ],
+  },
+  lookup_catalog: {
+    kind: 'lookup_catalog',
+    label: 'Look up a fact',
+    description: 'Speak one catalog fact, such as a price or the address',
+    category: 'runtime_alias',
+    icon: 'search',
+    color: '#06b6d4',
+    ports: [
+      { id: 'in', type: 'target' },
+      { id: 'found', label: 'Found', type: 'source' },
       { id: 'other', label: 'Other', type: 'source' },
     ],
   },

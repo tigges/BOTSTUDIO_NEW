@@ -4,6 +4,7 @@
  * sits beside the welcome. Anything with no line in stays loose.
  */
 
+import { LEARNING_TAG } from './learn-from-chats.js'
 import { spokenLines, welcomeDoors } from './conversation-map.js'
 
 export interface JourneyFlowInput {
@@ -22,6 +23,7 @@ export interface JourneyChapter {
   welcome: boolean
   suggested: boolean
   published: boolean
+  looksUp: string[]
   children: JourneyChapter[]
 }
 
@@ -37,6 +39,12 @@ function isWelcome(flow: JourneyFlowInput): boolean {
   return (flow.tags ?? []).includes('welcome') || WELCOME_NAMES.has(flow.name)
 }
 
+function looksUpCatalog(graph: unknown): boolean {
+  if (!graph || typeof graph !== 'object') return false
+  const nodes = (graph as { nodes?: Array<{ data?: { kind?: string } }> }).nodes
+  return Array.isArray(nodes) && nodes.some((node) => node?.data?.kind === 'lookup_catalog')
+}
+
 function chapterFrom(flow: JourneyFlowInput, welcome: boolean, suggested: boolean): JourneyChapter {
   return {
     id: flow.id,
@@ -46,6 +54,7 @@ function chapterFrom(flow: JourneyFlowInput, welcome: boolean, suggested: boolea
     welcome,
     suggested,
     published: flow.published,
+    looksUp: looksUpCatalog(flow.graph) ? ['Catalog'] : [],
     children: [],
   }
 }
@@ -97,7 +106,8 @@ export function journeyLayout(flows: JourneyFlowInput[]): JourneyLayout {
   const suggested: JourneyChapter[] = []
   for (const flow of flows) {
     if (built.has(flow.id)) continue
-    const proposed = (flow.tags ?? []).includes('proposed') && !flow.published
+    const tags = flow.tags ?? []
+    const proposed = (tags.includes('proposed') || tags.includes(LEARNING_TAG)) && !flow.published
     if (!proposed) continue
     suggested.push(build(flow, false, true, new Set()))
   }

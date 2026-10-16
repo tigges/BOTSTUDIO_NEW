@@ -6,7 +6,9 @@
  * Rosewood Lane address stay in the hair studio template.
  */
 
-import { SALON_WELCOME_NAME } from './salon-pack.js'
+import type { CatalogFact, StudioCatalog } from './catalog.js'
+import { emptyCatalog } from './catalog.js'
+import { catalogLookupFlow, SALON_WELCOME_NAME } from './salon-pack.js'
 import type { StarterFlow } from './flow-templates.js'
 
 export interface ScannedLink {
@@ -47,6 +49,7 @@ export interface WebsiteChatDraft {
   faqs: Array<{ question: string; answer: string; tags: string[] }>
   intents: Array<{ name: string; description: string; utterances: string[]; responses: Array<{ text: string }> }>
   documents: Array<{ title: string; url: string; content: string }>
+  catalog: StudioCatalog
 }
 
 const DOORS: Array<{ flowName: string; title: string; phrases: string[]; question: string }> = [
@@ -160,25 +163,54 @@ function ask(id: string, x: number, y: number, label: string, question: string, 
   return { id, type: 'flow-node', position: { x, y }, data: { kind: 'ask_question', label, config: { question, variable } } }
 }
 
-function answerFlow(name: string, answer: string): StarterFlow {
+function answerFlow(name: string, answer: string, ticket?: { subject: string; description: string }): StarterFlow {
   const y = 120
+  const spoken = /I can also help with/.test(answer)
+    ? answer
+    : `${answer} I can also help with hours, prices, or a booking.`
+  const nodes: object[] = [
+    { id: 'start', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: name, config: {} } },
+    { id: 'say', type: 'flow-node', position: { x: 340, y }, data: { kind: 'send_message', label: 'Answer', config: { text: spoken } } },
+  ]
+  const edges: object[] = [
+    { id: 'e1', source: 'start', target: 'say', sourceHandle: 'out' },
+  ]
+  if (ticket) {
+    nodes.push({ id: 'ticket', type: 'flow-node', position: { x: 560, y }, data: { kind: 'create_ticket', label: 'Inbox', config: ticket } })
+    nodes.push({ id: 'end', type: 'flow-node', position: { x: 780, y }, data: { kind: 'end_flow', label: 'End', config: {} } })
+    edges.push({ id: 'e2', source: 'say', target: 'ticket' })
+    edges.push({ id: 'e3', source: 'ticket', target: 'end' })
+  } else {
+    nodes.push({ id: 'end', type: 'flow-node', position: { x: 640, y }, data: { kind: 'end_flow', label: 'End', config: {} } })
+    edges.push({ id: 'e2', source: 'say', target: 'end' })
+  }
   return {
     name,
-    description: 'From the public website. Edit the line if the page was wrong.',
+    description: 'From the public website. Edit the catalog if the fact changed.',
     tags: ['website', 'faq'],
     publish: false,
-    graph: {
-      nodes: [
-        { id: 'start', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: name, config: {} } },
-        { id: 'say', type: 'flow-node', position: { x: 340, y }, data: { kind: 'send_message', label: 'Answer', config: { text: answer } } },
-        { id: 'end', type: 'flow-node', position: { x: 640, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
-      ],
-      edges: [
-        { id: 'e1', source: 'start', target: 'say', sourceHandle: 'out' },
-        { id: 'e2', source: 'say', target: 'end' },
-      ],
-    },
+    graph: { nodes, edges },
   }
+}
+
+const SCAN_NEXT_DOORS = [
+  { handle: 'hours', phrases: ['hours', 'opening hours', 'when are you open'], flowName: 'Salon hours' },
+  { handle: 'prices', phrases: ['price', 'prices', 'how much', 'haircut'], flowName: 'Services and prices' },
+  { handle: 'location', phrases: ['where', 'address', 'location'], flowName: 'Location' },
+  { handle: 'book', phrases: ['book', 'booking', 'yes', 'please', 'ok', 'okay', 'yeah'], flowName: 'Book an appointment' },
+]
+
+function lookupDoor(name: string, id: string, intro: string, next: string): StarterFlow {
+  return catalogLookupFlow({
+    name,
+    description: 'Looks up one fact from the scanned pages, then offers a next step.',
+    id,
+    intro,
+    next,
+    doors: SCAN_NEXT_DOORS.filter((door) => door.flowName !== name),
+    tags: ['website', 'faq'],
+    publish: false,
+  })
 }
 
 function welcomeFlow(company: string, persona: string, doors: ScanDoor[]): StarterFlow {
@@ -1031,20 +1063,46 @@ export function draftWebsiteChat(input: {
     : 'Left off the map. The pages do not state a cancellation rule.'
   if (cancel?.[0]) facts.splice(facts.length - 1, 0, { label: 'Policy', text: cancel[0].replace(/\s+/g, ' ').trim() })
 
+  const catalog = catalogFromScan({
+    locationAnswer,
+    hoursAnswer,
+    address,
+    hours,
+    services,
+    offers: offers.length >= 2 ? offers : (singleOffer ? [singleOffer] : []),
+    patch,
+    cancel: cancel?.[0] ? cancel[0].replace(/\s+/g, ' ').trim() : null,
+    careers,
+  })
+
   const greeting = `Hi, I'm ${persona} at ${company}. What's your name?`
   const flows = [
     welcomeFlow(company, persona, doors),
     ...doors.map((door) => {
       const talk = talks.get(door.flowName)
-      if (!talk) return answerFlow(door.flowName, door.answer)
-      return conversationFlow({
-        name: door.flowName,
-        description: 'Asks one thing at a time, from the public website.',
-        intro: talk.intro,
-        again: talk.again,
-        spokes: talk.spokes,
-        bookName: talk.book ? 'Book an appointment' : null,
-      })
+      if (talk) {
+        return conversationFlow({
+          name: door.flowName,
+          description: 'Asks one thing at a time, from the public website.',
+          intro: talk.intro,
+          again: talk.again,
+          spokes: talk.spokes,
+          bookName: talk.book ? 'Book an appointment' : null,
+        })
+      }
+      if (door.flowName === 'Location' && address) {
+        return lookupDoor('Location', 'location', 'Are you after the address?', 'Want the hours, a price, or to book?')
+      }
+      if (door.flowName === 'Salon hours' && hours) {
+        return lookupDoor('Salon hours', 'hours', 'Are you after the opening hours?', 'Want where we are, a price, or to book?')
+      }
+      if (door.flowName === 'Book an appointment' && !booking) {
+        return answerFlow(door.flowName, door.answer, {
+          subject: 'Booking request',
+          description: '{{topic}} {{request}}',
+        })
+      }
+      return answerFlow(door.flowName, door.answer)
     }),
   ]
   const faqs = DOORS.filter((spec) => core.includes(spec.flowName)).map((spec) => {
@@ -1082,5 +1140,99 @@ export function draftWebsiteChat(input: {
       url: page.url,
       content: page.text.slice(0, 20_000),
     })),
+    catalog,
   }
+}
+
+function catalogFromScan(input: {
+  locationAnswer: string
+  hoursAnswer: string
+  address: string | null
+  hours: string | null
+  services: Spoke[]
+  offers: string[]
+  patch: string | null
+  cancel: string | null
+  careers: { email: string; roles: string[] } | null
+}): StudioCatalog {
+  const facts: CatalogFact[] = []
+  const used = new Set<string>()
+  if (input.address) {
+    facts.push({
+      id: 'location',
+      kind: 'studio',
+      title: 'Location',
+      phrases: DOORS[0]?.phrases ?? ['address'],
+      fact: input.locationAnswer,
+      source: 'Location',
+    })
+    used.add('location')
+  }
+  if (input.hours) {
+    facts.push({
+      id: 'hours',
+      kind: 'studio',
+      title: 'Hours',
+      phrases: DOORS[1]?.phrases ?? ['hours'],
+      fact: input.hoursAnswer,
+      source: 'Salon hours',
+    })
+    used.add('hours')
+  }
+  for (const spoke of input.services) {
+    const lines = spoke.choices && spoke.choices.length > 0 ? spoke.choices : [spoke]
+    for (const line of lines) {
+      if (!line.say) continue
+      const id = slugHandle(line.title, used)
+      facts.push({
+        id,
+        kind: 'service',
+        title: line.title,
+        phrases: uniquePhrases([...line.phrases, ...phrasesForLabel(line.title)]),
+        fact: line.say,
+        source: 'Services and prices',
+      })
+    }
+  }
+  if (input.patch) {
+    facts.push({
+      id: slugHandle('patch-test', used),
+      kind: 'policy',
+      title: 'Patch test',
+      phrases: ['patch test', 'allergy test'],
+      fact: input.patch,
+      source: 'Services and prices',
+    })
+  }
+  for (const line of input.offers) {
+    facts.push({
+      id: slugHandle(line.match(/Every\s+(\w+)/i)?.[1] ?? 'offer', used),
+      kind: 'offer',
+      title: line.match(/Every\s+(\w+)/i)?.[1] ?? 'Offer',
+      phrases: phrasesForLabel(line.split('.')[0] ?? line),
+      fact: line,
+      source: 'Offers',
+    })
+  }
+  if (input.cancel) {
+    facts.push({
+      id: slugHandle('cancellation', used),
+      kind: 'policy',
+      title: 'Cancellation',
+      phrases: ['cancel', 'cancellation'],
+      fact: input.cancel,
+      source: 'Cancellation policy',
+    })
+  }
+  if (input.careers) {
+    facts.push({
+      id: slugHandle('careers', used),
+      kind: 'policy',
+      title: 'Join the team',
+      phrases: ['cv', 'career', 'vacancy', 'join the team'],
+      fact: `Email a CV to ${input.careers.email}.`,
+      source: 'Join the team',
+    })
+  }
+  return facts.length > 0 ? { facts } : emptyCatalog()
 }

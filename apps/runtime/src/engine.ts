@@ -5,6 +5,7 @@ import {
   executeSetVariable, executeCondition, executeHttpRequest,
   executeClassifyIntent, executeHandover, executeCreateTicket, executeEndFlow,
   executeSearchKnowledge, executeLlmGenerate, executeRouteTopic, executeExecuteFlow,
+  executeLookupCatalog,
 } from './nodes/executors.js'
 
 type NodeExecutor = (ctx: NodeContext) => Promise<NodeResult>
@@ -19,6 +20,7 @@ const EXECUTORS: Record<string, NodeExecutor> = {
   classify_intent:  executeClassifyIntent,
   route_topic:      executeRouteTopic,
   execute_flow:     executeExecuteFlow,
+  lookup_catalog:   executeLookupCatalog,
   handover:         executeHandover,
   create_ticket:    executeCreateTicket,
   end_flow:         executeEndFlow,
@@ -65,6 +67,7 @@ export class SessionMachine {
     waitForInput?: Session['waitingFor']
     handover?: { team?: string; priority?: string; note?: string }
     jumpToFlow?: string
+    ticket?: { subject: string; description?: string }
     completed?: boolean
   }> {
     const nodeMap = new Map(graph.nodes.map((n) => [n.id, n]))
@@ -75,6 +78,7 @@ export class SessionMachine {
     }
 
     const allNewMessages: Array<{ direction: 'outbound'; content: { text: string } }> = []
+    let ticket: { subject: string; description?: string } | undefined
 
     // If session is waiting for input, resume from that node with the user's text
     if (session.status === 'waiting_input' && session.waitingFor && incomingText) {
@@ -121,28 +125,29 @@ export class SessionMachine {
       Object.assign(session.variables.flow, result.output)
 
       if (result.newMessages) allNewMessages.push(...result.newMessages)
+      if (result.ticket) ticket = result.ticket
 
       if (result.handover) {
         session.status = 'handed_over'
         session.currentNodeId = currentId
-        return { session, newMessages: allNewMessages, handover: result.handover }
+        return { session, newMessages: allNewMessages, handover: result.handover, ticket }
       }
 
       if (result.jumpToFlow) {
         session.currentNodeId = currentId
-        return { session, newMessages: allNewMessages, jumpToFlow: result.jumpToFlow }
+        return { session, newMessages: allNewMessages, jumpToFlow: result.jumpToFlow, ticket }
       }
 
       if (result.waitForInput) {
         session.status = 'waiting_input'
         session.waitingFor = { nodeId: currentId, ...result.waitForInput }
         session.currentNodeId = currentId
-        return { session, newMessages: allNewMessages, waitForInput: session.waitingFor }
+        return { session, newMessages: allNewMessages, waitForInput: session.waitingFor, ticket }
       }
 
       if (node.data.kind === 'end_flow') {
         session.status = 'completed'
-        return { session, newMessages: allNewMessages, completed: true }
+        return { session, newMessages: allNewMessages, completed: true, ticket }
       }
 
       const nextHandle = typeof result.nextNodeId === 'string' ? result.nextNodeId : undefined
@@ -150,7 +155,7 @@ export class SessionMachine {
     }
 
     session.currentNodeId = currentId
-    return { session, newMessages: allNewMessages }
+    return { session, newMessages: allNewMessages, ticket }
   }
 
   private nextNode(nodeId: string, edgeMap: Map<string, GraphEdge[]>, handle?: string): string {

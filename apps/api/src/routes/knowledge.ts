@@ -4,6 +4,8 @@ import { prisma } from '@ybot/db'
 import { z } from 'zod'
 import { enqueueKnowledgeSync } from '../queues.js'
 import { extractTextFromBuffer } from '../lib/extract-text.js'
+import { rereadWebsitePages } from '../lib/reread-website.js'
+import { readPublicSite } from '../lib/public-site.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -179,6 +181,23 @@ export async function knowledgeRoutes(app: FastifyInstance) {
     if (!src) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
     await enqueueKnowledgeSync({ tenantId, sourceId: id, botId, kind: src.kind as 'website' | 'file', config: src.config as Record<string, unknown> })
     await prisma.knowledgeSource.update({ where: { id }, data: { lastSyncAt: new Date() } })
+    const url = typeof (src.config as { url?: unknown }).url === 'string' ? (src.config as { url: string }).url : ''
+    if (src.kind === 'website' && url) {
+      try {
+        const bot = await prisma.bot.findFirst({ where: { id: botId, tenantId }, select: { name: true, personaName: true } })
+        const pages = await readPublicSite(url)
+        await rereadWebsitePages({
+          tenantId,
+          botId,
+          sourceId: id,
+          pages,
+          companyName: bot?.name ?? '',
+          personaName: bot?.personaName,
+        })
+      } catch {
+        // The catalog reread is best-effort. Indexing still queued.
+      }
+    }
     return { data: { queued: true, sourceId: id } }
   })
 

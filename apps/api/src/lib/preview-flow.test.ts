@@ -60,3 +60,12 @@ test('the booking chart asks once, including a mistyped cut', async () => {
   assert.equal(known.session?.variables.contact['name'], 'Ada')
   assert.equal(known.session?.variables.flow['guest_name'], undefined)
 })
+
+test('Test Bot on the location chart looks up the address', async () => {
+  const pack = hairStudioPack('Yuzu')
+  const graph = pack.flows.find((flow) => flow.name === 'Location')!.graph as unknown as FlowGraph
+  const turn = await runCanvasPreview({ graph, message: 'where are you', catalog: pack.catalog })
+  assert.match(turn.text, /Rosewood/)
+  assert.match(turn.text, /hours|price|book/i)
+  assert.equal(turn.session?.status, 'waiting_input')
+})

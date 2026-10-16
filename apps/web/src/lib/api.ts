@@ -111,6 +111,8 @@ export interface WebsiteScanPreview {
   doors: Array<{ title: string; flowName: string; blurb: string; found: boolean }>
   facts: Array<{ label: string; text: string }>
   note: string
+  catalog?: { facts: Array<{ id: string; kind: string; title: string; phrases: string[]; fact: string; source?: string }> }
+  chapters?: Array<{ name: string; graph: FlowGraph }>
 }
 
 export interface LearnCard {

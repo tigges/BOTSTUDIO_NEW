@@ -34,6 +34,7 @@ const ICON_MAP: Record<NodeKind, React.ElementType> = {
   classify_intent: GitBranch,
   create_ticket: FileText,
   route_topic: GitBranch,
+  lookup_catalog: Search,
 }
 
 const COLOR_MAP: Record<NodeKind, string> = {
@@ -62,6 +63,7 @@ const COLOR_MAP: Record<NodeKind, string> = {
   classify_intent: '#f59e0b',
   create_ticket: '#3b82f6',
   route_topic: '#f59e0b',
+  lookup_catalog: '#06b6d4',
 }
 
 function previewValue(value: unknown): string {
@@ -89,11 +91,12 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
   const hasTarget = !['start', 'trigger_start'].includes(nodeData.kind)
   const routePorts = nodeData.kind === 'route_topic' ? routePortIds(nodeData.config) : []
   const hasSingleSource =
-    !['condition', 'http_request', 'knowledge_search', 'search_knowledge', 'start', 'trigger_start', 'route_topic'].includes(nodeData.kind) &&
+    !['condition', 'http_request', 'knowledge_search', 'search_knowledge', 'lookup_catalog', 'start', 'trigger_start', 'route_topic'].includes(nodeData.kind) &&
     !['resolve', 'end_flow'].includes(nodeData.kind)
   const hasConditionSources = nodeData.kind === 'condition'
   const hasHttpSources = nodeData.kind === 'http_request'
   const hasKBSources = ['knowledge_search', 'search_knowledge'].includes(nodeData.kind)
+  const hasLookupSources = nodeData.kind === 'lookup_catalog'
   const hasStartSource = ['start', 'trigger_start'].includes(nodeData.kind)
 
   return (
@@ -225,6 +228,25 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
         </>
       )}
 
+      {hasLookupSources && (
+        <>
+          <Handle
+            type="source"
+            id="found"
+            position={Position.Bottom}
+            style={{ left: '30%' }}
+            className="!h-3 !w-3 !bg-[var(--success)] !border-2"
+          />
+          <Handle
+            type="source"
+            id="other"
+            position={Position.Bottom}
+            style={{ left: '70%' }}
+            className="!h-3 !w-3 !bg-[var(--error)] !border-2"
+          />
+        </>
+      )}
+
       {routePorts.map((port, index) => (
         <Handle
           key={port}
@@ -248,13 +270,13 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
       )}
 
       {/* Port labels for condition/http/kb */}
-      {(hasConditionSources || hasHttpSources || hasKBSources) && (
+      {(hasConditionSources || hasHttpSources || hasKBSources || hasLookupSources) && (
         <div className="flex justify-between px-2 pb-1">
           <span className="text-[8px] text-[var(--success)]">
             {hasConditionSources ? 'True' : hasHttpSources ? 'Success' : 'Found'}
           </span>
           <span className="text-[8px] text-[var(--error)]">
-            {hasConditionSources ? 'False' : hasHttpSources ? 'Error' : 'Not found'}
+            {hasConditionSources ? 'False' : hasHttpSources ? 'Error' : hasLookupSources ? 'Other' : 'Not found'}
           </span>
         </div>
       )}

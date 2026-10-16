@@ -1,11 +1,23 @@
 import { prisma } from '@ybot/db'
-import type { WebsiteChatDraft } from '@ybot/shared'
+import { emptyCatalog, type WebsiteChatDraft } from '@ybot/shared'
+import { upsertStudioCatalog } from './studio-catalog.js'
 
 /** Saves the scanned welcome as drafts, plus the pages under Knowledge. Visitors hear it after a Sandbox publish. */
 export async function installWebsiteScan(tenantId: string, botId: string, draft: WebsiteChatDraft) {
+  await upsertStudioCatalog(tenantId, botId, draft.catalog ?? emptyCatalog())
+
   for (const starter of draft.flows) {
     const found = await prisma.flow.findFirst({ where: { tenantId, botId, name: starter.name } })
-    if (found) continue
+    if (found) {
+      const draftVersion = await prisma.flowVersion.findFirst({
+        where: { flowId: found.id, status: { not: 'published' } },
+        orderBy: { version: 'desc' },
+      })
+      if (draftVersion) {
+        await prisma.flowVersion.update({ where: { id: draftVersion.id }, data: { graph: starter.graph } })
+      }
+      continue
+    }
     const flow = await prisma.flow.create({
       data: {
         tenantId,
@@ -54,6 +66,31 @@ export async function installWebsiteScan(tenantId: string, botId: string, draft:
 
   let host = draft.url
   try { host = new URL(draft.url).hostname.replace(/^www\./, '') } catch { host = draft.url }
+  const source = await prisma.knowledgeSource.findFirst({ where: { tenantId, botId, kind: 'website' } })
+  if (source) {
+    await prisma.document.deleteMany({ where: { knowledgeSourceId: source.id, tenantId } })
+    await prisma.knowledgeSource.update({
+      where: { id: source.id },
+      data: {
+        name: host || source.name,
+        config: { url: draft.url, depth: 1 },
+        lastSyncAt: new Date(),
+      },
+    })
+    if (draft.documents.length > 0) {
+      await prisma.document.createMany({
+        data: draft.documents.map((doc) => ({
+          tenantId,
+          knowledgeSourceId: source.id,
+          title: doc.title.slice(0, 180) || doc.url,
+          content: doc.content,
+          status: 'indexed',
+          metadata: { url: doc.url },
+        })),
+      })
+    }
+    return
+  }
   await prisma.knowledgeSource.create({
     data: {
       tenantId,

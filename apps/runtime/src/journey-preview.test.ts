@@ -4,17 +4,22 @@ import { hairStudioPack } from '@ybot/shared'
 import { runJourneyPreview } from './journey-preview.js'
 import type { FlowGraph } from './engine.js'
 
-function salonChapters(company = 'Yuzu') {
-  return hairStudioPack(company, 'Bella').flows.map((flow) => ({
-    name: flow.name,
-    graph: flow.graph as unknown as FlowGraph,
-  }))
+function salonWalk(company = 'Yuzu') {
+  const pack = hairStudioPack(company, 'Bella')
+  return {
+    chapters: pack.flows.map((flow) => ({
+      name: flow.name,
+      graph: flow.graph as unknown as FlowGraph,
+    })),
+    catalog: pack.catalog,
+  }
 }
 
 test('a request on the welcome continues in that chapter and keeps the name', async () => {
-  const chapters = salonChapters()
+  const { chapters, catalog } = salonWalk()
   const hello = await runJourneyPreview({
     chapters,
+    catalog,
     startChapter: 'Salon welcome',
     message: 'where are you',
     environmentLabel: 'Sandbox',
@@ -25,6 +30,7 @@ test('a request on the welcome continues in that chapter and keeps the name', as
 
   const named = await runJourneyPreview({
     chapters,
+    catalog,
     startChapter: 'Salon welcome',
     message: 'Ada',
     environmentLabel: 'Sandbox',
@@ -37,9 +43,10 @@ test('a request on the welcome continues in that chapter and keeps the name', as
 })
 
 test('a price named before the name is answered in the prices chapter', async () => {
-  const chapters = salonChapters()
+  const { chapters, catalog } = salonWalk()
   const hello = await runJourneyPreview({
     chapters,
+    catalog,
     startChapter: 'Salon welcome',
     message: 'how much is a haircut',
     environmentLabel: 'Sandbox',
@@ -49,6 +56,7 @@ test('a price named before the name is answered in the prices chapter', async ()
 
   const priced = await runJourneyPreview({
     chapters,
+    catalog,
     startChapter: 'Salon welcome',
     message: 'Ada',
     environmentLabel: 'Sandbox',
@@ -60,15 +68,18 @@ test('a price named before the name is answered in the prices chapter', async ()
 })
 
 test('a handoff to a chapter that is not on this map stops', async () => {
-  const chapters = salonChapters().filter((chapter) => chapter.name !== 'Location')
+  const walk = salonWalk()
+  const chapters = walk.chapters.filter((chapter) => chapter.name !== 'Location')
   const hello = await runJourneyPreview({
     chapters,
+    catalog: walk.catalog,
     startChapter: 'Salon welcome',
     message: 'where are you',
     environmentLabel: 'Production',
   })
   const stopped = await runJourneyPreview({
     chapters,
+    catalog: walk.catalog,
     startChapter: 'Salon welcome',
     message: 'Ada',
     environmentLabel: 'Production',

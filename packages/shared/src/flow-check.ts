@@ -65,7 +65,7 @@ function outs(edges: CheckEdge[], id: string): CheckEdge[] {
   return edges.filter((edge) => edge.source === id)
 }
 
-function routeList(node: CheckNode): Array<{ handle: string; flowName?: string }> {
+function routeList(node: CheckNode): Array<{ handle: string; flowName?: string; phrases: string[] }> {
   const raw = configOf(node)['routes']
   if (!Array.isArray(raw)) return []
   return raw.flatMap((item) => {
@@ -73,8 +73,24 @@ function routeList(node: CheckNode): Array<{ handle: string; flowName?: string }
     const handle = String((item as { handle?: string }).handle ?? '').trim()
     if (!handle) return []
     const flowName = (item as { flowName?: string }).flowName
-    return [{ handle, flowName: typeof flowName === 'string' ? flowName : undefined }]
+    const phrases = Array.isArray((item as { phrases?: unknown }).phrases)
+      ? (item as { phrases: unknown[] }).phrases.map((phrase) => String(phrase).toLowerCase().trim()).filter(Boolean)
+      : []
+    return [{ handle, flowName: typeof flowName === 'string' ? flowName : undefined, phrases }]
   })
+}
+
+function overlappingPhrases(node: CheckNode): string[] {
+  const owner = new Map<string, string>()
+  const overlaps: string[] = []
+  for (const route of routeList(node)) {
+    for (const phrase of route.phrases) {
+      const prev = owner.get(phrase)
+      if (prev && prev !== route.handle && !overlaps.includes(phrase)) overlaps.push(phrase)
+      else if (!prev) owner.set(phrase, route.handle)
+    }
+  }
+  return overlaps
 }
 
 function routeHandles(node: CheckNode): string[] {
@@ -134,7 +150,28 @@ export function inspectFlowGraph(graph: CheckGraph | null | undefined, options: 
     const leaving = outs(edges, node.id)
     const config = configOf(node)
 
+    if (kind === 'lookup_catalog') {
+      for (const handle of ['found', 'other']) {
+        if (leaving.some((edge) => edge.sourceHandle === handle)) continue
+        issues.push({
+          level: 'block',
+          code: 'missing-route',
+          nodeId: node.id,
+          message: `${label} has no line for ${handle}. That answer has nowhere to go.`,
+        })
+      }
+    }
+
     if (kind === 'route_topic') {
+      const overlap = overlappingPhrases(node)
+      if (overlap.length > 0) {
+        issues.push({
+          level: 'note',
+          code: 'phrase-overlap',
+          nodeId: node.id,
+          message: `${label} uses the same phrase on two routes (${overlap.slice(0, 3).join(', ')}). The longer match still wins.`,
+        })
+      }
       const allowed = new Set(routeHandles(node))
       const stray = leaving.filter((edge) => !edge.sourceHandle || !allowed.has(edge.sourceHandle))
       if (stray.length > 0) {
