@@ -441,7 +441,7 @@ export function BotNewPage() {
         <>
           <h1 className="text-xl font-bold text-[var(--text-primary)]">A template for {name.trim()}</h1>
           <p className="mb-4 mt-1 text-sm text-[var(--text-muted)]">
-            Same layout as the templates page: pick a case, then see its map. Avatars and who speaks change with the template.
+            Pick a case, then see its map. Who speaks and how they talk follow that template.
           </p>
           <div className="mb-4 flex flex-wrap gap-1">
             <button
