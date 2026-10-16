@@ -151,9 +151,14 @@ function shortOption(title: string): string {
 function clipChoiceList(text: string): string {
   return text.replace(/\b(Which [^?\n]{1,80}\? )([^.?\n]+)\./g, (full, lead: string, listed: string) => {
     if (/or another/i.test(listed)) return full
-    const parts = listed.split(/,\s*(?=[A-Z])/).map((part) => part.replace(/\s+and a few more$/i, '').trim()).filter(Boolean)
+    const parts = listed
+      .split(/,\s*(?:or\s+)?(?=[A-Z])/)
+      .map((part) => part.replace(/^\s*or\s+/i, '').replace(/\s+and a few more$/i, '').trim())
+      .filter(Boolean)
     if (parts.length <= 1) return full
     const long = parts.some((part) => part.length > 18 || /wash/i.test(part))
+    // Four short plan names (Free / Starter / Professional / Enterprise) stay spoken.
+    if (!long && parts.length <= 4 && parts.every((part) => part.split(/\s+/).length <= 2)) return full
     if (parts.length <= 3 && !long) return full
     const labels = parts.slice(0, 3).map(shortOption)
     const more = parts.length > 3

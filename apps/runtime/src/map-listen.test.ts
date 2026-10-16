@@ -80,4 +80,7 @@ test('a long which-one list becomes three short names, and hours asks one next t
 
   const already = 'Which cut & style? Ladies, Gents, or Kids — or another.'
   assert.equal(shapeTurn(already), already)
+
+  const plans = shapeTurn('Which plan? Free, Starter, Professional, or Enterprise.')
+  assert.equal(plans, 'Which plan? Free, Starter, Professional, or Enterprise.')
 })
