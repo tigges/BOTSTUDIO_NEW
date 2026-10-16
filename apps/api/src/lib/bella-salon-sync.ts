@@ -35,3 +35,22 @@ export function environmentsNeedingGraph(
     return graphAction(current?.graph ?? null, graph) !== 'keep'
   })
 }
+
+/** Prisma unique constraint, including (flowId, version). */
+export function isUniqueConstraint(err: unknown): boolean {
+  return Boolean(err && typeof err === 'object' && 'code' in err && (err as { code: unknown }).code === 'P2002')
+}
+
+/** Runs work again when two seeds pick the same flow version number. */
+export async function retryOnUnique<T>(run: () => Promise<T>, attempts = 5): Promise<T> {
+  let last: unknown
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await run()
+    } catch (err) {
+      last = err
+      if (!isUniqueConstraint(err) || attempt === attempts - 1) throw err
+    }
+  }
+  throw last
+}
