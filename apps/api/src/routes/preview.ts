@@ -18,6 +18,7 @@ import { prisma } from '@ybot/db'
 import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
 import type { FlowGraph } from '@ybot/runtime'
 import { z } from 'zod'
+import { CATALOG_ENTITY, catalogFromValues } from '@ybot/shared'
 import { keepFirstQuestion, runCanvasPreview, type PreviewSnapshot } from '../lib/preview-flow.js'
 
 
@@ -113,10 +114,12 @@ export async function previewRoutes(app: FastifyInstance) {
 
     if (graph) {
       try {
+        const catalogRow = await prisma.entity.findFirst({ where: { botId, tenantId, name: CATALOG_ENTITY } }).catch(() => null)
         const turn = await runCanvasPreview({
           graph: graph as FlowGraph,
           message,
           session: session as PreviewSnapshot | undefined,
+          catalog: catalogFromValues(catalogRow?.values),
         })
         if (turn.handled) {
           reply.raw.writeHead(200, {

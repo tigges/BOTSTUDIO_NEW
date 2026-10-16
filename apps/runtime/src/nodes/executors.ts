@@ -1,4 +1,5 @@
 import type { NodeContext, NodeResult } from '../types.js'
+import { matchCatalog } from '../catalog-lookup.js'
 import { matchTopic, type TopicRoute } from '../topic-route.js'
 import { evaluateCondition, interpolate } from '../utils.js'
 
@@ -95,6 +96,21 @@ export async function executeExecuteFlow(ctx: NodeContext): Promise<NodeResult> 
   return { output: { jump: flowName }, jumpToFlow: flowName }
 }
 
+// ── lookup_catalog ────────────────────────────────────────────────────────────
+export async function executeLookupCatalog(ctx: NodeContext): Promise<NodeResult> {
+  const { config, session, services } = ctx
+  const id = String(config['id'] ?? '').trim()
+  const kind = String(config['kind'] ?? '').trim() || undefined
+  const pinned = id ? services.catalog?.facts.find((fact) => fact.id === id) : undefined
+  const text = `${session.variables.flow['topic'] ?? ''} ${session.variables.flow['request'] ?? ''} ${session.variables.flow['_last_user_message'] ?? ''}`
+  const hit = pinned ?? matchCatalog(services.catalog, text, kind)
+  if (!hit) return { output: { fact: '', catalog_title: '' }, nextNodeId: 'other' }
+  return {
+    output: { fact: hit.fact, catalog_title: hit.title, catalog_id: hit.id },
+    nextNodeId: 'found',
+  }
+}
+
 // ── classify_intent ───────────────────────────────────────────────────────────
 export async function executeClassifyIntent(ctx: NodeContext): Promise<NodeResult> {
   const { session, services } = ctx
@@ -119,9 +135,10 @@ export async function executeHandover(ctx: NodeContext): Promise<NodeResult> {
 // ── create_ticket ─────────────────────────────────────────────────────────────
 export async function executeCreateTicket(ctx: NodeContext): Promise<NodeResult> {
   const { config, session } = ctx
-  const subject = interpolate(String(config['subject'] ?? 'Support request'), { ...session.variables.flow, contact: session.variables.contact })
-  // Actual ticket creation happens in the session runner after this returns
-  return { output: { ticket_created: true, subject } }
+  const vars = { ...session.variables.flow, contact: session.variables.contact }
+  const subject = interpolate(String(config['subject'] ?? 'Support request'), vars)
+  const description = interpolate(String(config['description'] ?? subject), vars)
+  return { output: { ticket_created: true, subject }, ticket: { subject, description } }
 }
 
 // ── end_flow ──────────────────────────────────────────────────────────────────

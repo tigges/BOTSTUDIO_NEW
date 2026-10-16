@@ -6,6 +6,7 @@
  * salon can answer from the first minute and then edit the lines.
  */
 
+import type { CatalogFact, StudioCatalog } from './catalog.js'
 import { NAME_QUESTION } from './contact-speech.js'
 import type { StarterFlow } from './flow-templates.js'
 
@@ -39,6 +40,7 @@ export interface SalonPack {
   name: string
   description: string
   flows: StarterFlow[]
+  catalog: StudioCatalog
   intents: SalonIntent[]
   faqs: SalonFaq[]
 }
@@ -192,13 +194,13 @@ function answerFlow(topic: Topic): StarterFlow {
   const y = 120
   return {
     name: topic.flowName,
-    description: 'Benchmark answer for a hair studio. Edit the message to match your salon.',
+    description: 'Benchmark answer for a hair studio. Edit the catalog if the fact changed.',
     tags: ['salon', 'template', 'faq'],
     publish: true,
     graph: {
       nodes: [
         { id: 'start', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: topic.flowName, config: {} } },
-        { id: 'say', type: 'flow-node', position: { x: 340, y }, data: { kind: 'send_message', label: 'Answer', config: { text: topic.answer } } },
+        { id: 'say', type: 'flow-node', position: { x: 340, y }, data: { kind: 'send_message', label: 'Answer', config: { text: `${topic.answer} I can also help with hours, prices, or a booking.` } } },
         { id: 'end', type: 'flow-node', position: { x: 640, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
       ],
       edges: [
@@ -207,6 +209,125 @@ function answerFlow(topic: Topic): StarterFlow {
       ],
     },
   }
+}
+
+export function catalogLookupFlow(input: {
+  name: string
+  description: string
+  kind?: string
+  id?: string
+  intro: string
+  next: string
+  doors: Array<{ handle: string; phrases: string[]; flowName: string }>
+  tags?: string[]
+  publish?: boolean
+}): StarterFlow {
+  const y = 80
+  const lookConfig = { ...(input.kind ? { kind: input.kind } : {}), ...(input.id ? { id: input.id } : {}) }
+  const nodes: object[] = [
+    { id: 'start', type: 'flow-node', position: { x: 40, y }, data: { kind: 'trigger_start', label: input.name, config: {} } },
+    { id: 'look', type: 'flow-node', position: { x: 280, y }, data: { kind: 'lookup_catalog', label: 'Look up', config: lookConfig } },
+    { id: 'say', type: 'flow-node', position: { x: 560, y }, data: { kind: 'send_message', label: 'The fact', config: { text: '{{fact}}' } } },
+    { id: 'ask', type: 'flow-node', position: { x: 820, y }, data: { kind: 'ask_question', label: 'Next', config: { question: input.next, variable: 'request' } } },
+    { id: 'next', type: 'flow-node', position: { x: 1080, y }, data: { kind: 'route_topic', label: 'What next', config: { routes: input.doors.map((door) => ({ handle: door.handle, phrases: door.phrases })) } } },
+    { id: 'which', type: 'flow-node', position: { x: 560, y: y + 200 }, data: { kind: 'ask_question', label: 'Which', config: { question: input.intro, variable: 'request' } } },
+    { id: 'close', type: 'flow-node', position: { x: 1340, y: y + 240 }, data: { kind: 'send_message', label: 'Close', config: { text: 'I can also help with hours, prices, or a booking.' } } },
+    { id: 'end', type: 'flow-node', position: { x: 1600, y: y + 200 }, data: { kind: 'end_flow', label: 'End', config: {} } },
+  ]
+  const edges: object[] = [
+    { id: 'e-start', source: 'start', target: 'look' },
+    { id: 'e-found', source: 'look', target: 'say', sourceHandle: 'found' },
+    { id: 'e-miss', source: 'look', target: 'which', sourceHandle: 'other' },
+    { id: 'e-say', source: 'say', target: 'ask' },
+    { id: 'e-ask', source: 'ask', target: 'next' },
+    { id: 'e-which', source: 'which', target: 'look' },
+    { id: 'e-next-other', source: 'next', target: 'close', sourceHandle: 'other' },
+    { id: 'e-close', source: 'close', target: 'end' },
+  ]
+  input.doors.forEach((door, index) => {
+    const jumpId = `go-${door.handle}`
+    nodes.push({
+      id: jumpId,
+      type: 'flow-node',
+      position: { x: 1340, y: y + index * 80 },
+      data: { kind: 'execute_flow', label: door.flowName, config: { flowName: door.flowName } },
+    })
+    edges.push({ id: `e-next-${door.handle}`, source: 'next', target: jumpId, sourceHandle: door.handle })
+  })
+  return {
+    name: input.name,
+    description: input.description,
+    tags: input.tags ?? ['salon', 'template', 'faq'],
+    publish: input.publish ?? true,
+    graph: { nodes, edges },
+  }
+}
+
+export function hairStudioCatalog(companyName: string): StudioCatalog {
+  const company = companyLabel(companyName)
+  const facts: CatalogFact[] = [
+    { id: 'cut', kind: 'service', title: 'A cut', phrases: ['haircut', 'a cut', 'a trim', 'trim', 'fringe', 'how much is a haircut'], fact: `${company} cuts start from £35.`, source: 'Services and prices' },
+    { id: 'colour', kind: 'service', title: 'Colour', phrases: ['colour', 'color', 'how much is colour', 'how much is a colour'], fact: `Colour starts from £70.`, source: 'Services and prices' },
+    { id: 'treatment', kind: 'service', title: 'A treatment', phrases: ['treatment', 'treatments'], fact: `Treatments start from £45.`, source: 'Services and prices' },
+    { id: 'balayage', kind: 'service', title: 'Balayage', phrases: ['balayage'], fact: `Balayage starts from £90.`, source: 'Services and prices' },
+    { id: 'scrub', kind: 'service', title: 'A skin scrub', phrases: ['skin scrub'], fact: `A skin scrub starts from £200.`, source: 'Services and prices' },
+    { id: 'keratin', kind: 'service', title: 'Keratin', phrases: ['keratin', 'keratin smoothing'], fact: `Keratin smoothing starts from £120.`, source: 'Services and prices' },
+    { id: 'location', kind: 'studio', title: 'Location', phrases: ['where are you', 'address', 'directions', 'where is the salon'], fact: `${company} is at 14 Rosewood Lane.`, source: 'Location' },
+    { id: 'hours', kind: 'studio', title: 'Hours', phrases: ['opening hours', 'salon hours', 'when are you open', 'what time do you open', 'hours'], fact: `${company} is open Monday to Saturday, 09:00 to 18:00. You can message any time. I still answer outside those hours, and the studio replies during them.`, source: 'Salon hours' },
+  ]
+  for (const topic of topicsFor(companyName)) {
+    if (topic.flowName === 'Services and prices' || topic.flowName === 'Location' || topic.flowName === 'Salon hours') continue
+    if (topic.kind !== 'answer') continue
+    facts.push({
+      id: handleFor(topic.flowName),
+      kind: 'policy',
+      title: topic.choice,
+      phrases: topic.phrases,
+      fact: topic.answer,
+      source: topic.flowName,
+    })
+  }
+  return { facts }
+}
+
+const NEXT_DOORS = [
+  { handle: 'hours', phrases: ['hours', 'opening hours', 'when are you open'], flowName: 'Salon hours' },
+  { handle: 'prices', phrases: ['price', 'prices', 'how much', 'haircut'], flowName: 'Services and prices' },
+  { handle: 'location', phrases: ['where', 'address', 'location'], flowName: 'Location' },
+  { handle: 'book', phrases: ['book', 'booking', 'yes', 'please', 'ok', 'okay', 'yeah'], flowName: 'Book an appointment' },
+]
+
+function pricesChapter(): StarterFlow {
+  return catalogLookupFlow({
+    name: 'Services and prices',
+    description: 'Looks up one price, then offers to book.',
+    kind: 'service',
+    intro: 'What are you thinking of? A cut, colour, a treatment, balayage, a skin scrub, or keratin.',
+    next: 'Shall I book that?',
+    doors: NEXT_DOORS.filter((door) => door.handle !== 'prices'),
+  })
+}
+
+function locationChapter(): StarterFlow {
+  return catalogLookupFlow({
+    name: 'Location',
+    description: 'Looks up the address, then offers a next step.',
+    id: 'location',
+    intro: 'Are you after the address?',
+    next: 'Want the hours, a price, or to book?',
+    doors: NEXT_DOORS.filter((door) => door.handle !== 'location'),
+  })
+}
+
+function hoursChapter(): StarterFlow {
+  return catalogLookupFlow({
+    name: 'Salon hours',
+    description: 'Looks up the hours, then offers a next step.',
+    id: 'hours',
+    intro: 'Are you after the opening hours?',
+    next: 'Want where we are, a price, or to book?',
+    doors: NEXT_DOORS.filter((door) => door.handle !== 'hours'),
+  })
 }
 
 const TIME_PREFERENCE = 'Would Saturday morning or a weekday after 5 suit you? The studio will confirm the exact time in this chat.'
@@ -251,7 +372,7 @@ function bookFlow(topic: Topic): StarterFlow {
     ask('b-want', 1280, y + 280, 'Ask what they want', 'What would you like done? A cut, colour, or something else is fine, and not sure is fine too.', 'request'),
     { id: 'b-route2', type: 'flow-node', position: { x: 1540, y: y + 280 }, data: { kind: 'route_topic', label: 'Route the answer', config: { routes: serviceRoutes } } },
     say('b-more', 1800, y + 420, 'Ask again', 'Tell me a little more about what you would like, even if you are not sure.'),
-    { id: 'b-end', type: 'flow-node', position: { x: 2480, y: 520 }, data: { kind: 'end_flow', label: 'End', config: {} } },
+    { id: 'b-end', type: 'flow-node', position: { x: 2720, y: 520 }, data: { kind: 'end_flow', label: 'End', config: {} } },
     ask('b-history', 1280, y - 280, 'Hair history', 'What colour is your hair now, and have you used box dye or henna?', 'hair_history'),
     ask('b-heard', 1520, y - 280, 'How they found us', 'How did you hear about us?', 'heard'),
     ask('b-photo', 1760, y - 280, 'Photos', 'Can you send a photo of your hair now, and any looks you like? A description is fine too.', 'photo_note'),
@@ -259,6 +380,7 @@ function bookFlow(topic: Topic): StarterFlow {
     ask('b-email', 2240, y - 280, 'Email', `If a deposit is needed, the studio will send a secure link. Please do not send card details in this chat. ${NOTICE} What email should the receipt go to?`, 'email'),
     ask('b-addon', 2480, y - 280, 'Add-on', 'Would you like a bond-building treatment as well? No is completely fine.', 'addon'),
     say('b-close', 2720, y - 280, 'Close', ARRIVE),
+    { id: 'b-ticket', type: 'flow-node', position: { x: 2480, y: 520 }, data: { kind: 'create_ticket', label: 'Inbox', config: { subject: 'Booking for {{preferred_time}}', description: '{{topic}} for {{preferred_time}}' } } },
     ask('b-been', 1280, y + 40, 'Been before?', 'Have you been to us before?', 'been_before'),
     { id: 'b-been-route', type: 'flow-node', position: { x: 1520, y: y + 40 }, data: { kind: 'route_topic', label: 'New or returning', config: { routes: [
       { handle: 'returning', phrases: ['i have been', "i've been", 'been in before', 'regular', 'returning', 'yes i have'] },
@@ -299,19 +421,20 @@ function bookFlow(topic: Topic): StarterFlow {
     { id: 'e-colour-time', source: 'b-colour-time', target: 'b-email' },
     { id: 'e-email', source: 'b-email', target: 'b-addon' },
     { id: 'e-addon', source: 'b-addon', target: 'b-close' },
-    { id: 'e-close', source: 'b-close', target: 'b-end' },
+    { id: 'e-close', source: 'b-close', target: 'b-ticket' },
+    { id: 'e-ticket', source: 'b-ticket', target: 'b-end' },
     { id: 'e-been', source: 'b-been', target: 'b-been-route' },
     { id: 'e-returning', source: 'b-been-route', target: 'b-return-time', sourceHandle: 'returning' },
     { id: 'e-first', source: 'b-been-route', target: 'b-cut-hope', sourceHandle: 'first' },
     { id: 'e-been-other', source: 'b-been-route', target: 'b-cut-hope', sourceHandle: 'other' },
     { id: 'e-return-time', source: 'b-return-time', target: 'b-return-close' },
-    { id: 'e-return-close', source: 'b-return-close', target: 'b-end' },
+    { id: 'e-return-close', source: 'b-return-close', target: 'b-ticket' },
     { id: 'e-cut-hope', source: 'b-cut-hope', target: 'b-cut-photo' },
     { id: 'e-cut-photo', source: 'b-cut-photo', target: 'b-cut-time' },
     { id: 'e-cut-time', source: 'b-cut-time', target: 'b-cut-close' },
-    { id: 'e-cut-close', source: 'b-cut-close', target: 'b-end' },
+    { id: 'e-cut-close', source: 'b-cut-close', target: 'b-ticket' },
     { id: 'e-treat-time', source: 'b-treat-time', target: 'b-treat-close' },
-    { id: 'e-treat-close', source: 'b-treat-close', target: 'b-end' },
+    { id: 'e-treat-close', source: 'b-treat-close', target: 'b-ticket' },
   ]
   return {
     name: topic.flowName,
@@ -504,17 +627,26 @@ function welcomeFlow(companyName: string, topics: Topic[], personaName?: string)
   }
 }
 
+function chapterFor(topic: Topic): StarterFlow {
+  if (topic.flowName === 'Services and prices') return pricesChapter()
+  if (topic.flowName === 'Location') return locationChapter()
+  if (topic.flowName === 'Salon hours') return hoursChapter()
+  return topic.kind === 'answer' ? answerFlow(topic) : taskFlow(topic)
+}
+
 export function hairStudioPack(companyName: string, personaName?: string): SalonPack {
   const topics = topicsFor(companyName)
+  const catalog = hairStudioCatalog(companyName)
   const flows: StarterFlow[] = [welcomeFlow(companyName, topics, personaName)]
   for (const topic of topics) {
-    flows.push(topic.kind === 'answer' ? answerFlow(topic) : taskFlow(topic))
+    flows.push(chapterFor(topic))
   }
   return {
     id: HAIR_STUDIO_PACK_ID,
     name: 'Hair studio',
     description: 'Benchmark flows, intents, and FAQs for a salon widget. Prices and the address match the Bella demo page.',
     flows,
+    catalog,
     intents: topics.map((topic) => ({
       name: topic.flowName,
       description: topic.question,

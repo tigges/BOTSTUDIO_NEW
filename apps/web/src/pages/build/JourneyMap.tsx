@@ -56,6 +56,16 @@ function Chart({
         </span>
         {lens === 'design' && (
           <span className="mt-2 flex flex-wrap items-center gap-1">
+            {!chapter.published && !chapter.suggested && (
+              <span className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-base)] px-1.5 py-0.5 text-[11px] text-[var(--text-muted)]">
+                Draft
+              </span>
+            )}
+            {chapter.looksUp.map((chip) => (
+              <span key={chip} className="rounded-lg border border-cyan-200 bg-cyan-50 px-1.5 py-0.5 text-[11px] text-cyan-800">
+                {chip}
+              </span>
+            ))}
             {chapter.steps.map((step) => (
               <span key={step} className="rounded-lg border border-[var(--border)] bg-white px-1.5 py-0.5 text-[11px] text-[var(--text-secondary)]">
                 {clip(step)}
@@ -66,7 +76,7 @@ function Chart({
                 {clip(name)}
               </span>
             ))}
-            {chapter.steps.length === 0 && chapter.jumps.length === 0 && (
+            {chapter.steps.length === 0 && chapter.jumps.length === 0 && chapter.looksUp.length === 0 && (
               <span className="text-xs text-[var(--text-muted)]">No spoken lines on this chart.</span>
             )}
           </span>
@@ -143,7 +153,7 @@ function Column({
       />
       {nest && chapter.children.length > 0 && (
         <div className="ml-3 flex flex-col gap-3 border-l border-emerald-200 pl-3">
-          {chapter.children.map((child) => (
+          {sortedChapters(chapter.children, lens, chats).map((child) => (
             <Column
               key={child.id}
               chapter={child}
@@ -161,6 +171,11 @@ function Column({
       )}
     </div>
   )
+}
+
+function sortedChapters(chapters: JourneyChapter[], lens: JourneyLens, chats: Record<string, number>): JourneyChapter[] {
+  if (lens !== 'health') return chapters
+  return [...chapters].sort((a, b) => (chats[b.id] ?? 0) - (chats[a.id] ?? 0))
 }
 
 export function JourneyMap({
@@ -184,8 +199,7 @@ export function JourneyMap({
   onOpen: (id: string) => void
   onConnect: (id: string) => void
 }) {
-  const welcome = layout.roots.find((chapter) => chapter.welcome) ?? null
-  const otherRoots = layout.roots.filter((chapter) => !chapter.welcome)
+Wait, I need to insert sortedChapters before JourneyMap export, not replace the export. Let me read the current JourneyMap around the export.
   const shared = {
     lens,
     chats,
@@ -204,7 +218,7 @@ export function JourneyMap({
       {(welcome || layout.suggested.length > 0) && (
         <div className="flex flex-wrap items-start gap-4">
           {welcome && <div className="max-w-md flex-1"><Column chapter={welcome} nest={false} {...shared} /></div>}
-          {layout.suggested.map((chapter) => (
+          {sortedChapters(layout.suggested, lens, chats).map((chapter) => (
             <div key={chapter.id} className="w-64">
               <Column chapter={chapter} {...shared} />
             </div>
@@ -215,7 +229,7 @@ export function JourneyMap({
         <div>
           <p className="mb-3 text-xs text-[var(--text-muted)]">Opens</p>
           <div className="grid items-start gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-            {welcome.children.map((chapter) => (
+            {sortedChapters(welcome.children, lens, chats).map((chapter) => (
               <Column key={chapter.id} chapter={chapter} {...shared} />
             ))}
           </div>
@@ -223,7 +237,7 @@ export function JourneyMap({
       )}
       {otherRoots.length > 0 && (
         <div className="grid items-start gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-          {otherRoots.map((chapter) => (
+          {sortedChapters(otherRoots, lens, chats).map((chapter) => (
             <Column key={chapter.id} chapter={chapter} {...shared} />
           ))}
         </div>
@@ -232,7 +246,7 @@ export function JourneyMap({
         <div>
           <p className="mb-3 text-xs text-[var(--text-muted)]">Built, and nothing points here yet</p>
           <div className="grid items-start gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-            {layout.loose.map((chapter) => (
+            {sortedChapters(layout.loose, lens, chats).map((chapter) => (
               <Column key={chapter.id} chapter={chapter} {...shared} />
             ))}
           </div>

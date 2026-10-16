@@ -106,12 +106,16 @@ async function reply(
 test('a salon widget answers prices, bookings, and the Bella address', async () => {
   const pack = hairStudioPack('Bella Hair Studio')
   const names = pack.flows.map((flow) => flow.name)
+  const lookup = new Set(['Services and prices', 'Location', 'Salon hours'])
   assert.equal(new Set(names).size, names.length)
+  assert.ok(pack.catalog.facts.some((fact) => fact.id === 'cut' && /£35/.test(fact.fact)))
+  assert.ok(pack.catalog.facts.some((fact) => fact.id === 'location' && /14 Rosewood Lane/.test(fact.fact)))
   for (const intent of pack.intents) {
     const flow = pack.flows.find((item) => item.name === intent.name)
     assert.ok(flow, intent.name)
     const faq = pack.faqs.find((item) => item.question === intent.description)
     assert.equal(faq?.answer, intent.responses[0]!.text)
+    if (lookup.has(intent.name)) continue
     assert.match(JSON.stringify(flow.graph), new RegExp(intent.responses[0]!.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }
   for (const flow of pack.flows) {
@@ -128,7 +132,7 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   }
 
   const welcome = pack.flows.find((flow) => flow.name === SALON_WELCOME_NAME)!
-  const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
+  const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch, catalog: pack.catalog } as unknown as ExecutionServices)
   const graph = welcome.graph as unknown as FlowGraph
   const greeting = "Hi, I'm Bella at Bella Hair Studio. What's your name?"
   const greetings = (welcome.graph as { nodes: Array<{ data?: { config?: Record<string, unknown> } }> }).nodes.filter((node) => {
@@ -197,19 +201,27 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   )
 
   const pricesFlow = pack.flows.find((flow) => flow.name === 'Services and prices')!
-  const pricesSpoken = await machine.run(session('prices'), pricesFlow.graph as unknown as FlowGraph, 'prices')
+  const pricesSpoken = await machine.run(session('how much is a haircut'), pricesFlow.graph as unknown as FlowGraph, 'how much is a haircut')
   assert.match(spoken(pricesSpoken), /£35/)
-  assert.equal(pricesSpoken.session.status, 'completed')
+  assert.match(spoken(pricesSpoken), /book/i)
+  assert.equal(pricesSpoken.session.status, 'waiting_input')
+  const pricesMenu = await machine.run(session('prices'), pricesFlow.graph as unknown as FlowGraph, 'prices')
+  assert.match(spoken(pricesMenu), /thinking of/)
+  assert.equal(/£35/.test(spoken(pricesMenu)), false)
 
   const location = pack.flows.find((flow) => flow.name === 'Location')!
   const address = await machine.run(session('address'), location.graph as unknown as FlowGraph, 'address')
-  assert.match(address.newMessages.map((message) => message.content.text).join('\n'), /14 Rosewood Lane/)
+  const addressText = address.newMessages.map((message) => message.content.text).join('\n')
+  assert.match(addressText, /14 Rosewood Lane/)
+  assert.match(addressText, /hours|price|book/i)
+  assert.equal(address.session.status, 'waiting_input')
 
   const hoursFlow = pack.flows.find((flow) => flow.name === 'Salon hours')!
   const hoursSpoken = await machine.run(session('hours'), hoursFlow.graph as unknown as FlowGraph, 'hours')
   const hoursText = hoursSpoken.newMessages.map((message) => message.content.text).join('\n')
   assert.match(hoursText, /Monday to Saturday, 09:00 to 18:00/)
   assert.equal(hoursText.includes('Sunday'), false)
+  assert.equal(hoursSpoken.session.status, 'waiting_input')
 
   const voucherFlow = pack.flows.find((flow) => flow.name === 'Gift voucher')!
   const voucherSpoken = await machine.run(session('voucher'), voucherFlow.graph as unknown as FlowGraph, 'voucher')
@@ -246,6 +258,7 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   assert.match(spoken(addon), /14 Rosewood Lane/)
   assert.match(spoken(addon), /Sophie/)
   assert.equal(addon.session.status, 'completed')
+  assert.equal(addon.ticket?.subject.includes('Saturday morning'), true)
 
   const cut = await machine.run(atStart(bookGraph, 'book a haircut'), bookGraph, 'book a haircut')
   assert.match(spoken(cut), /I can book that/)

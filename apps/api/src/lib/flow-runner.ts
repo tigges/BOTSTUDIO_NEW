@@ -8,9 +8,10 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { SessionMachine } from '@ybot/runtime'
+import { SessionMachine, copyJumpVariables, missingChapterLine } from '@ybot/runtime'
 import type { Session, SessionVariables, FlowGraph } from '@ybot/runtime'
 import { prisma } from '@ybot/db'
+import { CATALOG_ENTITY, catalogFromValues } from '@ybot/shared'
 import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
 import { pickEntry } from './entry-flow.js'
 import { runFlowTurn } from './flow-turn.js'
@@ -27,6 +28,7 @@ export interface FlowRunResult {
   handled: boolean
   messages: string[]
   handover?: { team?: string; priority?: string; note?: string }
+  ticket?: { subject: string; description?: string }
   waitingFor?: Session['waitingFor']
   /** The published flow reached its end. A waiting question is still open. */
   ended?: boolean
@@ -77,10 +79,11 @@ export async function runFlowIfPublished(opts: {
 
   const convo = await prisma.conversation.findFirst({
     where: { id: conversationId },
-    select: { environmentId: true, subject: true },
+    select: { environmentId: true, subject: true, environment: { select: { kind: true } } },
   })
   const envId = convo?.environmentId
   if (!envId) return { handled: false, messages: [] }
+  const environmentLabel = convo?.environment?.kind === 'production' ? 'Production' : 'Sandbox'
 
   let fsRecord = await prisma.flowSession.findUnique({ where: { conversationId } })
   let active = fsRecord
@@ -91,7 +94,9 @@ export async function runFlowIfPublished(opts: {
   const cfg = await prisma.botConfig.findUnique({ where: { botId } }).catch(() => null)
   const model = cfg?.model ?? undefined
   const llmAdapter = model ? createLlmAdapterForModel(model) : defaultLlm
-  const machine = new SessionMachine({ llm: llmAdapter, db: prisma, httpFetch: fetch })
+  const catalogRow = await prisma.entity.findFirst({ where: { botId, tenantId, name: CATALOG_ENTITY } }).catch(() => null)
+  const catalog = catalogFromValues(catalogRow?.values)
+  const machine = new SessionMachine({ llm: llmAdapter, db: prisma, httpFetch: fetch, catalog })
 
   let first
   try {
@@ -136,7 +141,7 @@ export async function runFlowIfPublished(opts: {
     if (!target) {
       outcome = {
         ...first,
-        messages: [...first.messages, `I can help with ${first.jumpToFlow}. A person on the team will follow up.`],
+        messages: [...first.messages, missingChapterLine(first.jumpToFlow, environmentLabel)],
         jumpToFlow: undefined,
       }
     } else {
@@ -149,10 +154,21 @@ export async function runFlowIfPublished(opts: {
         tenantId,
         userText,
         contactName: named.spoken,
+        seedVariables: copyJumpVariables(first.session.variables, userText, named.spoken),
       })
       if (jumped) {
         version = target
         outcome = { ...jumped, messages: [...first.messages, ...jumped.messages] }
+        const jumpLog = {
+          tenantId,
+          conversationId,
+          nodeId: 'jump',
+          nodeKind: 'execute_flow' as const,
+          input: { fromFlowId: first.session.flowId, toFlowId: target.flowId, toName: target.flow.name },
+          output: { toFlowId: target.flowId },
+        }
+        await prisma.stepLog.create({ data: { ...jumpLog, flowVersionId: first.session.flowVersionId } }).catch(() => {})
+        await prisma.stepLog.create({ data: { ...jumpLog, flowVersionId: target.id } }).catch(() => {})
         if (!convo?.subject) {
           await prisma.conversation.update({ where: { id: conversationId }, data: { subject: target.flow.name } }).catch(() => {})
         }
@@ -205,7 +221,19 @@ export async function runFlowIfPublished(opts: {
   }
 
   if (outcome.handover) {
-    await prisma.conversation.update({ where: { id: conversationId }, data: { status: 'waiting_agent' } }).catch(() => {})
+    await prisma.conversation.update({ where: { id: conversationId }, data: { status: 'escalated' } }).catch(() => {})
+  }
+  if (outcome.ticket) {
+    await prisma.ticket.create({
+      data: {
+        tenantId,
+        conversationId,
+        subject: outcome.ticket.subject.slice(0, 180),
+        description: (outcome.ticket.description ?? outcome.ticket.subject).slice(0, 2000),
+        status: 'open',
+        priority: 'medium',
+      },
+    }).catch(() => {})
   }
 
   const messages = named.thanks && !outcome.messages.includes(named.thanks)
@@ -215,6 +243,7 @@ export async function runFlowIfPublished(opts: {
     handled: true,
     messages,
     handover: outcome.handover,
+    ticket: outcome.ticket,
     waitingFor: outcome.session.waitingFor,
     ended: outcome.session.status === 'completed',
     flowName: version.flow.name,
@@ -238,6 +267,7 @@ async function runVersion(opts: {
   tenantId: string
   userText: string
   contactName: string
+  seedVariables?: SessionVariables
 }) {
   const graph = opts.version.graph as unknown as FlowGraph
   const startId = startNodeId(graph)
@@ -253,7 +283,7 @@ async function runVersion(opts: {
       flowId: opts.version.flowId,
       flowVersionId: opts.version.id,
       currentNodeId: startId,
-      variables: {
+      variables: opts.seedVariables ?? {
         flow: { _last_user_message: opts.userText },
         global: {},
         contact: { name: opts.contactName },
@@ -287,5 +317,6 @@ async function runVersion(opts: {
     messages: result.newMessages.map((message) => message.content.text),
     handover: result.handover,
     jumpToFlow: result.jumpToFlow,
+    ticket: result.ticket,
   }
 }

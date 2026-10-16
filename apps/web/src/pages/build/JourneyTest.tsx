@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Loader2, RotateCcw, Send, X } from 'lucide-react'
 import { Avatar, Button, cn } from '@ybot/ui'
 import { runJourneyPreview, type FlowGraph, type JourneyPreviewSnapshot } from '@ybot/runtime'
+import type { StudioCatalog } from '@ybot/shared'
 
 export interface JourneyTestChapter {
   name: string
@@ -24,6 +25,7 @@ export function JourneyTest({
   startChapter,
   environmentLabel,
   chapterKey,
+  catalog,
   onChapter,
   onClose,
 }: {
@@ -32,6 +34,7 @@ export function JourneyTest({
   startChapter: string
   environmentLabel: string
   chapterKey: string
+  catalog?: StudioCatalog
   onChapter: (name: string) => void
   onClose: () => void
 }) {
@@ -40,10 +43,12 @@ export function JourneyTest({
   const [loading, setLoading] = useState(false)
   const sessionRef = useRef<JourneyPreviewSnapshot | undefined>(undefined)
   const chaptersRef = useRef(chapters)
+  const catalogRef = useRef(catalog)
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const busyRef = useRef(false)
   chaptersRef.current = chapters
+  catalogRef.current = catalog
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -64,6 +69,7 @@ export function JourneyTest({
         message: text,
         environmentLabel,
         session: sessionRef.current,
+        catalog: catalogRef.current,
       })
       if (result.session) sessionRef.current = result.session
       onChapter(result.chapter || startChapter)
@@ -94,6 +100,7 @@ export function JourneyTest({
           startChapter,
           message: 'hi',
           environmentLabel,
+          catalog: catalogRef.current,
         })
         if (cancel) return
         if (result.session) sessionRef.current = result.session

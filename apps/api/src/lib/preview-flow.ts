@@ -1,6 +1,6 @@
 import { SessionMachine } from '@ybot/runtime'
 import type { ExecutionServices, FlowGraph, Session, SessionVariables } from '@ybot/runtime'
-import { spokenFirstName } from '@ybot/shared'
+import { spokenFirstName, type StudioCatalog } from '@ybot/shared'
 
 export interface PreviewSnapshot {
   currentNodeId: string
@@ -69,16 +69,19 @@ function sessionFrom(graph: FlowGraph, message: string, saved?: PreviewSnapshot)
   }
 }
 
-const services = {
-  llm: {
-    classify: async () => ({ category: 'other', confidence: 0 }),
-    embed: async () => ({ embeddings: [[]] }),
-    complete: async () => ({ content: '' }),
-    stream: async () => {},
-  },
-  db: {},
-  httpFetch: fetch,
-} as unknown as ExecutionServices
+function previewServices(catalog?: StudioCatalog): ExecutionServices {
+  return {
+    llm: {
+      classify: async () => ({ category: 'other', confidence: 0 }),
+      embed: async () => ({ embeddings: [[]] }),
+      complete: async () => ({ content: '' }),
+      stream: async () => {},
+    },
+    db: {},
+    httpFetch: fetch,
+    catalog,
+  } as unknown as ExecutionServices
+}
 
 /**
  * Walk the chart on the canvas. The model is not asked, so it cannot add a list of questions.
@@ -87,10 +90,11 @@ export async function runCanvasPreview(input: {
   graph: FlowGraph
   message: string
   session?: PreviewSnapshot
+  catalog?: StudioCatalog
 }): Promise<PreviewTurn> {
   const session = sessionFrom(input.graph, input.message, input.session)
   if (!session) return { handled: false, text: '' }
-  const machine = new SessionMachine(services)
+  const machine = new SessionMachine(previewServices(input.catalog))
   const result = await machine.run(session, input.graph, input.message)
   const given = spokenFirstName(String(result.session.variables.flow['guest_name'] ?? ''))
   if (given) result.session.variables.contact['name'] = given

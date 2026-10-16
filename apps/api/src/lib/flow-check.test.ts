@@ -108,6 +108,38 @@ test('an unmatched reply that loops is sent to the end', () => {
   assert.equal(repaired.graph.edges.some((edge) => edge.source === 'ask' && edge.target === 'route2'), true)
 })
 
+test('the same phrase on two routes is a note, and lookup needs both lines', () => {
+  const overlap = inspectFlowGraph({
+    nodes: [
+      {
+        id: 'route',
+        data: {
+          kind: 'route_topic',
+          label: 'Route',
+          config: {
+            routes: [
+              { handle: 'cut', phrases: ['haircut', 'a cut'] },
+              { handle: 'book', phrases: ['book', 'haircut'] },
+            ],
+          },
+        },
+      },
+    ],
+    edges: [
+      { id: 'a', source: 'route', target: 'x', sourceHandle: 'cut' },
+      { id: 'b', source: 'route', target: 'y', sourceHandle: 'book' },
+      { id: 'c', source: 'route', target: 'z', sourceHandle: 'other' },
+    ],
+  })
+  assert.ok(overlap.some((issue) => issue.code === 'phrase-overlap' && issue.level === 'note'))
+
+  const lookup = inspectFlowGraph({
+    nodes: [{ id: 'look', data: { kind: 'lookup_catalog', label: 'Look up', config: { kind: 'service' } } }],
+    edges: [{ id: 'found', source: 'look', target: 'say', sourceHandle: 'found' }],
+  })
+  assert.ok(lookup.some((issue) => issue.code === 'missing-route' && issue.level === 'block' && /other/.test(issue.message)))
+})
+
 test('standard templates have no broken connections', () => {
   const templates = starterFlows('Acme Corp')
   const names = templates.map((template) => template.name)
