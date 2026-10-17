@@ -55,7 +55,7 @@ function getDemoUrl(channelId: string): string {
 }
 
 function statusCopy(status: ChannelStatus, kind: ChannelKind): { label: string; hint: string } {
-  if (kind === 'web') return { label: 'Active', hint: 'Always on for this layer' }
+  if (kind === 'web') return { label: 'Active', hint: 'Always on' }
   if (status === 'active') return { label: 'Active', hint: 'Accepting conversations' }
   if (status === 'inactive') return { label: 'Inactive', hint: 'Connected — turn on to take chats' }
   return { label: 'Idle', hint: 'Not connected' }
@@ -318,7 +318,7 @@ export function ChannelsPage() {
                       </span>
                       <div>
                         <p className="text-sm font-medium text-[var(--text-primary)]">Always on</p>
-                        <p className="text-xs text-[var(--text-muted)]">Connected and active on this layer. Guests do not wait on a wizard.</p>
+                        <p className="text-xs text-[var(--text-muted)]">Connected and active. Guests do not wait on a wizard.</p>
                       </div>
                     </div>
                   </div>
@@ -475,7 +475,7 @@ export function ChannelsPage() {
             <DialogHeader><DialogTitle>Connect {KIND_META[connecting].label}</DialogTitle></DialogHeader>
             <DialogBody className="space-y-4">
               <p className="text-sm text-[var(--text-secondary)]">
-                This connects {KIND_META[connecting].label} on the {selectedEnv === 'sandbox' ? 'sandbox' : 'production'} layer. It stays inactive until you turn it on.
+                This connects {KIND_META[connecting].label}. It stays inactive until you turn it on.
               </p>
               {connecting === 'whatsapp' && (
                 <div className="space-y-3">
