@@ -1,6 +1,6 @@
-/** One card per channel kind. Sandbox vs production is the top-bar layer, not a second card. */
+/** One card per channel kind. Two website-chat rows (test and live) still count as one card. */
 
-export const CHANNEL_KINDS = ['web', 'whatsapp', 'sms', 'email', 'facebook', 'telegram'] as const
+export const CHANNEL_KINDS = ['web', 'whatsapp', 'sms', 'telegram', 'phone', 'email'] as const
 
 export type ChannelKind = (typeof CHANNEL_KINDS)[number]
 export type ChannelStatus = 'active' | 'inactive' | 'idle'
@@ -20,7 +20,6 @@ export function pickChannel<T extends ChannelRef>(
   if (environmentId) {
     const exact = channels.find((channel) => channel.kind === kind && channel.environmentId === environmentId)
     if (exact) return exact
-    return channels.find((channel) => channel.kind === kind && !channel.environmentId)
   }
   return channels.find((channel) => channel.kind === kind)
 }
