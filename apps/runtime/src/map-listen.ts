@@ -240,6 +240,34 @@ export function isTopicSwitch(text: string): boolean {
     || CUT_ASK.test(heard)
 }
 
+/** Chapters a guest can open from this map, excluding the welcome they are already on. */
+export function chapterRoutes(input: {
+  chapters: Array<{ name: string; graph: FlowGraph }>
+  catalog?: StudioCatalog
+  text: string
+  current?: string
+}): TopicRoute[] {
+  const withFacts: TopicRoute[] = []
+  const withoutFacts: TopicRoute[] = []
+  for (const chapter of input.chapters) {
+    if (isWelcomeName(chapter.name) || chapter.name === input.current) continue
+    if (/^offers?$/i.test(chapter.name) && !wantsOffer(input.text)) continue
+    const facts = catalogPhrases(input.catalog, chapter.name)
+    const route = {
+      handle: chapter.name,
+      phrases: [
+        chapter.name,
+        ...facts,
+        ...incomingPhrases(input.chapters, chapter.name),
+        ...phrasesFromGraph(chapter.graph),
+      ],
+    }
+    if (facts.length > 0) withFacts.push(route)
+    else withoutFacts.push(route)
+  }
+  return [...withFacts, ...withoutFacts]
+}
+
 /**
  * Hear a chapter from the whole map: its name, the words that open it, and catalog facts.
  * The welcome is a hub, not a destination.
@@ -256,25 +284,7 @@ export function listenForChapter(input: {
   if (book && colourWantsBooking(heard)) {
     return book.name === input.current ? undefined : book.name
   }
-  const withFacts: TopicRoute[] = []
-  const withoutFacts: TopicRoute[] = []
-  for (const chapter of input.chapters) {
-    if (isWelcomeName(chapter.name) || chapter.name === input.current) continue
-    if (/^offers?$/i.test(chapter.name) && !wantsOffer(heard)) continue
-    const facts = catalogPhrases(input.catalog, chapter.name)
-    const route = {
-      handle: chapter.name,
-      phrases: [
-        chapter.name,
-        ...facts,
-        ...incomingPhrases(input.chapters, chapter.name),
-        ...phrasesFromGraph(chapter.graph),
-      ],
-    }
-    if (facts.length > 0) withFacts.push(route)
-    else withoutFacts.push(route)
-  }
-  const routes = [...withFacts, ...withoutFacts]
+  const routes = chapterRoutes(input)
   if (routes.length === 0) return undefined
   const handle = matchTopic(heard, routes)
   return handle === 'other' ? undefined : handle

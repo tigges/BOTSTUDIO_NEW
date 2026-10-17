@@ -111,8 +111,9 @@ Copy `.env.aviori` to `.env.production` and fill in these required values:
 | `MINIO_ROOT_PASSWORD` | **yes** | Strong password for MinIO |
 | `FRONTEND_URL` | **yes** | URL users browse to, e.g. `http://aviori:8080` |
 | `OLLAMA_BASE_URL` | LLM | e.g. `http://host.docker.internal:11434` (local) |
-| `OPENAI_API_KEY` | LLM | Alternative to Ollama |
-| `GROQ_API_KEY` | LLM | Free tier available |
+| `GEMINI_API_KEY` | LLM | Free default (Gemini Flash) |
+| `GROQ_API_KEY` | LLM | Free tier |
+| `OPENAI_API_KEY` | LLM | Paid alternative |
 
 At least one LLM option must be configured.
 

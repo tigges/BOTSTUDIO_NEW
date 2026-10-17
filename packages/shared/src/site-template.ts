@@ -643,6 +643,84 @@ export function draftClusteredTemplate(input: {
   }
 }
 
+function clipKept(value: string, max = 280): string {
+  const tidy = value.replace(/\s+/g, ' ').trim()
+  if (tidy.length <= max) return tidy
+  return `${tidy.slice(0, max - 1).replace(/\s+\S*$/, '')}.`
+}
+
+function isJunkJobName(name: string): boolean {
+  if (!name.trim()) return true
+  if (/page not found|\b404\b|^learn more\b/i.test(name)) return true
+  if (isOpaqueStem(name.replace(/\s+/g, ''))) return true
+  return false
+}
+
+/**
+ * Turn model- or editor-supplied jobs into the same spec the page compiler emits.
+ * Talk to a person is added when it is missing. Answers stay as given (caller grounds them).
+ */
+export function learnedSpecFromJobs(input: {
+  pages: ScannedPage[]
+  companyName: string
+  personaName?: string | null
+  topics: SiteTopic[]
+  keepBrand?: boolean
+  note?: string
+}): LearnedTemplateSpec {
+  const pages = input.pages.filter((page) => page.text.trim().length > 0)
+  const company = companyLabel(input.companyName)
+  const clusterId = suggestCluster(`${input.pages.map((page) => `${page.text} ${page.url}`).join('\n')}`)
+  const persona = input.personaName?.trim()
+  const greeting = persona
+    ? clusterId === 'hair'
+      ? `Hi, I'm ${persona} at ${company}. What's your name?`
+      : `Hi, I'm ${persona} at ${company}.`
+    : assistantGreeting(company)
+  const used = new Set<string>()
+  const topics: SiteTopic[] = []
+  for (const incoming of input.topics) {
+    const rawName = incoming.flowName || incoming.choice
+    if (isJunkJobName(rawName)) continue
+    const name = uniqueFlowName(rawName, used)
+    if (!name) continue
+    const answer = (input.keepBrand ? clipKept(incoming.answer) : clip(incoming.answer)).trim()
+    if (answer.length < 24) continue
+    used.add(name)
+    const phrases = [...new Set((incoming.phrases ?? []).map((item) => item.toLowerCase().replace(/\s+/g, ' ').trim()).filter((item) => item.length >= 2))].slice(0, 8)
+    topics.push({
+      flowName: name,
+      choice: incoming.choice?.trim() || name,
+      phrases: phrases.length > 0 ? phrases : [name.toLowerCase()],
+      question: incoming.question?.trim() || `What about ${name.toLowerCase()}?`,
+      answer,
+      blurb: (input.keepBrand ? clipKept(answer, 80) : clip(answer, 80)),
+      walk: incoming.walk,
+      choices: incoming.choices,
+    })
+    if (topics.length >= 8) break
+  }
+  if (!topics.some((topic) => topic.flowName === 'Talk to a person')) {
+    topics.push(talkTopic(company))
+  }
+  const sourceUrl = pages[0]?.url ?? input.pages[0]?.url ?? ''
+  const host = hostOf(sourceUrl)
+  const packTag = clusterId === 'custom' ? 'software' : clusterId
+  return {
+    clusterId: packTag,
+    title: titleCaseHost(host) || company,
+    body: input.note ?? `From ${host || 'a public site'}. Jobs follow what the pages stated.`,
+    welcomeName: `${company} welcome`,
+    packTag,
+    greeting,
+    followUp: `Hi {{contact.name}}. What do you need help with?`,
+    menu: `I can help with ${topics.filter((topic) => topic.flowName !== 'Talk to a person').map((topic) => topic.choice.toLowerCase()).join(', ')}, or a person on the team.`,
+    topics,
+    sourceUrl,
+    sourceHost: host,
+  }
+}
+
 export function packFromLearned(spec: LearnedTemplateSpec, companyName: string, personaName?: string | null): SiteTemplatePack {
   const voice = personaName?.trim()
   const greeting = voice

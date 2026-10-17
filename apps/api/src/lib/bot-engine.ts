@@ -11,6 +11,7 @@ import { finishBotLines, saveContactName, takeNameTurn } from './visitor-name.js
 import { fillNameTokens } from '@ybot/shared'
 import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
 import type { LlmMessage } from '@ybot/llm'
+import { runFlowIfPublished } from './flow-runner.js'
 
 const llm = createLlmAdapter()
 const embedAI = createEmbeddingAdapter()
@@ -110,6 +111,27 @@ export async function getBotReply(params: BotReplyParams): Promise<BotReplyResul
     }).catch(() => {})
     await onOutboundReply(conversationId).catch(() => {})
     return { reply: named.thanks, conversationId }
+  }
+
+  if (conversationId) {
+    try {
+      const flow = await runFlowIfPublished({ conversationId, botId, tenantId, userText })
+      if (flow.handled && flow.messages.some((line) => line.trim())) {
+        const reply = flow.messages.join('\n\n')
+        const finished = named
+          ? finishBotLines([fillNameTokens(reply, named.spoken)], named.contact, named.spoken, {
+            conversationId,
+          }).lines.join('\n\n')
+          : reply
+        await prisma.message.create({
+          data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: finished } },
+        }).catch(() => {})
+        await onOutboundReply(conversationId).catch(() => {})
+        return { reply: finished, conversationId }
+      }
+    } catch (err) {
+      console.error('[bot-engine] flow runner error — falling back to RAG:', err)
+    }
   }
 
   // ── LLM config ────────────────────────────────────────────────────────────

@@ -218,9 +218,10 @@ async function configHandler() {
           S3_REGION:   { set: isSet('S3_REGION'),   label: 'S3 Region',           value: e['S3_REGION'] ?? null },
         },
         llm: {
+          GEMINI_API_KEY:    { set: isSet('GEMINI_API_KEY'),    label: 'Gemini API Key' },
+          GROQ_API_KEY:      { set: isSet('GROQ_API_KEY'),      label: 'Groq API Key' },
           OPENAI_API_KEY:    { set: isSet('OPENAI_API_KEY'),    label: 'OpenAI API Key' },
           ANTHROPIC_API_KEY: { set: isSet('ANTHROPIC_API_KEY'), label: 'Anthropic API Key' },
-          GROQ_API_KEY:      { set: isSet('GROQ_API_KEY'),      label: 'Groq API Key' },
           OLLAMA_BASE_URL:   { set: isSet('OLLAMA_BASE_URL'),   label: 'Ollama Base URL', endpoint: e['OLLAMA_BASE_URL'] ?? null },
         },
         app: {

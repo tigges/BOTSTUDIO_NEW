@@ -7,8 +7,6 @@ import {
   BOT_STARTS,
   START_CLUSTERS,
   bakedPack,
-  draftClusteredTemplate,
-  draftWebsiteChat,
   identityFor,
   packFromLearned,
   personaAvatar,
@@ -21,6 +19,7 @@ import { installCorporatePack, installHairStudioPack, installSitePack, removeSta
 import { installDraftWelcome, installStarterFlows } from '../lib/install-starter-flows.js'
 import { installWebsiteScan } from '../lib/install-website-scan.js'
 import { PublicSiteError, readPublicSite } from '../lib/public-site.js'
+import { draftSiteSpecWithModel, draftWebsiteChatWithModel } from '../lib/site-jobs.js'
 import { ensureOptionalChannels, ensureWebChannels } from '../lib/web-channels.js'
 
 
@@ -48,7 +47,7 @@ export async function botsRoutes(app: FastifyInstance) {
     const body = request.body as { url?: string; personaName?: string; companyName?: string }
     try {
       const pages = await readPublicSite(body.url ?? '')
-      const draft = draftWebsiteChat({
+      const draft = await draftWebsiteChatWithModel({
         pages,
         companyName: body.companyName ?? '',
         personaName: body.personaName,
@@ -107,11 +106,10 @@ export async function botsRoutes(app: FastifyInstance) {
     const body = request.body as { url?: string; personaName?: string; companyName?: string; clusterId?: ClusterId }
     try {
       const pages = await readPublicSite(body.url ?? '')
-      const spec = draftClusteredTemplate({
+      const spec = await draftSiteSpecWithModel({
         pages,
         companyName: body.companyName ?? '',
         personaName: body.personaName,
-        clusterId: body.clusterId,
       })
       return { data: spec }
     } catch (err) {
@@ -128,11 +126,10 @@ export async function botsRoutes(app: FastifyInstance) {
     const body = request.body as { url?: string; personaName?: string; companyName?: string; clusterId?: ClusterId }
     try {
       const pages = await readPublicSite(body.url ?? '')
-      const spec = draftClusteredTemplate({
+      const spec = await draftSiteSpecWithModel({
         pages,
         companyName: body.companyName ?? '',
         personaName: body.personaName,
-        clusterId: body.clusterId,
       })
       const saved = await prisma.startTemplate.create({
         data: {
@@ -253,7 +250,7 @@ export async function botsRoutes(app: FastifyInstance) {
     if (start === 'hair-studio') {
       await installHairStudioPack(tenantId, bot.id, companyName, sandbox?.id ?? null, personaName)
     } else if (start === 'website' && websitePages) {
-      const draft = draftWebsiteChat({ pages: websitePages, companyName, personaName })
+      const draft = await draftWebsiteChatWithModel({ pages: websitePages, companyName, personaName })
       await installWebsiteScan(tenantId, bot.id, draft)
     } else if (start === 'corporate') {
       await installCorporatePack(tenantId, bot.id, companyName, sandbox?.id ?? null, personaName)

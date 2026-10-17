@@ -1,5 +1,6 @@
 import { prisma } from '@ybot/db'
-import { draftWebsiteChat, type ScannedPage } from '@ybot/shared'
+import { type ScannedPage } from '@ybot/shared'
+import { draftWebsiteChatWithModel } from './site-jobs.js'
 import { upsertStudioCatalog } from './studio-catalog.js'
 
 /** Replace the catalog and page texts from a fresh read. Charts stay as they are. */
@@ -11,7 +12,7 @@ export async function rereadWebsitePages(input: {
   companyName: string
   personaName?: string | null
 }) {
-  const draft = draftWebsiteChat({
+  const draft = await draftWebsiteChatWithModel({
     pages: input.pages,
     companyName: input.companyName,
     personaName: input.personaName,

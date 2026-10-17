@@ -420,9 +420,10 @@ export const DEMO_SYSTEM_CONFIG: SystemConfig = {
     S3_REGION:   { set: true, label: 'S3 Region', value: 'us-east-1' },
   },
   llm: {
+    GEMINI_API_KEY:    { set: false, label: 'Gemini API Key' },
+    GROQ_API_KEY:      { set: false, label: 'Groq API Key' },
     OPENAI_API_KEY:    { set: false, label: 'OpenAI API Key' },
     ANTHROPIC_API_KEY: { set: false, label: 'Anthropic API Key' },
-    GROQ_API_KEY:      { set: false, label: 'Groq API Key' },
     OLLAMA_BASE_URL:   { set: true, label: 'Ollama Base URL', endpoint: 'http://host.docker.internal:11434' },
   },
   app: {
