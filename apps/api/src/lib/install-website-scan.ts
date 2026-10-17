@@ -93,7 +93,7 @@ export async function installWebsiteScan(tenantId: string, botId: string, draft:
       where: { id: source.id },
       data: {
         name: host || source.name,
-        config: { url: draft.url, depth: 1 },
+        config: { url: draft.url, depth: draft.pages.length > 1 ? 2 : 1, pageCount: draft.pages.length },
         lastSyncAt: new Date(),
       },
     })
@@ -117,7 +117,7 @@ export async function installWebsiteScan(tenantId: string, botId: string, draft:
       botId,
       name: host || 'Website',
       kind: 'website',
-      config: { url: draft.url, depth: 1 },
+      config: { url: draft.url, depth: draft.pages.length > 1 ? 2 : 1, pageCount: draft.pages.length },
       lastSyncAt: new Date(),
       documents: {
         create: draft.documents.map((doc) => ({

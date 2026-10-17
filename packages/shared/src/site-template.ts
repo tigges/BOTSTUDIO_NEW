@@ -360,13 +360,96 @@ function talkTopic(company: string): SiteTopic {
   }
 }
 
-function sentenceFor(text: string, phrases: string[]): string | null {
-  const parts = text.split(/(?<=[.!?])\s+/)
-  for (const phrase of phrases) {
-    const hit = parts.find((part) => part.toLowerCase().includes(phrase.toLowerCase()) && part.length > 24 && part.length < 320)
-    if (hit) return clip(hit)
+function escapeRe(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Nav chrome, a11y suffixes, and campaign stats are not an answer. */
+function isNavChrome(text: string): boolean {
+  const t = text.replace(/\s+/g, ' ').trim()
+  if (/\ba11y\b/i.test(t)) return true
+  if (/skip to (?:main )?content/i.test(t)) return true
+  if (/opens in a new tab/i.test(t)) return true
+  if (/see all /i.test(t) && /case stud/i.test(t)) return true
+  if (/play video/i.test(t) && t.length < 160) return true
+  if (/^view more\b/i.test(t)) return true
+  if (/[™®]/.test(t) && /learn more/i.test(t)) return true
+  if (/\d+%\s+(?:more|improvement|increase)/i.test(t)) return true
+  if (/\?\s*$/.test(t)) return true
+  if (/\|\s*\S+/.test(t) && t.length < 80 && !/[.!?]$/.test(t)) return true
+  const words = t.split(' ').filter(Boolean)
+  const firstWords = words.slice(0, 3)
+  if (firstWords.length === 3 && firstWords.every((word) => /^[A-Z][a-z]{1,16}$/.test(word))) return true
+  if (/^[A-Z][a-z]{1,16}\s+[A-Z][a-z]{1,16}\s/.test(t) && !/,/.test(t.slice(0, 48))) {
+    const extraTitle = words.slice(2, 6).some((word) => /^[A-Z][a-z]{1,16}$/.test(word))
+    if (extraTitle || t.length < 90) return true
   }
-  return null
+  const titleRuns = words.filter((word) => /^[A-Z][a-z]{0,16}$/.test(word))
+  if (titleRuns.length >= 5 && titleRuns.length / Math.max(words.length, 1) >= 0.5) return true
+  if (!/[.!?']/.test(t) && /(?:[A-Z][a-z]+)(?:\s+[A-Z][a-z]+){3,}/.test(t) && t.length < 200) return true
+  return false
+}
+
+function splitCopy(text: string): string[] {
+  return text
+    .split(/\n+|(?<=[.!?])\s+/)
+    .map((part) => part.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+}
+
+function pageTopicScore(page: ScannedPage, phrases: string[]): number {
+  let path = ''
+  try { path = new URL(page.url).pathname.toLowerCase() } catch { path = page.url.toLowerCase() }
+  const title = page.title.toLowerCase()
+  let score = 0
+  if (path === '/' || path === '') score -= 6
+  if (/\/products?(?:\/|$)/.test(path)) score += 8
+  if (/\/pricing|\/plans?(?:\/|$)/.test(path)) score += 10
+  if (/\/(?:blog|company-news|glossary|case-stud|careers-blog)(?:\/|$)/.test(path)) score -= 10
+  if (/\/company\//.test(path)) score -= 4
+  if (/\/(?:company\/)?contact(?:-us)?(?:\/|$)/.test(path) && phrases.some((phrase) => /contact/.test(phrase))) score -= 8
+  if (/\/(?:crm|contacts)(?:\/|$)/.test(path) && phrases.some((phrase) => /contact|record/.test(phrase))) score += 10
+  for (const phrase of phrases) {
+    const token = phrase.toLowerCase()
+    if (token.length < 4) continue
+    const slug = token.replace(/\s+/g, '-')
+    if (path.includes(slug) || path.includes(token.replace(/\s+/g, ''))) score += 12
+    if (title.includes(token)) score += 6
+  }
+  return score
+}
+
+function hasPhrase(text: string, phrase: string): boolean {
+  return new RegExp(`\\b${escapeRe(phrase)}s?\\b`, 'i').test(text)
+}
+
+function sentenceFor(pages: ScannedPage[], phrases: string[]): string | null {
+  let best: { text: string; score: number } | null = null
+  for (const page of pages) {
+    const pageScore = pageTopicScore(page, phrases)
+    for (const part of splitCopy(page.text)) {
+      if (part.length < 24 || part.length > 320 || isNavChrome(part)) continue
+      const lower = part.toLowerCase()
+      let hits = 0
+      let phraseScore = 0
+      for (const phrase of phrases) {
+        if (!hasPhrase(part, phrase)) continue
+        hits += 1
+        const at = lower.indexOf(phrase.toLowerCase())
+        let add = Math.min(phrase.length, 12)
+        if (at >= 0 && at < 24) add += 8
+        else if (at >= 0 && at < 56) add += 3
+        if (add > phraseScore) phraseScore = add
+      }
+      if (hits === 0) continue
+      const score = pageScore + phraseScore + Math.min(hits, 2)
+      if (!best || score > best.score || (score === best.score && part.length < best.text.length)) {
+        best = { text: part, score }
+      }
+    }
+  }
+  if (!best || best.score < 4) return null
+  return clip(best.text)
 }
 
 function titleCaseHost(host: string): string {
@@ -385,19 +468,28 @@ export function draftClusteredTemplate(input: {
   clusterId?: ClusterId
 }): LearnedTemplateSpec {
   const pages = input.pages.filter((page) => page.text.trim().length > 0)
-  const raw = pages.map((page) => page.text).join('\n')
-  const text = abstractBrand(raw)
+  const branded = pages.map((page) => ({
+    ...page,
+    title: abstractBrand(page.title),
+    text: abstractBrand(page.text),
+  }))
+  const text = branded.map((page) => page.text).join('\n')
   const clusterId = input.clusterId && input.clusterId !== 'custom' ? input.clusterId : suggestCluster(`${text} ${pages.map((page) => page.url).join(' ')}`)
   const company = companyLabel(input.companyName)
   const persona = input.personaName?.trim()
   const greeting = persona
-    ? `Hi, I'm ${persona} at ${company}. What's your name?`
+    ? clusterId === 'hair'
+      ? `Hi, I'm ${persona} at ${company}. What's your name?`
+      : `Hi, I'm ${persona} at ${company}.`
     : assistantGreeting(company)
   const seeds = clusterId === 'custom' ? SEEDS.software : SEEDS[clusterId]
-  const tiers = clusterId === 'hair' || clusterId === 'email' ? [] : extractPlanTiers(text)
+  const hadPricingUrl = input.pages.some((page) => /pric|\/plans?\b/i.test(`${page.url} ${page.title}`))
+  const pricingPages = branded.filter((page) => /pric|\/plans?\b/i.test(`${page.url} ${page.title}`))
+  const tierText = (hadPricingUrl ? pricingPages : branded).map((page) => page.text).join('\n')
+  const tiers = clusterId === 'hair' || clusterId === 'email' ? [] : extractPlanTiers(tierText)
   const topics: SiteTopic[] = []
   for (const seed of seeds) {
-    const found = sentenceFor(text, seed.phrases)
+    const found = sentenceFor(branded, seed.phrases)
     const answer = found ?? `The pages did not state this for ${seed.choice.toLowerCase()}. Edit the line to match ${company}.`
     topics.push({
       ...seed,
@@ -414,9 +506,22 @@ export function draftClusteredTemplate(input: {
       plan.choices = planChoices(tiers)
       plan.question = 'Which plan are you asking about?'
     }
+  } else if (hadPricingUrl) {
+    const plan = topics.find((topic) => /plan|pricing/i.test(topic.flowName))
+    if (plan) {
+      const fromPricing = sentenceFor(pricingPages, plan.phrases)
+      plan.answer = fromPricing ?? `The pages did not state this for ${plan.choice.toLowerCase()}. Edit the line to match ${company}.`
+      plan.blurb = fromPricing ? clip(fromPricing, 80) : plan.blurb
+    }
   }
   const demo = topics.find((topic) => /demo/i.test(topic.flowName))
-  if (demo && clusterId !== 'hair' && clusterId !== 'email') demo.walk = 'email'
+  if (demo && clusterId !== 'hair' && clusterId !== 'email') {
+    demo.walk = 'email'
+    if (/did not state this/i.test(demo.answer) || isNavChrome(demo.answer) || /get started free|play video|get a demo|free trial|start \d+-day/i.test(demo.answer)) {
+      demo.answer = `I'll take one email, then someone from ${company} sales continues here.`
+      demo.blurb = 'Email, then sales'
+    }
+  }
   topics.push(talkTopic(company))
   const host = hostOf(pages[0]?.url ?? '')
   const clusterTitle: Record<ClusterId, string> = {
@@ -444,8 +549,11 @@ export function draftClusteredTemplate(input: {
 }
 
 export function packFromLearned(spec: LearnedTemplateSpec, companyName: string, personaName?: string | null): SiteTemplatePack {
-  const greeting = personaName?.trim()
-    ? `Hi, I'm ${personaName.trim()} at ${companyLabel(companyName)}. What's your name?`
+  const voice = personaName?.trim()
+  const greeting = voice
+    ? /what's your name/i.test(spec.greeting)
+      ? `Hi, I'm ${voice} at ${companyLabel(companyName)}. What's your name?`
+      : `Hi, I'm ${voice} at ${companyLabel(companyName)}.`
     : spec.greeting.replace(/\bat .+\./, `at ${companyLabel(companyName)}.`)
   return siteTemplatePack({
     id: 'learned',
