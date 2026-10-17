@@ -444,7 +444,7 @@ function ReviewPane({
           onClick={() => onApply(applyable)}
         >
           {applying ? <Loader2 size={13} className="animate-spin" /> : null}
-          {applyable.length > 1 ? 'Apply all and replay' : applyable.length === 1 ? 'Apply and replay' : 'Replay'}
+          {applyable.length > 1 ? 'Apply all and replay' : 'Apply and replay'}
         </Button>
         <button type="button" className="w-full text-center text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)]" onClick={onBack}>
           Back to chat
