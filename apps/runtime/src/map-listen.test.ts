@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { draftWebsiteChat, hairStudioPack, pageFromHtml } from '@ybot/shared'
 import type { FlowGraph } from './engine.js'
-import { isSmallTalk, isTopicSwitch, listenForChapter, offerOnMap, sameQuestion, shapeTurn, wantsOffer } from './map-listen.js'
+import { acceptedHoursOffer, isSmallTalk, isTopicSwitch, listenForChapter, offerOnMap, sameQuestion, shapeTurn, wantsOffer } from './map-listen.js'
 
 function salonChapters() {
   const pack = hairStudioPack('Yuzu', 'Bella')
@@ -55,6 +55,10 @@ test('a finished chapter offers the doors instead of repeating itself', () => {
   assert.equal(sameQuestion("What's your name?", 'What would you like done?'), false)
   assert.equal(isSmallTalk('thanks'), true)
   assert.equal(isSmallTalk('cut'), false)
+  assert.equal(acceptedHoursOffer('Want the hours?', 'ok'), true)
+  assert.equal(acceptedHoursOffer('Want the hours?', 'yes please'), true)
+  assert.equal(acceptedHoursOffer('Want the hours?', 'book'), false)
+  assert.equal(acceptedHoursOffer('Shall I book a time?', 'ok'), false)
 })
 
 test('a long which-one list becomes three short names, and hours asks one next thing', () => {

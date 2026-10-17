@@ -10,7 +10,7 @@ import { bookAppointmentFlow } from './booking-walk.js'
 import type { CatalogFact, StudioCatalog } from './catalog.js'
 import { emptyCatalog } from './catalog.js'
 import { BOOKING_HOSTS, namedLink } from './chat-links.js'
-import { catalogLookupFlow, SALON_WELCOME_NAME } from './salon-pack.js'
+import { catalogLookupFlow, doorsForNextOffer, SALON_WELCOME_NAME } from './salon-pack.js'
 import type { StarterFlow } from './flow-templates.js'
 import { draftClusteredTemplate, packFromLearned, suggestCluster, type ClusterId } from './site-template.js'
 import { identityFor } from './start-catalog.js'
@@ -183,13 +183,6 @@ function answerFlow(name: string, answer: string, ticket?: { subject: string; de
   }
 }
 
-const SCAN_NEXT_DOORS = [
-  { handle: 'hours', phrases: ['hours', 'opening hours', 'when are you open'], flowName: 'Salon hours' },
-  { handle: 'prices', phrases: ['price', 'prices', 'how much', 'haircut', 'services', 'cut', 'a cut', 'trim'], flowName: 'Services and prices' },
-  { handle: 'location', phrases: ['where', 'address', 'location'], flowName: 'Location' },
-  { handle: 'book', phrases: ['book', 'booking', 'yes', 'please', 'ok', 'okay', 'yeah'], flowName: 'Book an appointment' },
-]
-
 function lookupDoor(name: string, id: string, intro: string, next: string): StarterFlow {
   return catalogLookupFlow({
     name,
@@ -197,7 +190,7 @@ function lookupDoor(name: string, id: string, intro: string, next: string): Star
     id,
     intro,
     next,
-    doors: SCAN_NEXT_DOORS.filter((door) => door.flowName !== name),
+    doors: doorsForNextOffer(next).filter((door) => door.flowName !== name),
     tags: ['website', 'faq'],
     publish: false,
   })
