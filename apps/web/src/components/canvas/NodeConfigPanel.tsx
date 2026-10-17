@@ -74,6 +74,7 @@ const CONFIG_FIELDS: Partial<Record<NodeKind, Array<{ key: string; label: string
   ],
   classify_intent: [
     { key: 'variable', label: 'Save intent to', type: 'text', placeholder: 'intent' },
+    { key: 'categories', label: 'Categories for this bot (JSON array)', type: 'textarea', placeholder: '["plans","hours","book","other"]' },
   ],
   create_ticket: [
     { key: 'subject', label: 'Subject', type: 'text', placeholder: 'Return request: {{return_reason}}' },

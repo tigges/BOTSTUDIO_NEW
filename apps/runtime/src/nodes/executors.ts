@@ -1,6 +1,6 @@
 import type { NodeContext, NodeResult } from '../types.js'
 import { matchCatalog } from '../catalog-lookup.js'
-import { matchTopic, type TopicRoute } from '../topic-route.js'
+import { matchTopic, pickTopic, type TopicRoute } from '../topic-route.js'
 import { evaluateCondition, interpolate } from '../utils.js'
 
 // ── trigger_start ────────────────────────────────────────────────────────────
@@ -92,13 +92,15 @@ function heardText(session: NodeContext['session']): { latest: string; withTopic
 }
 
 export async function executeRouteTopic(ctx: NodeContext): Promise<NodeResult> {
-  const { config, session } = ctx
+  const { config, session, services } = ctx
   const routes = (config['routes'] as TopicRoute[] | undefined) ?? []
   const heard = heardText(session)
-  const handle = matchTopic(heard.latest, routes)
-  if (handle !== 'other') return { output: { route: handle }, nextNodeId: handle }
-  const fallback = matchTopic(heard.withTopic, routes)
-  return { output: { route: fallback }, nextNodeId: fallback }
+  const fromLatest = matchTopic(heard.latest, routes)
+  if (fromLatest !== 'other') return { output: { route: fromLatest }, nextNodeId: fromLatest }
+  const fromTopic = matchTopic(heard.withTopic, routes)
+  if (fromTopic !== 'other') return { output: { route: fromTopic }, nextNodeId: fromTopic }
+  const handle = await pickTopic(heard.latest || heard.withTopic, routes, services.llm)
+  return { output: { route: handle }, nextNodeId: handle }
 }
 
 // ── execute_flow ──────────────────────────────────────────────────────────────
@@ -126,13 +128,28 @@ export async function executeLookupCatalog(ctx: NodeContext): Promise<NodeResult
 
 // ── classify_intent ───────────────────────────────────────────────────────────
 export async function executeClassifyIntent(ctx: NodeContext): Promise<NodeResult> {
-  const { session, services } = ctx
+  const { session, services, config } = ctx
   const lastMsg = String((session.variables.flow['_last_user_message'] as string | undefined) ?? '')
   if (!lastMsg) return { output: { intent: 'unknown', confidence: 0 } }
-
-  const result = await services.llm.classify(lastMsg, {
-    categories: ['order_status', 'return_request', 'billing_query', 'password_reset', 'greeting', 'escalate_to_agent', 'other'],
-  })
+  const rawCategories = config['categories']
+  const configured = Array.isArray(rawCategories)
+    ? rawCategories.map((item) => String(item).trim()).filter(Boolean)
+    : typeof rawCategories === 'string' && rawCategories.trim().startsWith('[')
+      ? (() => {
+        try {
+          const parsed = JSON.parse(rawCategories) as unknown
+          return Array.isArray(parsed) ? parsed.map((item) => String(item).trim()).filter(Boolean) : []
+        } catch {
+          return []
+        }
+      })()
+      : []
+  const categories = configured.length > 0
+    ? configured
+    : ['order_status', 'return_request', 'billing_query', 'password_reset', 'greeting', 'escalate_to_agent', 'other']
+  const classify = services.llm?.classify
+  if (typeof classify !== 'function') return { output: { intent: 'other', confidence: 0 } }
+  const result = await classify(lastMsg, { categories })
   return { output: { intent: result.category, confidence: result.confidence } }
 }
 

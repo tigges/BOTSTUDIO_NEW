@@ -174,3 +174,36 @@ export function matchTopic(text: string, routes: TopicRoute[]): string {
   }
   return best?.handle ?? 'other'
 }
+
+const CLASSIFY_MS = 6_000
+
+type ClassifyFn = (text: string, params: { categories: string[] }) => Promise<{ category: string }>
+
+function classifyFn(llm: unknown): ClassifyFn | null {
+  if (!llm || typeof llm !== 'object') return null
+  const fn = (llm as { classify?: unknown }).classify
+  return typeof fn === 'function' ? (fn as ClassifyFn).bind(llm) : null
+}
+
+/**
+ * Phrase match first. On a miss, ask the model to pick one of THIS node's handles.
+ * Empty llm (tests, canvas walk) stays on "other".
+ */
+export async function pickTopic(text: string, routes: TopicRoute[], llm?: unknown): Promise<string> {
+  const phrase = matchTopic(text, routes)
+  if (phrase !== 'other') return phrase
+  const classify = classifyFn(llm)
+  const handles = [...new Set(routes.map((route) => route.handle).filter(Boolean))]
+  if (!classify || handles.length === 0 || !text.trim()) return 'other'
+  try {
+    const result = await Promise.race([
+      classify(text, { categories: [...handles, 'other'] }),
+      new Promise<{ category: string }>((resolve) => {
+        setTimeout(() => resolve({ category: 'other' }), CLASSIFY_MS)
+      }),
+    ])
+    return handles.includes(result.category) ? result.category : 'other'
+  } catch {
+    return 'other'
+  }
+}

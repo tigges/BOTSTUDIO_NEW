@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { SessionMachine, type FlowGraph } from './engine.js'
 import type { ExecutionServices, Session } from './types.js'
-import { matchTopic } from './topic-route.js'
+import { matchTopic, pickTopic } from './topic-route.js'
 
 test('matchTopic picks the longest phrase', () => {
   const routes = [
@@ -62,6 +62,44 @@ test('matchTopic picks the longest phrase', () => {
   )
 })
 
+test('a phrase miss asks the model for one of this node\'s jobs', async () => {
+  const routes = [
+    { handle: 'plans', phrases: ['plans', 'sim only'] },
+    { handle: 'hours', phrases: ['hours', 'open'] },
+  ]
+  assert.equal(await pickTopic('plans', routes, { classify: async () => ({ category: 'hours', confidence: 1 }) }), 'plans')
+  assert.equal(
+    await pickTopic('how much for unlimited data roaming', routes, {
+      classify: async () => ({ category: 'plans', confidence: 0.9 }),
+    }),
+    'plans',
+  )
+  assert.equal(
+    await pickTopic('hello', routes, {
+      classify: async () => ({ category: 'other', confidence: 0.9 }),
+    }),
+    'other',
+  )
+  assert.equal(
+    await pickTopic('how much for unlimited data roaming', routes, {
+      classify: async () => ({ category: 'order_status', confidence: 1 }),
+    }),
+    'other',
+  )
+  assert.equal(await pickTopic('how much for unlimited data roaming', routes, {}), 'other')
+  let called = false
+  assert.equal(
+    await pickTopic('plans', routes, {
+      classify: async () => {
+        called = true
+        return { category: 'hours', confidence: 1 }
+      },
+    }),
+    'plans',
+  )
+  assert.equal(called, false)
+})
+
 test('execute_flow hands off and route_topic selects a branch', async () => {
   const services = { llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices
   const machine = new SessionMachine(services)
@@ -103,6 +141,20 @@ test('execute_flow hands off and route_topic selects a branch', async () => {
   const welcomed = await machine.run(greeting, graph, 'hello')
   assert.equal(welcomed.jumpToFlow, undefined)
   assert.match(welcomed.newMessages.map((message) => message.content.text).join('\n'), /How can I help/)
+
+  const thinking = { classify: async () => ({ category: 'orders', confidence: 0.8 }) }
+  const classifiedMachine = new SessionMachine({ llm: thinking, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
+  const asked = await classifiedMachine.run(
+    {
+      ...session,
+      id: 's2b',
+      currentNodeId: 'start',
+      variables: { flow: { _last_user_message: 'where has my parcel got to' }, global: {}, contact: { name: 'there' } },
+    },
+    graph,
+    'where has my parcel got to',
+  )
+  assert.equal(asked.jumpToFlow, 'Order Status')
 })
 
 test('a condition saved as true and false still takes the no branch', async () => {
