@@ -15,12 +15,10 @@
       <div class="wrap nav">
         <a class="brand" href="#top">
           <span class="mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="16" height="16">
-              <rect x="4" y="8" width="16" height="11" rx="3" fill="none" stroke="#fff" stroke-width="1.8" />
-              <circle cx="9" cy="13.5" r="1.2" fill="#fff" />
-              <circle cx="15" cy="13.5" r="1.2" fill="#fff" />
-              <path d="M12 8V5.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" />
-              <circle cx="12" cy="4.2" r="1.1" fill="#fff" />
+            <svg viewBox="0 0 32 32" width="28" height="28">
+              <rect width="32" height="32" rx="8" fill="#6366f1" />
+              <path d="M8 22 L16 10 L24 22" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+              <circle cx="16" cy="22" r="2" fill="#fff" />
             </svg>
           </span>
           BotStudio
@@ -69,27 +67,71 @@
         <section class="steps" aria-label="How it works">
           <article class="card">
             <span class="num" aria-hidden="true">1</span>
-            <h2>Choose a flow</h2>
+            <h2>Your site, or a map</h2>
             <div class="flow" aria-hidden="true">
-              <div class="flow-top">
-                <span class="flow-node start">Start</span>
-                <span class="flow-line"></span>
-                <span class="flow-node">Welcome</span>
-                <span class="flow-line"></span>
-                <span class="flow-node">Ask topic</span>
-              </div>
-              <div class="flow-stem"></div>
-              <div class="flow-branch">
-                <span class="flow-node pick">Order status</span>
-                <span class="flow-node">Returns</span>
-                <span class="flow-node">Billing</span>
+              <div class="flow-stack">
+                <div class="salon-site">
+                  <div class="salon-bar">
+                    <svg viewBox="0 0 32 32" width="12" height="12" aria-hidden="true">
+                      <rect width="32" height="32" rx="8" fill="#fff" />
+                      <path d="M8 22 L16 10 L24 22" fill="none" stroke="#6366f1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                      <circle cx="16" cy="22" r="2" fill="#6366f1" />
+                    </svg>
+                    Hair &amp; Spa
+                  </div>
+                  <div class="salon-hero"></div>
+                  <div class="salon-body">
+                    <span class="salon-line wide"></span>
+                    <span class="salon-line mid"></span>
+                    <div class="salon-chips">
+                      <span>Colour</span>
+                      <span>Cut</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="flow-stem tall"></div>
+                <div class="flow-top">
+                  <span class="flow-node start">Start</span>
+                  <span class="flow-line"></span>
+                  <span class="flow-node">Welcome</span>
+                  <span class="flow-line"></span>
+                  <span class="flow-node">Ask</span>
+                </div>
+                <div class="flow-stem"></div>
+                <div class="flow-branch">
+                  <span class="flow-node pick">Location</span>
+                  <span class="flow-node">Hours</span>
+                  <span class="flow-node">Book</span>
+                </div>
               </div>
             </div>
-            <p>Pick the conversation you want the bot to run.</p>
+            <p>Scan your website address and let the BotStudio do the rest. Use a blueprint if you don't have a website.</p>
           </article>
           <article class="card">
             <span class="num" aria-hidden="true">2</span>
-            <h2>Choose a channel</h2>
+            <h2>Website chat is on</h2>
+            <div class="site-preview" aria-hidden="true">
+              <div class="site-preview-bar">
+                <svg viewBox="0 0 32 32" width="10" height="10" aria-hidden="true">
+                  <rect width="32" height="32" rx="8" fill="#6366f1" />
+                  <path d="M8 22 L16 10 L24 22" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                  <circle cx="16" cy="22" r="2" fill="#fff" />
+                </svg>
+                <span></span>
+              </div>
+              <div class="site-preview-body">
+                <span></span>
+                <span class="short"></span>
+                <span class="block"></span>
+              </div>
+              <span class="launcher">
+                <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
+                  <rect width="32" height="32" rx="8" fill="#6366f1" />
+                  <path d="M8 22 L16 10 L24 22" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                  <circle cx="16" cy="22" r="2" fill="#fff" />
+                </svg>
+              </span>
+            </div>
             <div class="channels" aria-hidden="true">
               <div class="channel on">
                 <span class="logo web">
@@ -110,11 +152,11 @@
                 <span>Email</span>
               </div>
             </div>
-            <p>Start with the website chat widget.</p>
+            <p>Start with the website widget. Activate further channels like WhatsApp and email in Channels.</p>
           </article>
           <article class="card">
             <span class="num" aria-hidden="true">3</span>
-            <h2>Let the bot handle your customer conversations</h2>
+            <h2>The same chat in Inbox</h2>
             <div class="inbox" aria-hidden="true">
               <div class="inbox-head">Inbox</div>
               <div class="inbox-row on">
@@ -135,7 +177,7 @@
               </div>
               <p class="inbox-note">Assigned to Anna</p>
             </div>
-            <p>The same chat then shows in your inbox.</p>
+            <p>The guest stays in the widget. Your team sees the thread.</p>
           </article>
         </section>
 
@@ -146,7 +188,14 @@
       </div>
     </main>
 
-    <footer class="foot">BotStudio · London</footer>
+    <footer class="foot">
+      <svg viewBox="0 0 32 32" width="16" height="16" aria-hidden="true">
+        <rect width="32" height="32" rx="8" fill="#6366f1" />
+        <path d="M8 22 L16 10 L24 22" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        <circle cx="16" cy="22" r="2" fill="#fff" />
+      </svg>
+      BotStudio · London
+    </footer>
     <script type="module" src="/src/landing/main.ts"></script>
   </body>
 </html>

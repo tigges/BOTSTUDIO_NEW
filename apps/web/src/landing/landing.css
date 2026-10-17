@@ -43,7 +43,7 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: var(--accent);
+  overflow: hidden;
 }
 
 .nav-actions {
@@ -368,12 +368,74 @@ h1,
 }
 
 .flow {
-  padding: 16px 12px 14px;
+  padding: 14px 10px 12px;
   background-color: var(--bg-elevated);
   background-image:
     linear-gradient(var(--border) 1px, transparent 1px),
     linear-gradient(90deg, var(--border) 1px, transparent 1px);
   background-size: 14px 14px;
+}
+
+.flow-stack {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.salon-site {
+  width: 128px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.salon-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.salon-hero {
+  height: 36px;
+  background: var(--bg-overlay);
+}
+
+.salon-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+}
+
+.salon-line {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-elevated);
+}
+
+.salon-line.wide { width: 78%; }
+.salon-line.mid { width: 54%; }
+
+.salon-chips {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.salon-chips span {
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 600;
 }
 
 .flow-top,
@@ -389,6 +451,67 @@ h1,
   height: 14px;
   margin: 0 auto;
   background: var(--accent);
+}
+
+.flow-stem.tall {
+  height: 18px;
+}
+
+.site-preview {
+  position: relative;
+  height: 92px;
+  margin: 14px 0 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.site-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 18px;
+  padding: 0 8px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.site-preview-bar span {
+  width: 48px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bg-overlay);
+}
+
+.site-preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+}
+
+.site-preview-body span {
+  height: 8px;
+  width: 70%;
+  border-radius: 4px;
+  background: var(--bg-surface);
+}
+
+.site-preview-body span.short { width: 46%; }
+.site-preview-body span.block {
+  height: 28px;
+  width: 88%;
+  border-radius: 6px;
+  background: var(--bg-overlay);
+}
+
+.launcher {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: grid;
+  line-height: 0;
 }
 
 .flow-line {
@@ -423,6 +546,7 @@ h1,
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+  margin-top: 0;
   padding: 12px;
   background: var(--bg-surface);
 }
@@ -527,11 +651,14 @@ h1,
 }
 
 .foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 28px 16px 36px;
   border-top: 1px solid var(--border);
   color: var(--text-muted);
   font-size: 13px;
-  text-align: center;
 }
 
 @media (max-width: 800px) {
