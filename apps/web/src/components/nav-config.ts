@@ -8,10 +8,13 @@ import {
   Megaphone,
   BarChart3,
   Settings,
+  Settings2,
   Plug,
   Database,
   Globe,
   Users,
+  Contact,
+  Ticket,
   FileText,
   Repeat2,
   Server,
@@ -67,18 +70,10 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Inbox',
     items: [
-      {
-        id: 'inbox',
-        label: 'Inbox',
-        icon: MessageSquare,
-        path: '/inbox',
-        subItems: [
-          { id: 'inbox-chats', label: 'Chats', path: '/inbox/chats' },
-          { id: 'inbox-tickets', label: 'Tickets', path: '/inbox/tickets' },
-          { id: 'inbox-contacts', label: 'Contacts', path: '/inbox/contacts' },
-          { id: 'inbox-settings', label: 'Settings', path: '/inbox/settings' },
-        ],
-      },
+      { id: 'inbox', label: 'Inbox', icon: MessageSquare, path: '/inbox/chats' },
+      { id: 'inbox-tickets', label: 'Tickets', icon: Ticket, path: '/inbox/tickets' },
+      { id: 'inbox-contacts', label: 'Contacts', icon: Contact, path: '/inbox/contacts' },
+      { id: 'inbox-settings', label: 'Inbox Settings', icon: Settings2, path: '/inbox/settings' },
     ],
   },
   {

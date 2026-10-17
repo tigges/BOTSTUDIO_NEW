@@ -1,16 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { Clock, Save, ToggleLeft, ToggleRight, Loader2, Users, Zap, MessageSquare } from 'lucide-react'
 import { Button, Card } from '@ybot/ui'
-import { SubNav } from '../../components/SubNav'
 import { PlannedBadge } from '../../components/PlannedFeature'
 import { useInboxConfig, useSaveInboxConfig } from '../../lib/hooks'
-
-const SUBNAV = [
-  { label: 'Chats', path: '/inbox/chats' },
-  { label: 'Tickets', path: '/inbox/tickets' },
-  { label: 'Contacts', path: '/inbox/contacts' },
-  { label: 'Settings', path: '/inbox/settings' },
-]
+import { useAppStore } from '../../store/app'
 
 interface ToggleRowProps { label: string; description: string; value: boolean; onChange: (v: boolean) => void }
 function PlannedRow({ label, description }: { label: string; description: string }) {
@@ -48,6 +41,7 @@ const DEFAULTS = {
 const DEFAULT_AWAY = "Thanks for your message. We're currently outside our working hours and will reply when the team is back."
 
 export function InboxSettingsPage() {
+  const displayName = useAppStore((s) => s.user?.displayName?.trim() || s.user?.email || 'you')
   const { data: savedConfig, isLoading } = useInboxConfig()
   const saveConfig = useSaveInboxConfig()
   const [settings, setSettings] = useState(DEFAULTS)
@@ -94,15 +88,17 @@ export function InboxSettingsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 pt-4 pb-0 shrink-0">
-        <div className="flex items-center justify-between pb-3">
-          <h1 className="text-base font-semibold text-[var(--text-primary)]">Inbox</h1>
+      <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 py-4 shrink-0">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-base font-semibold text-[var(--text-primary)]">Inbox Settings</h1>
+            <p className="mt-0.5 text-xs text-[var(--text-muted)]">Your inbox, {displayName}. These choices apply to you on this account.</p>
+          </div>
           <Button size="sm" className="gap-1.5" onClick={save} disabled={saveConfig.isPending}>
             {saveConfig.isPending ? <Loader2 size={13} className="animate-spin" /> : <Clock size={13} />}
             {saved ? 'Saved!' : 'Save changes'}
           </Button>
         </div>
-        <SubNav items={SUBNAV} />
       </div>
 
       <div className="flex-1 overflow-auto p-6">

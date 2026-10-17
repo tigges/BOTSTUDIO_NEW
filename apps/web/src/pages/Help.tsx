@@ -99,7 +99,7 @@ export function HelpPage() {
         <section id="inbox" className="scroll-mt-6 space-y-2">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Inbox</h2>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-            Chats are the conversations. Tickets can be opened from a chat or on their own. Contacts can be imported, exported, and turned into a conversation. Assign and transfer use a teammate, and an internal note stays off the customer widget.
+            Inbox, Tickets, Contacts, and Inbox Settings sit under Inbox in the side menu. Chats are the conversations. Tickets can be opened from a chat or on their own. Contacts can be imported, exported, and turned into a conversation. Assign and transfer use a teammate, and an internal note stays off the customer widget. Inbox Settings is your inbox on this account.
           </p>
           <Figure file="inbox.jpg" alt="Inbox chats" />
         </section>
@@ -130,7 +130,7 @@ export function HelpPage() {
         <section id="planned" className="scroll-mt-6 space-y-2">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Planned features</h2>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-            A Planned badge means that control will become a real feature. Stripe on Integrations is marked Planned. In Inbox settings, Auto-assign, Round-robin, and Bot handover on agent idle are marked Planned too. Those three do not change who answers a chat. Billing and single sign-on are not in the product yet. WhatsApp, SMS, Telegram, phone, and email Connect with credentials and take conversations once you turn the channel on.
+            A Planned badge means that control will become a real feature. Stripe on Integrations is marked Planned. In Inbox Settings, Auto-assign, Round-robin, and Bot handover on agent idle are marked Planned too. Those three do not change who answers a chat. Billing and single sign-on are not in the product yet. WhatsApp, SMS, Telegram, phone, and email Connect with credentials and take conversations once you turn the channel on.
           </p>
           <Figure file="integrations.jpg" alt="Integrations page with Stripe marked Planned" />
         </section>
