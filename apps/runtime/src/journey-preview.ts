@@ -2,7 +2,7 @@ import type { StudioCatalog } from '@ybot/shared'
 import { usableContactName } from './contact-speech.js'
 import { SessionMachine, type FlowGraph } from './engine.js'
 import { copyJumpVariables, missingChapterLine } from './handoff.js'
-import { isSmallTalk, isTopicSwitch, listenForChapter, offerOnMap, questionFrom, sameQuestion, shapeTurn } from './map-listen.js'
+import { acceptedHoursOffer, hoursChapterName, isSmallTalk, isTopicSwitch, listenForChapter, offerOnMap, questionFrom, sameQuestion, shapeTurn } from './map-listen.js'
 import type { ExecutionServices, Session, SessionVariables } from './types.js'
 
 export interface JourneyPreviewSnapshot {
@@ -153,8 +153,15 @@ export async function runJourneyPreview(input: {
       }
     }
   } else {
-    chapterName = previous.chapter
-    saved = previous
+    const hoursName = hoursChapterName(input.chapters)
+    const hoursGraph = hoursName ? byName.get(hoursName) : undefined
+    if (hoursName && hoursGraph && previous.chapter !== hoursName && acceptedHoursOffer(previous.lastQuestion, heard)) {
+      chapterName = hoursName
+      saved = beginChapter(hoursGraph, hoursName, 'opening hours', previous)
+    } else {
+      chapterName = previous.chapter
+      saved = previous
+    }
   }
 
   let graph = byName.get(chapterName)

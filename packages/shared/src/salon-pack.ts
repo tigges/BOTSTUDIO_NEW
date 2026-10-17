@@ -290,12 +290,37 @@ export function hairStudioCatalog(companyName: string): StudioCatalog {
   return { facts }
 }
 
-const NEXT_DOORS = [
-  { handle: 'hours', phrases: ['hours', 'opening hours', 'when are you open'], flowName: 'Salon hours' },
-  { handle: 'prices', phrases: ['price', 'prices', 'how much', 'haircut', 'services', 'cut', 'a cut', 'trim'], flowName: 'Services and prices' },
-  { handle: 'location', phrases: ['where', 'address', 'location'], flowName: 'Location' },
-  { handle: 'book', phrases: ['book', 'booking', 'yes', 'please', 'ok', 'okay', 'yeah'], flowName: 'Book an appointment' },
-]
+const YES_NEXT = ['yes', 'yeah', 'yep', 'ok', 'okay']
+const HOURS_PHRASES = ['hours', 'opening hours', 'when are you open']
+const PRICE_PHRASES = ['price', 'prices', 'how much', 'haircut', 'services', 'cut', 'a cut', 'trim']
+const LOCATION_PHRASES = ['where', 'address', 'location']
+const BOOK_PHRASES = ['book', 'booking']
+
+export function offersHoursNext(next: string): boolean {
+  return /hours/i.test(next)
+}
+
+/**
+ * Yes/ok follow the question just asked. After "Want the hours?" they open
+ * Salon hours. After "Shall I book…?" they still open Book.
+ */
+export function doorsForNextOffer(next: string): Array<{ handle: string; phrases: string[]; flowName: string }> {
+  const hoursNext = offersHoursNext(next)
+  return [
+    {
+      handle: 'hours',
+      phrases: hoursNext ? [...HOURS_PHRASES, ...YES_NEXT] : HOURS_PHRASES,
+      flowName: 'Salon hours',
+    },
+    { handle: 'prices', phrases: PRICE_PHRASES, flowName: 'Services and prices' },
+    { handle: 'location', phrases: LOCATION_PHRASES, flowName: 'Location' },
+    {
+      handle: 'book',
+      phrases: hoursNext ? BOOK_PHRASES : [...BOOK_PHRASES, 'please', ...YES_NEXT],
+      flowName: 'Book an appointment',
+    },
+  ]
+}
 
 function pricesChapter(): StarterFlow {
   return catalogLookupFlow({
@@ -304,7 +329,7 @@ function pricesChapter(): StarterFlow {
     kind: 'service',
     intro: 'What are you thinking of? A cut, colour, or a treatment — or another.',
     next: 'Shall I book that?',
-    doors: NEXT_DOORS.filter((door) => door.handle !== 'prices'),
+    doors: doorsForNextOffer('Shall I book that?').filter((door) => door.handle !== 'prices'),
   })
 }
 
@@ -315,7 +340,7 @@ function locationChapter(): StarterFlow {
     id: 'location',
     intro: 'Are you after the address?',
     next: 'Want the hours?',
-    doors: NEXT_DOORS.filter((door) => door.handle !== 'location'),
+    doors: doorsForNextOffer('Want the hours?').filter((door) => door.handle !== 'location'),
   })
 }
 
@@ -326,7 +351,7 @@ function hoursChapter(): StarterFlow {
     id: 'hours',
     intro: 'Are you after the opening hours?',
     next: 'Shall I book a time?',
-    doors: NEXT_DOORS.filter((door) => door.handle !== 'hours'),
+    doors: doorsForNextOffer('Shall I book a time?').filter((door) => door.handle !== 'hours'),
   })
 }
 

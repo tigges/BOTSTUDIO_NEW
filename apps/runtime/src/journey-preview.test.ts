@@ -293,6 +293,101 @@ test('a mistyped tomorrow offers senior slots and confirms a clock time', async 
   assert.match(chatPlain(mobile.text), /Phorest/)
 })
 
+function withOldHoursDoors(graph: FlowGraph): FlowGraph {
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) => {
+      if (node.data.kind !== 'route_topic') return node
+      const routes = (node.data.config['routes'] as Array<{ handle: string; phrases: string[] }> | undefined) ?? []
+      if (!routes.some((route) => route.handle === 'hours')) return node
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          config: {
+            ...node.data.config,
+            routes: routes.map((route) => {
+              if (route.handle === 'hours') return { ...route, phrases: ['hours', 'opening hours', 'when are you open'] }
+              if (route.handle === 'book') return { ...route, phrases: ['book', 'booking', 'yes', 'please', 'ok', 'okay', 'yeah'] }
+              return route
+            }),
+          },
+        },
+      }
+    }),
+  }
+}
+
+test('ok after Want the hours opens Salon hours, and ok after hours still books', async () => {
+  const { chapters, catalog } = salonWalk()
+  const open = await runJourneyPreview({
+    chapters,
+    catalog,
+    startChapter: 'Salon welcome',
+    message: '',
+    environmentLabel: 'Sandbox',
+  })
+  const where = await runJourneyPreview({
+    chapters,
+    catalog,
+    startChapter: 'Salon welcome',
+    message: 'where are you',
+    environmentLabel: 'Sandbox',
+    session: open.session,
+  })
+  assert.match(where.text, /Want the hours/)
+  assert.equal(where.chapter, 'Location')
+  const hours = await runJourneyPreview({
+    chapters,
+    catalog,
+    startChapter: 'Salon welcome',
+    message: 'ok',
+    environmentLabel: 'Sandbox',
+    session: where.session,
+  })
+  assert.match(hours.text, /Monday to Saturday|09:00/)
+  assert.match(hours.text, /Shall I book/)
+  assert.equal(hours.chapter, 'Salon hours')
+  assert.equal(/been to us before/i.test(hours.text), false)
+
+  const book = await runJourneyPreview({
+    chapters,
+    catalog,
+    startChapter: 'Salon welcome',
+    message: 'ok',
+    environmentLabel: 'Sandbox',
+    session: hours.session,
+  })
+  assert.equal(book.chapter, 'Book an appointment')
+  assert.match(book.text, /been to us before|colour work|What would you like done/)
+})
+
+test('an older Location chart that hears ok as Book still opens hours in the test chat', async () => {
+  const walk = salonWalk()
+  const chapters = walk.chapters.map((chapter) => (
+    chapter.name === 'Location' ? { ...chapter, graph: withOldHoursDoors(chapter.graph) } : chapter
+  ))
+  const where = await runJourneyPreview({
+    chapters,
+    catalog: walk.catalog,
+    startChapter: 'Salon welcome',
+    message: 'where are you',
+    environmentLabel: 'Sandbox',
+  })
+  assert.equal(where.chapter, 'Location')
+  const hours = await runJourneyPreview({
+    chapters,
+    catalog: walk.catalog,
+    startChapter: 'Salon welcome',
+    message: 'ok',
+    environmentLabel: 'Sandbox',
+    session: where.session,
+  })
+  assert.equal(hours.chapter, 'Salon hours')
+  assert.match(hours.text, /Monday to Saturday|09:00/)
+  assert.equal(/been to us before/i.test(hours.text), false)
+})
+
 test('a named colour stays on the walk and a deal only appears when they ask', async () => {
   const home = pageFromHtml('https://yuzu.hair/', `<title>Yuzu</title>
 <p>Yuzu Hair and Beauty works at 5 Dickens Yard, Longfield Avenue, Ealing, W5 2TD.</p>

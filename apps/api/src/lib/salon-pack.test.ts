@@ -222,6 +222,8 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   assert.equal(/a price, or to book/.test(addressText), false)
   assert.equal((addressText.match(/\?/g) ?? []).length, 1)
   assert.equal(address.session.status, 'waiting_input')
+  const hoursDoor = await reply(machine, address, location.graph as unknown as FlowGraph, 'ok')
+  assert.equal(hoursDoor.jumpToFlow, 'Salon hours')
 
   const hoursFlow = pack.flows.find((flow) => flow.name === 'Salon hours')!
   const hoursSpoken = await machine.run(session('hours'), hoursFlow.graph as unknown as FlowGraph, 'hours')
@@ -232,6 +234,8 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   assert.equal(/where we are/.test(hoursText), false)
   assert.equal((hoursText.match(/\?/g) ?? []).length, 1)
   assert.equal(hoursSpoken.session.status, 'waiting_input')
+  const bookDoor = await reply(machine, hoursSpoken, hoursFlow.graph as unknown as FlowGraph, 'ok')
+  assert.equal(bookDoor.jumpToFlow, 'Book an appointment')
 
   const voucherFlow = pack.flows.find((flow) => flow.name === 'Gift voucher')!
   const voucherSpoken = await machine.run(session('voucher'), voucherFlow.graph as unknown as FlowGraph, 'voucher')

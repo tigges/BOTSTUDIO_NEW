@@ -8,6 +8,19 @@ export function isSmallTalk(text: string): boolean {
   return SMALL_TALK.test(text.trim())
 }
 
+const YES_TO_OFFER = /^(yes|yeah|yep|ok|okay)([,!.\s]+please)?[!?.\s]*$/i
+
+/** "Want the hours?" then ok/yes is the hours chapter, not Book. */
+export function acceptedHoursOffer(question: string | undefined, heard: string): boolean {
+  if (!question || !heard) return false
+  if (!/want the hours/i.test(question)) return false
+  return YES_TO_OFFER.test(heard.trim())
+}
+
+export function hoursChapterName(chapters: Array<{ name: string }>): string | undefined {
+  return chapters.find((chapter) => /^salon hours$/i.test(chapter.name) || /^hours$/i.test(chapter.name))?.name
+}
+
 export function isWelcomeName(name: string): boolean {
   return /welcome/i.test(name.trim())
 }
