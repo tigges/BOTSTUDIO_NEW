@@ -7,6 +7,7 @@ export const bellaPassword = process.env['BELLA_PASSWORD'] ?? 'Demo1234!'
 export const agentEmail = process.env['AGENT_EMAIL'] ?? 'mike@acme.com'
 export const agentPassword = process.env['AGENT_PASSWORD'] ?? 'password123'
 export const bellaEmmaConversationId = 'enrich-bella-convo-1'
+export const acmeBobConversationId = 'enrich-acme-convo-2'
 
 export async function signIn(page: Page, email: string, password: string) {
   await page.goto('/sign-in')

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { expectNoCrash, expectStudioUnchanged, qaEmail, qaPassword, signIn } from '../helpers'
+import { acmeBobConversationId, expectNoCrash, expectStudioUnchanged, qaEmail, qaPassword, signIn } from '../helpers'
 
 test('show the Acme demo journey', { tag: '@smoke' }, async ({ page, request }) => {
   await signIn(page, qaEmail, qaPassword)
@@ -23,7 +23,9 @@ test('show the Acme demo journey', { tag: '@smoke' }, async ({ page, request }) 
   await expectStudioUnchanged(page)
 
   await page.goto('/inbox/chats')
-  await page.getByText('Bob Smith').first().click()
+  await expect(page.locator(`[data-convo-id="${acmeBobConversationId}"]`)).toBeVisible()
+  await page.locator(`[data-convo-id="${acmeBobConversationId}"]`).click()
+  await expect(page.getByText('Bob Smith').first()).toBeVisible()
   await expect(page.getByText(/arrived damaged/i)).toBeVisible()
 
   await page.goto('/inbox/tickets')

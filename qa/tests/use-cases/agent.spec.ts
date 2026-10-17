@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { agentEmail, agentPassword, signIn } from '../helpers'
+import { acmeBobConversationId, agentEmail, agentPassword, signIn } from '../helpers'
 
 test('an agent can open the inbox and cannot edit flows', { tag: '@smoke' }, async ({ page, request }) => {
   const login = await request.post('/api/v1/auth/login', {
@@ -19,5 +19,6 @@ test('an agent can open the inbox and cannot edit flows', { tag: '@smoke' }, asy
 
   await signIn(page, agentEmail, agentPassword)
   await page.goto('/inbox/chats')
+  await expect(page.locator(`[data-convo-id="${acmeBobConversationId}"]`)).toBeVisible()
   await expect(page.getByText('Bob Smith').first()).toBeVisible()
 })

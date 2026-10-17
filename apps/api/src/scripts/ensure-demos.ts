@@ -49,6 +49,7 @@ const OPENING_HOURS = {
 }
 
 const BELLA_NAMES = ['Emma Clarke', 'Olivia Bennett', 'Sophie Turner', 'Jack Murray', 'Aisha Khan', 'Noah Patel']
+const ACME_NAMES = ['Alice Johnson', 'Bob Smith', 'Carol White', 'David Lee', 'Eve Brown']
 
 const BELLA_CHATS: Array<{ subject: string; lines: Array<{ role: 'user' | 'bot'; text: string }> }> = [
   {
@@ -117,7 +118,7 @@ const ACME_CHATS: Array<{ subject: string; lines: Array<{ role: 'user' | 'bot'; 
   {
     subject: 'Damaged kettle return',
     lines: [
-      { role: 'user', text: 'The kettle in my order arrived cracked.' },
+      { role: 'user', text: 'The kettle in my order arrived damaged.' },
       { role: 'bot', text: 'Sorry about that. I can start a return and email a label today.' },
       { role: 'user', text: 'Yes please.' },
       { role: 'bot', text: 'The return is open. The label is on its way to your inbox.' },
@@ -653,6 +654,38 @@ async function ensureRule(tenantId: string, botId: string) {
   return true
 }
 
+async function refreshOwnedLines(opts: {
+  tenantId: string
+  botId: string
+  conversationId: string
+  contactId: string
+  createdAt: Date
+  lines: Array<{ role: 'user' | 'bot'; text: string }>
+}) {
+  const existing = await prisma.message.findMany({
+    where: { conversationId: opts.conversationId },
+    select: { content: true },
+  })
+  const blob = existing.map((row) => JSON.stringify(row.content)).join('\n')
+  if (opts.lines.every((line) => blob.includes(line.text))) return
+  await prisma.message.deleteMany({ where: { conversationId: opts.conversationId } })
+  let msgTime = new Date(opts.createdAt)
+  for (const line of opts.lines) {
+    msgTime = new Date(msgTime.getTime() + 45_000)
+    await prisma.message.create({
+      data: {
+        tenantId: opts.tenantId,
+        conversationId: opts.conversationId,
+        direction: line.role === 'user' ? 'inbound' : 'outbound',
+        authorKind: line.role,
+        authorId: line.role === 'user' ? opts.contactId : opts.botId,
+        content: { text: line.text },
+        createdAt: msgTime,
+      },
+    })
+  }
+}
+
 async function ensureChats(opts: {
   prefix: string
   tenantId: string
@@ -668,7 +701,7 @@ async function ensureChats(opts: {
     const template = opts.templates[i % opts.templates.length]!
     const person = opts.prefix === 'enrich-bella'
       ? BELLA_NAMES[i % BELLA_NAMES.length]!
-      : `Alex ${i + 1}`
+      : ACME_NAMES[i % ACME_NAMES.length]!
     const id = `${opts.prefix}-convo-${i + 1}`
     const existing = await prisma.conversation.findUnique({ where: { id } })
     const contactId = `${opts.prefix}-contact-${i + 1}`
@@ -681,6 +714,16 @@ async function ensureChats(opts: {
         where: { id },
         data: { updatedAt: new Date(Date.now() - i * 1000) },
       })
+      if (opts.prefix === 'enrich-acme') {
+        await refreshOwnedLines({
+          tenantId: opts.tenantId,
+          botId: opts.botId,
+          conversationId: id,
+          contactId: existing.contactId ?? contactId,
+          createdAt: existing.createdAt,
+          lines: template.lines,
+        })
+      }
       continue
     }
 
