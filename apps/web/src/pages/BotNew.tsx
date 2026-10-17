@@ -393,7 +393,7 @@ export function BotNewPage() {
               <Card>
                 <h2 className="text-sm font-semibold text-[var(--text-primary)]">Then pick the case</h2>
                 <p className="mt-1 text-xs text-[var(--text-muted)]">
-                  Hair studio, CRM, software, inbox, or commerce. Each one has its own persona and speaks that kind of conversation.
+                  Hair and Spa Salon, CRM, software, inbox, or commerce. Each one has its own persona and speaks that kind of conversation.
                 </p>
                 <div className="mt-4 flex justify-end">
                   <Button type="button" onClick={() => setStep(3)}>

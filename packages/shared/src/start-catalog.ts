@@ -80,7 +80,7 @@ export const START_OPTIONS: StartOption[] = [
   {
     id: 'template',
     title: 'From a template',
-    body: 'Hair studio, CRM, software, inbox, or commerce — then the map for that kind of conversation.',
+    body: 'Hair and Spa Salon, CRM, software, inbox, or commerce — then the map for that kind of conversation.',
     tag: 'Mapped cases',
   },
   {
@@ -111,7 +111,7 @@ const FALLBACK_IDENTITY: TemplateIdentity = {
 }
 
 export const TEMPLATE_IDENTITIES: Record<string, TemplateIdentity> = {
-  'hair-studio': { persona: 'Bella', accent: '#059669', role: 'Front desk', genre: 'Hair studio' },
+  'hair-studio': { persona: 'Bella', accent: '#059669', role: 'Receptionist', genre: 'Hair and Spa Salon' },
   corporate: { persona: 'Cal', accent: '#2563eb', role: 'Customer care', genre: 'Commerce' },
   'product-support': { persona: 'Aria', accent: '#7c3aed', role: 'Product support', genre: 'Software' },
   'crm-platform': { persona: 'Maya', accent: '#ea580c', role: 'Customer platform', genre: 'CRM' },
@@ -146,7 +146,7 @@ function voiceFor(start: BotStart, personaName?: string | null): string {
 }
 
 export const START_CLUSTERS: StartCluster[] = [
-  { id: 'hair', title: 'Hair & beauty', body: 'Studios like Bella. A greeting, then where you are, the hours, the prices, or a booking.' },
+  { id: 'hair', title: 'Hair and Spa Salon', body: 'Studios like Bella. A greeting, then where you are, the hours, the prices, or a booking.' },
   { id: 'commerce', title: 'Commerce', body: 'Orders, shipping, returns, plans, and a person on the team.' },
   { id: 'software', title: 'Software vendors', body: 'Product, support, accounts, payments, safety, onboarding, integrations, pricing, status, the API, and a demo.' },
   { id: 'crm', title: 'CRM & sales', body: 'Marketing, sales, service, contacts, meetings, tickets, reporting, plans, billing, and a demo.' },
@@ -163,7 +163,7 @@ export const BAKED_TEMPLATES: StartTemplate[] = [
   withIdentity({
     id: 'hair-studio',
     clusterId: 'hair',
-    title: 'Hair studio',
+    title: 'Hair and Spa Salon',
     body: 'The same kind of conversation as Bella. A greeting, then a booking, a price, the hours, or where the studio is.',
     tag: 'Like Bella',
   }),

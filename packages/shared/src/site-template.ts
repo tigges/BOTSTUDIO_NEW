@@ -420,7 +420,7 @@ export function draftClusteredTemplate(input: {
   topics.push(talkTopic(company))
   const host = hostOf(pages[0]?.url ?? '')
   const clusterTitle: Record<ClusterId, string> = {
-    hair: 'Hair studio',
+    hair: 'Hair and Spa Salon',
     commerce: 'Commerce support',
     software: 'Software vendor',
     crm: 'CRM platform',
