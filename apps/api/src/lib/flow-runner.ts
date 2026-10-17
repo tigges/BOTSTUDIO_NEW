@@ -277,7 +277,7 @@ export async function runFlowIfPublished(opts: {
   }
 
   const asked = outcome.session.waitingFor?.question ?? questionFrom(outcome.messages.at(-1) ?? '')
-  if (!first.jumpToFlow && asked && sameQuestion(asked, previousAsked)) {
+  if (!first.jumpToFlow && asked && outcome.session.waitingFor?.variable !== 'preferred_time' && sameQuestion(asked, previousAsked)) {
     const retried = await runVersion({
       machine,
       version,

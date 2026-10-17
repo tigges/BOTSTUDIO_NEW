@@ -1,3 +1,4 @@
+import { hoursFromCatalog, takeBookingTime } from '@ybot/shared'
 import { usableContactName } from './contact-speech.js'
 import type { NodeContext, NodeResult, Session, ExecutionServices } from './types.js'
 import {
@@ -85,6 +86,36 @@ export class SessionMachine {
       const { variable } = session.waitingFor
       if (variable === 'guest_name' && !usableContactName(incomingText)) {
         delete session.variables.flow[variable]
+      } else if (variable === 'preferred_time' || variable === 'preferred_day') {
+        const taken = takeBookingTime({
+          heard: incomingText,
+          previousDay: String(session.variables.flow['preferred_day'] ?? ''),
+          hoursText: hoursFromCatalog(this.services.catalog),
+          stylist: String(session.variables.flow['stylist'] ?? 'senior'),
+          now: this.services.now?.() ?? new Date(),
+          offered: session.waitingFor.choices,
+        })
+        if (taken.ask) {
+          if (taken.day) session.variables.flow['preferred_day'] = taken.day
+          session.status = 'waiting_input'
+          session.waitingFor = {
+            ...session.waitingFor,
+            variable: 'preferred_time',
+            question: taken.ask,
+            choices: taken.slots,
+          }
+          return {
+            session,
+            newMessages: [{ direction: 'outbound', content: { text: taken.ask } }],
+            waitForInput: session.waitingFor,
+          }
+        }
+        if (taken.spoken) {
+          session.variables.flow['preferred_time'] = taken.spoken
+          if (taken.day) session.variables.flow['preferred_day'] = taken.day
+        } else {
+          session.variables.flow[variable] = incomingText
+        }
       } else {
         session.variables.flow[variable] = incomingText
       }
