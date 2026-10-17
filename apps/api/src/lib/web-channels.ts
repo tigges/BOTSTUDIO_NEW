@@ -27,10 +27,12 @@ export function canRemoveWebChannel(
 const OPTIONAL_CHANNEL_NAMES: Record<string, string> = {
   whatsapp: 'WhatsApp',
   sms: 'SMS',
+  telegram: 'Telegram',
+  phone: 'Phone',
   email: 'Email',
 }
 
-/** Optional WhatsApp, SMS, and email. Website chat stays always-on. Channels are connected in settings. */
+/** Optional WhatsApp, SMS, Telegram, phone, and email. Website chat stays always-on. */
 export async function ensureOptionalChannels(tenantId: string, botId: string, kinds: string[]): Promise<void> {
   const wanted = [...new Set(kinds)].filter((kind) => OPTIONAL_CHANNEL_NAMES[kind])
   if (wanted.length === 0) return
