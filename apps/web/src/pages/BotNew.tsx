@@ -272,23 +272,21 @@ export function BotNewPage() {
               }}
             >
               <Input
-                label="Internal name"
-                placeholder="Yuzu"
+                label="Company name (internal name)"
+                placeholder="Bella Hair Studio"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                hint="Visible only inside BotStudio. Guests hear the company as this name."
               />
               <Input
                 label="Persona name (customer-facing)"
-                placeholder="Optional — each template has its own"
+                placeholder="Bella"
                 value={personaName}
                 onChange={(e) => setPersonaName(e.target.value)}
-                hint="Leave empty and the template chooses who speaks. Hair studio says Bella, CRM says Maya."
               />
               <Input
                 label="Description (optional)"
-                placeholder="Front desk for the studio"
+                placeholder="Receptionist of Bella Hair Studio"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
