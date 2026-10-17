@@ -118,8 +118,12 @@ function hoursOfferChapter(chapters: OptimizeChapter[]): OptimizeChapter | undef
     ?? chapters.find((chapter) => /^location$/i.test(chapter.name))
 }
 
+function isWelcomeChapter(name: string): boolean {
+  return /welcome/i.test(name)
+}
+
 function doubleNameChapter(chapters: OptimizeChapter[]): OptimizeChapter | undefined {
-  return chapters.find((chapter) => nameAskNodes(chapter.graph).length >= 2)
+  return chapters.find((chapter) => isWelcomeChapter(chapter.name) && nameAskNodes(chapter.graph).length >= 2)
 }
 
 function namedTwiceInChat(lines: ChatOptimizeLine[]): boolean {
@@ -161,14 +165,15 @@ export function findingsFromChat(input: {
   }
 
   const welcome = doubleNameChapter(input.chapters)
-  if (welcome && (namedTwiceInChat(input.lines) || nameAskNodes(welcome.graph).length >= 2)) {
+  if (namedTwiceInChat(input.lines) || welcome) {
+    const chapter = welcome ?? input.chapters.find((item) => isWelcomeChapter(item.name))
     findings.push({
       id: 'name_once',
       kind: 'name_once',
       title: 'The greeting asked for a name twice',
       detail: 'Keep one What’s your name? The greeting stays a hello. The next step still asks once.',
-      chapterName: welcome.name,
-      applyable: true,
+      chapterName: chapter?.name,
+      applyable: Boolean(chapter && nameAskNodes(chapter.graph).length >= 2),
     })
   }
 

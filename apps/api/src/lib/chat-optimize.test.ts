@@ -112,6 +112,20 @@ test('a greeting that asks for a name twice keeps one ask', () => {
   assert.equal(keep?.data.config['question'], "What's your name?")
 })
 
+test('a hair welcome that asks for a name once is not a double-ask', () => {
+  const pack = hairStudioPack('Yuzu', 'Bella')
+  const findings = findingsFromChat({
+    lines: [
+      { role: 'assistant', content: "Hi, I'm Bella at Yuzu. What's your name?", chapter: 'Salon welcome' },
+      { role: 'user', content: 'where are you' },
+      { role: 'assistant', content: 'Yuzu is at 14 Rosewood Lane.\n\nWant the hours?', chapter: 'Location' },
+    ],
+    chapters: pack.flows,
+  })
+  assert.equal(findings.some((finding) => finding.kind === 'name_once'), false)
+  assert.equal(findings.some((finding) => finding.kind === 'offer_yes'), false)
+})
+
 test('homepage nav chrome is a note, not an automatic chart edit', () => {
   const findings = findingsFromChat({
     lines: [
