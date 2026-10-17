@@ -130,7 +130,7 @@ export function HelpPage() {
         <section id="planned" className="scroll-mt-6 space-y-2">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Planned features</h2>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-            A Planned badge means that control will become a real feature. Stripe on Integrations is marked Planned. In Inbox settings, Auto-assign, Round-robin, and Bot handover on agent idle are marked Planned too. Those three do not change who answers a chat. Billing, single sign-on, and live SMS, email, and WhatsApp connections are not in the product yet.
+            A Planned badge means that control will become a real feature. Stripe on Integrations is marked Planned. In Inbox settings, Auto-assign, Round-robin, and Bot handover on agent idle are marked Planned too. Those three do not change who answers a chat. Billing and single sign-on are not in the product yet. WhatsApp, SMS, Telegram, phone, and email Connect with credentials and take conversations once you turn the channel on.
           </p>
           <Figure file="integrations.jpg" alt="Integrations page with Stripe marked Planned" />
         </section>
