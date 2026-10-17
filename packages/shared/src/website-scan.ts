@@ -45,6 +45,7 @@ export interface ScanFact {
 export interface WebsiteChatDraft {
   url: string
   pages: string[]
+  clusterId: ClusterId
   greeting: string
   doors: ScanDoor[]
   facts: ScanFact[]
@@ -99,8 +100,43 @@ function decodeHtml(value: string): string {
     })
 }
 
+const VOID_HTML = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'])
+
+/** Sample charts marked aria-hidden are not the product. Leave them off the scan. */
+function dropAriaHidden(html: string): string {
+  const tag = /<!--[\s\S]*?-->|<\/?([a-zA-Z][a-zA-Z0-9:-]*)\b[^>]*>/g
+  const skip: string[] = []
+  let out = ''
+  let last = 0
+  for (const match of html.matchAll(tag)) {
+    const at = match.index ?? 0
+    if (skip.length === 0) out += html.slice(last, at)
+    last = at + match[0].length
+    if (match[0].startsWith('<!--')) {
+      if (skip.length === 0) out += match[0]
+      continue
+    }
+    const name = (match[1] ?? '').toLowerCase()
+    const closing = match[0].startsWith('</')
+    const selfClosing = /\/\s*>$/.test(match[0]) || VOID_HTML.has(name)
+    if (closing) {
+      if (skip.length > 0 && skip[skip.length - 1] === name) skip.pop()
+      else if (skip.length === 0) out += match[0]
+      continue
+    }
+    const hidden = /\baria-hidden\s*=\s*(?:"true"|'true'|true)/i.test(match[0])
+    if (skip.length > 0 || hidden) {
+      if (!selfClosing) skip.push(name)
+      continue
+    }
+    out += match[0]
+  }
+  if (skip.length === 0) out += html.slice(last)
+  return out
+}
+
 function strippedHtml(html: string): string {
-  return html
+  return dropAriaHidden(html)
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
     .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
@@ -954,6 +990,7 @@ function draftVendorWebsiteChat(input: {
   return {
     url: first?.url ?? '',
     pages: pages.map((page) => page.url),
+    clusterId: input.clusterId === 'custom' ? 'software' : input.clusterId,
     greeting: pack.greeting,
     doors,
     facts,
@@ -1238,6 +1275,7 @@ export function draftWebsiteChat(input: {
   return {
     url: first?.url ?? '',
     pages: pages.map((page) => page.url),
+    clusterId: 'hair',
     greeting,
     doors,
     facts,

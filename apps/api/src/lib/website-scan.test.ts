@@ -61,6 +61,7 @@ function messageTexts(flow: { graph?: { nodes?: Array<{ data?: { kind?: string; 
 test('yuzu.hair becomes Bella at Yuzu with four doors and no invented cancellation rule', async () => {
   const page = pageFromHtml('https://yuzu.hair/', YUZU)
   const draft = draftWebsiteChat({ pages: [page], companyName: 'Yuzu', personaName: 'Bella' })
+  assert.equal(draft.clusterId, 'hair')
   assert.equal(draft.greeting, "Hi, I'm Bella at Yuzu. What's your name?")
   assert.deepEqual(draft.doors.map((door) => door.title), ['Where we are', 'Hours', 'Services', 'Book'])
   assert.equal(draft.doors.every((door) => door.found), true)
@@ -141,12 +142,59 @@ test('yuzu.hair becomes Bella at Yuzu with four doors and no invented cancellati
 test('a page with no facts still has four doors and does not invent an address', () => {
   const page = pageFromHtml('https://example.com/', '<title>Example</title><p>Welcome to the studio. We love hair.</p>')
   const draft = draftWebsiteChat({ pages: [page], companyName: 'Example', personaName: '' })
+  assert.equal(draft.clusterId, 'hair')
   assert.equal(draft.greeting, "Hi, I'm Bella at Example. What's your name?")
   assert.equal(draft.doors.every((door) => door.found), false)
   assert.match(draft.doors[0]!.answer, /did not state an address/)
   assert.equal(draft.doors[0]!.answer.includes('Rosewood'), false)
   assert.equal(draft.doors[2]!.answer.includes('£'), false)
   assert.equal(draft.catalog.facts.length, 0)
+})
+
+const BOTSTUDIO_HOME = `<!doctype html>
+<html lang="en"><head><title>BotStudio</title>
+<meta name="description" content="Bots answer from your own content. Your team steps in when they should." />
+</head>
+<body>
+<h1>Build, operate, and connect your hybrid agent workforce.</h1>
+<p>Bots answer from your own content. Your team steps in when they should.</p>
+<a href="https://app.botstudio.uk/sign-in?mode=register">Start free</a>
+<a href="https://app.botstudio.uk/api/v1/public/demo/bella-web">Try the live agent</a>
+<p>Free plan · No credit card · UK/EU data hosting</p>
+<div class="flow" aria-hidden="true">
+  <div>Hair &amp; Spa</div>
+  <span>Colour</span><span>Cut</span>
+  <span>Location</span><span>Hours</span><span>Book</span>
+</div>
+<p>Scan your website address and let the BotStudio do the rest. Use a blueprint if you don't have a website.</p>
+<p>Start with the website widget. Activate further channels like WhatsApp and email in Channels.</p>
+<div class="inbox" aria-hidden="true">
+  <div>Inbox</div>
+  <em>Where is order AC-20441?</em>
+  <em>I need to return a kettle</em>
+</div>
+<p>The guest stays in the widget. Your team sees the thread.</p>
+<p>Your first agent, live today.</p>
+</body></html>`
+
+test('botstudio.uk is a software map, not an empty salon from the Hair & Spa sample', () => {
+  const page = pageFromHtml('https://botstudio.uk/', BOTSTUDIO_HOME)
+  assert.equal(/Hair & Spa|Colour/.test(page.text), false)
+  assert.match(page.text, /hybrid agent workforce/)
+  assert.match(page.text, /website widget/)
+  const draft = draftWebsiteChat({ pages: [page], companyName: 'Acme 2', personaName: 'James' })
+  assert.equal(draft.clusterId, 'software')
+  assert.equal(draft.greeting, "Hi, I'm James at Acme 2.")
+  assert.equal(/What's your name/.test(draft.greeting), false)
+  assert.equal(draft.doors.some((door) => door.flowName === 'Location' || door.flowName === 'Salon hours'), false)
+  assert.ok(draft.doors.some((door) => /product|what we do/i.test(`${door.title} ${door.flowName}`)))
+  assert.ok(draft.doors.some((door) => /demo/i.test(`${door.title} ${door.flowName}`)))
+  assert.equal(/did not state an address/.test(draft.doors.map((door) => door.blurb).join(' ')), false)
+  const product = draft.doors.find((door) => door.flowName === 'Product')
+  assert.ok(product?.found)
+  assert.match(product!.answer, /bots answer from your own content/i)
+  const accounts = draft.doors.find((door) => door.flowName === 'Accounts')
+  assert.equal(/sign in/i.test(accounts?.answer ?? ''), false)
 })
 
 const PRICE_LIST = `<title>Price list</title>
