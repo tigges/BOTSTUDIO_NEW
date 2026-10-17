@@ -131,7 +131,8 @@ async function fetchDocument(start: URL, allowType: RegExp): Promise<{ url: stri
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: {
         Accept: 'text/html,application/xhtml+xml,application/xml,text/xml',
-        'User-Agent': 'Mozilla/5.0 (compatible; BotStudio/1.0; website scan)',
+        'Accept-Language': 'en-GB,en;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
       },
     }).catch(() => {
       throw new PublicSiteError('Could not read that site. Check the address and try again.', 'UNREADABLE')
@@ -170,8 +171,9 @@ async function readSitemap(origin: string): Promise<string[]> {
   const queue = [`${origin}/sitemap.xml`, `${origin}/wp-sitemap.xml`]
   const seen = new Set<string>()
   const pages: string[] = []
+  const skip = /\/(?:blog|company-news|careers-blog|glossary|case-stud(?:y|ies)|bid\/)/i
   let fetches = 0
-  while (queue.length > 0 && fetches < 5 && pages.length < 40) {
+  while (queue.length > 0 && fetches < 5 && pages.length < 80) {
     const next = queue.shift()
     if (!next || seen.has(next)) continue
     seen.add(next)
@@ -187,13 +189,14 @@ async function readSitemap(origin: string): Promise<string[]> {
       .filter(Boolean)
     if (/<sitemapindex/i.test(xml)) {
       for (const loc of locs) {
-        if (/users|taxonom/i.test(loc)) continue
+        if (/users|taxonom|blog|news/i.test(loc)) continue
         if (!seen.has(loc)) queue.push(loc)
       }
       continue
     }
     for (const loc of locs) {
-      if (pages.length >= 40) break
+      if (pages.length >= 80) break
+      if (skip.test(loc)) continue
       pages.push(loc)
     }
   }

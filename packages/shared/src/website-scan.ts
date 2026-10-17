@@ -357,17 +357,24 @@ function extractBooking(pages: ScannedPage[]): { url: string; label: string } | 
 }
 
 const JUNK_PATH = /\/(?:wp-admin|wp-json|feed|tag|category|author|sample-page|hello-world)(?:\/|$)/i
+const SKIP_PATH = /\/(?:blog|company-news|careers-blog|glossary|case-stud(?:y|ies)|bid)(?:\/|$)/i
 const ASSET_PATH = /\.(?:png|jpe?g|gif|svg|css|js|pdf|zip|webp|ico|mp4|xml)(?:\?|$)/i
 const PAGE_RANK: Array<[string, number]> = [
-  ['price', 6], ['pricing', 6], ['plan', 5], ['faq', 6], ['question', 6], ['career', 6], ['vacancy', 6], ['cv', 5],
-  ['team', 5], ['service', 5], ['demo', 5], ['offer', 4], ['job', 4], ['contact', 4], ['menu', 4],
-  ['hour', 3], ['patch', 2], ['about', 2], ['book', 2], ['visit', 1],
+  ['pricing', 8], ['price', 6], ['product', 6], ['plan', 5], ['faq', 6], ['question', 6],
+  ['career', 6], ['vacancy', 6], ['cv', 5], ['team', 5], ['service', 5], ['demo', 5],
+  ['offer', 4], ['job', 4], ['contact', 4], ['menu', 4], ['integrat', 4], ['billing', 4],
+  ['hour', 3], ['login', 3], ['platform', 3], ['feature', 3], ['crm', 3],
+  ['patch', 2], ['about', 2], ['book', 2], ['visit', 1],
+]
+const PAGE_PENALTY: Array<[string, number]> = [
+  ['/blog', 8], ['company-news', 8], ['glossary', 6], ['case-stud', 6], ['webinar', 4], ['/resources/', 3],
 ]
 
 /**
  * Which same-origin pages to read after the homepage.
- * A price list, questions, and a join-the-team page outrank the first few links.
- * Two addresses for the same page (a pretty URL and a theme file) count once.
+ * A price list, product page, or questions page outranks a blog post.
+ * A pretty URL and a theme file for the same leaf still count once.
+ * /products/marketing and /pricing/marketing are different pages.
  */
 export function chooseSitePages(input: {
   homeUrl: string
@@ -377,7 +384,7 @@ export function chooseSitePages(input: {
 }): string[] {
   let home: URL
   try { home = new URL(input.homeUrl) } catch { return [] }
-  const byStem = new Map<string, { href: string; score: number; pathLength: number; themeFile: boolean }>()
+  const byKey = new Map<string, { href: string; score: number; pathLength: number; themeFile: boolean; stem: string }>()
   const consider = (href: string, text: string, bonus: number) => {
     let url: URL
     try { url = new URL(href, home) } catch { return }
@@ -385,26 +392,41 @@ export function chooseSitePages(input: {
     url.hash = ''
     url.search = ''
     if (url.pathname === '/' || url.pathname === '') return
-    if (JUNK_PATH.test(url.pathname) || ASSET_PATH.test(url.pathname)) return
+    if (JUNK_PATH.test(url.pathname) || ASSET_PATH.test(url.pathname) || SKIP_PATH.test(url.pathname)) return
     const stem = (url.pathname.split('/').filter(Boolean).pop() ?? '').replace(/\.html?$/i, '').toLowerCase()
     if (!stem || stem === 'index') return
     const blob = `${url.pathname} ${text}`.toLowerCase()
     let score = bonus
     for (const [word, weight] of PAGE_RANK) {
-      if (blob.includes(word)) score += weight
+      if (new RegExp(`(?:^|[^a-z0-9])${word}(?:[^a-z0-9]|$)`, 'i').test(blob)) score += weight
+    }
+    for (const [word, weight] of PAGE_PENALTY) {
+      if (blob.includes(word)) score -= weight
     }
     if (url.pathname.includes('wp-content')) score -= 2
+    const segments = url.pathname.split('/').filter(Boolean)
+    if (/^\/(?:pricing|plans)(?:\/|$)/i.test(url.pathname)) score += 14
+    if (/^\/products?\/[^/]+\/?$/i.test(url.pathname)) score += 5
+    if (/^\/products?\/(marketing|sales|service|crm)\/?$/i.test(url.pathname)) score += 4
+    if (segments.length <= 2 && /^(products?|pricing|plans|faq|questions?|team|about)$/i.test(segments[0] ?? '')) score += 3
+    if (segments.length >= 3) score -= 3
     const pathLength = url.pathname.length
     const themeFile = /\/wp-content\/|\/themes\/|\/static\//i.test(url.pathname)
-    const prev = byStem.get(stem)
-    const better = !prev
-      || (themeFile !== prev.themeFile && !themeFile)
-      || (themeFile === prev.themeFile && (score > prev.score || (score === prev.score && pathLength < prev.pathLength)))
-    if (better) byStem.set(stem, { href: url.href, score, pathLength, themeFile })
+    const key = themeFile ? `stem:${stem}` : `path:${url.pathname.replace(/\/$/, '').toLowerCase()}`
+    if (!themeFile) {
+      byKey.delete(`stem:${stem}`)
+    } else {
+      for (const item of byKey.values()) {
+        if (!item.themeFile && item.stem === stem) return
+      }
+    }
+    const prev = byKey.get(key)
+    const better = !prev || score > prev.score || (score === prev.score && pathLength < prev.pathLength)
+    if (better) byKey.set(key, { href: url.href, score, pathLength, themeFile, stem })
   }
   for (const link of input.links) consider(link.href, link.text, 0)
   for (const loc of input.sitemap ?? []) consider(loc, '', 1)
-  return [...byStem.values()]
+  return [...byKey.values()]
     .sort((a, b) => b.score - a.score || a.pathLength - b.pathLength)
     .slice(0, Math.max(0, input.limit))
     .map((item) => item.href)

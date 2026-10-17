@@ -294,6 +294,35 @@ test('chooseSitePages keeps a price list, questions, and the team page once', ()
   assert.equal(chosen.some((href) => href.includes('sample-page') || href.includes('hello-world') || href.includes('phorest')), false)
 })
 
+test('chooseSitePages keeps product and pricing leaves, and skips blog sitemap rows', () => {
+  const chosen = chooseSitePages({
+    homeUrl: 'https://www.hubspot.com/',
+    links: [
+      { href: 'https://www.hubspot.com/products/marketing', text: 'Free and premium plans' },
+      { href: 'https://www.hubspot.com/products/sales', text: 'Free and premium plans' },
+      { href: 'https://www.hubspot.com/products/service', text: 'Free and premium plans' },
+      { href: 'https://www.hubspot.com/products/crm', text: 'CRM' },
+      { href: '//www.hubspot.com/pricing/marketing', text: 'Pricing' },
+      { href: 'https://www.hubspot.com/products/crm/starter', text: 'Starter' },
+      { href: 'https://www.hubspot.com/products/service/ai-customer-service-agent', text: 'AI agent' },
+      { href: 'https://www.hubspot.com/company/contact', text: 'Contact' },
+      { href: 'https://www.hubspot.com/careers', text: 'Careers' },
+    ],
+    sitemap: [
+      'https://www.hubspot.com/blog/bid/12490/hubspot-unveils-social-mobile',
+      'https://www.hubspot.com/company-news/hubspots-inbound-2013',
+      'https://www.hubspot.com/glossary/opportunity-management',
+      'https://www.hubspot.com/case-studies/sendle',
+      'https://www.hubspot.com/careers-blog/campus-to-career',
+    ],
+    limit: 9,
+  })
+  assert.equal(chosen.some((href) => href.includes('/products/marketing')), true)
+  assert.equal(chosen.some((href) => href.includes('/pricing/marketing')), true)
+  assert.equal(chosen.some((href) => href.includes('/products/crm')), true)
+  assert.equal(chosen.some((href) => href.includes('/blog') || href.includes('company-news') || href.includes('case-studies') || href.includes('glossary')), false)
+})
+
 const HUBSPOT_PRICING = `<!doctype html>
 <html><head><title>Pricing</title></head>
 <body>
@@ -337,6 +366,105 @@ const HUBSPOT_PRICING = `<!doctype html>
   <p>Set up marketing email</p>
 </section>
 </body></html>`
+
+const HUBSPOT_HOME = `<!doctype html>
+<html><head><title>HubSpot | Software</title></head>
+<body>
+<nav>
+<h3>Marketing</h3>
+<p>Generate leads Convert visitors into contacts for your database.</p>
+<h3>Sales</h3>
+<p>Sales Build pipeline Generate a pipeline of high-quality prospects.</p>
+<h3>Service</h3>
+<p>Customer Service Scale support Support customers at scale with AI and a help desk.</p>
+<a href="/products/marketing">Marketing</a>
+<a href="/products/sales">Sales</a>
+<a href="/products/crm">CRM</a>
+<a href="/pricing/marketing">Pricing</a>
+<p>See all app integrations Case Studies See all case studies a11y text suffix Remarkable results for every size business.</p>
+<p>Learn more about data software billing ™ Make it easy for customers to pay you.</p>
+<p>You can feed unstructured data like PDFs, meeting transcripts, and company documents, so customer agent provides accurate, contextual responses based on your business information.</p>
+<p>After just one year, the CRM customers acquire 129% more leads, close 36% more deals, and see a 37% improvement in ticket closure rates.</p>
+<p>Get a demo of the CRM premium software Get started free with the CRM free tools Play video All your customer data, right at your fingertips.</p>
+<p>Your whole team of free or paid users will also have access to our active community forums, training lessons from the CRM Academy, and a comprehensive knowledge base of user guides and help documents.</p>
+</nav>
+</body></html>`
+
+const HUBSPOT_MARKETING_PAGE = `<!doctype html>
+<html><head><title>Marketing</title></head>
+<body>
+<p>Grow awareness, convert leads into revenue, and run every campaign without adding more tools.</p>
+<p>Starter is listed on some product cards at $10/mo, which is not the pricing grid.</p>
+<p>Enterprise banner $150.</p>
+</body></html>`
+
+const HUBSPOT_CRM_PAGE = `<!doctype html>
+<html><head><title>Customer platform</title></head>
+<body>
+<p>Contacts, companies, and deals live on one customer record, so every team sees the same history.</p>
+<p>Book a meeting from the calendar so a sales visit has the record open.</p>
+<p>Open a ticket from the inbox, assign the case, and follow it until it is closed.</p>
+<p>Dashboards report pipeline, campaigns, and tickets in one place.</p>
+</body></html>`
+
+test('a CRM homepage does not turn nav chrome into answers, and reads product pages instead', () => {
+  const home = pageFromHtml('https://www.hubspot.com/', HUBSPOT_HOME)
+  const marketing = pageFromHtml('https://www.hubspot.com/products/marketing', HUBSPOT_MARKETING_PAGE)
+  const crm = pageFromHtml('https://www.hubspot.com/products/crm', HUBSPOT_CRM_PAGE)
+  const pricing = pageFromHtml('https://www.hubspot.com/pricing', HUBSPOT_PRICING)
+  const draft = draftWebsiteChat({
+    pages: [home, marketing, crm, pricing],
+    companyName: 'Hubspot',
+    personaName: 'James',
+  })
+  assert.equal(draft.greeting, "Hi, I'm James at Hubspot.")
+  assert.equal(/What's your name/.test(draft.greeting), false)
+  const welcome = JSON.stringify(draft.flows.find((flow) => /welcome/i.test(flow.name))?.graph ?? {})
+  assert.match(welcome, /What's your name/)
+  const contacts = draft.doors.find((door) => /contacts/i.test(door.flowName))
+  assert.ok(contacts)
+  assert.match(contacts!.answer, /one customer record/)
+  assert.equal(/convert visitors into contacts/i.test(contacts!.answer), false)
+  const meetings = draft.doors.find((door) => /meetings/i.test(door.flowName))
+  assert.ok(meetings)
+  assert.match(meetings!.answer, /calendar/)
+  assert.equal(/transcripts/i.test(meetings!.answer), false)
+  const tickets = draft.doors.find((door) => /tickets/i.test(door.flowName))
+  assert.ok(tickets)
+  assert.match(tickets!.answer, /assign the case|follow it/)
+  assert.equal(/129%/.test(tickets!.answer), false)
+  const integrations = draft.doors.find((door) => /integrations/i.test(door.flowName))
+  assert.ok(integrations)
+  assert.equal(/a11y/i.test(integrations!.answer), false)
+  const billing = draft.doors.find((door) => /billing/i.test(door.flowName))
+  assert.ok(billing)
+  assert.equal(/data software billing/i.test(billing!.answer), false)
+  const marketingDoor = draft.doors.find((door) => /marketing/i.test(door.flowName))
+  assert.ok(marketingDoor)
+  assert.match(marketingDoor!.answer, /campaign/)
+  const plans = draft.doors.find((door) => /plan|pricing/i.test(door.flowName))
+  assert.ok(plans)
+  assert.match(plans!.answer, /£0 a month/)
+  assert.equal(/\$10/.test(plans!.answer), false)
+  const demoFaq = draft.faqs.find((faq) => /demo/i.test(faq.question))
+  assert.ok(demoFaq)
+  assert.equal(/play video|get started free/i.test(demoFaq!.answer), false)
+  assert.match(demoFaq!.answer, /email/i)
+})
+
+test('a JS pricing URL does not pick product-card prices off a marketing page', () => {
+  const marketing = pageFromHtml('https://www.hubspot.com/products/marketing', HUBSPOT_MARKETING_PAGE)
+  const emptyPricing = pageFromHtml('https://www.hubspot.com/pricing', '<html><head><title>Pricing</title></head><body><div id="app"></div></body></html>')
+  const draft = draftWebsiteChat({
+    pages: [marketing, emptyPricing],
+    companyName: 'Hubspot',
+    personaName: 'James',
+  })
+  const plans = draft.doors.find((door) => /plan|pricing/i.test(door.flowName))
+  assert.ok(plans)
+  assert.equal(/\$10|\$150/.test(plans!.answer), false)
+  assert.match(plans!.answer, /did not state|Which plan|Free, Starter, Professional, Enterprise/)
+})
 
 test('a CRM pricing page becomes plan doors and an email follow-up, not a salon map', async () => {
   const page = pageFromHtml('https://www.hubspot.com/pricing', HUBSPOT_PRICING)
