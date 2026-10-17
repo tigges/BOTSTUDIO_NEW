@@ -5,7 +5,9 @@ import {
   draftWebsiteChat,
   findingsFromChat,
   hairStudioPack,
+  journeyMarksFor,
   pageFromHtml,
+  recommendationsForVotes,
   type OptimizeChapter,
 } from '@ybot/shared'
 
@@ -66,6 +68,19 @@ test('ok after Want the hours is a finding, and apply moves yes onto Salon hours
   const offer = findings.find((finding) => finding.kind === 'offer_yes')
   assert.ok(offer)
   assert.equal(offer?.applyable, true)
+  assert.equal(offer?.fromChapter, 'Location')
+  assert.equal(offer?.shouldOpen, 'Salon hours')
+  assert.equal(offer?.openedChapter, 'Book an appointment')
+  assert.equal(offer?.heard, 'ok')
+  const marks = journeyMarksFor([offer!])
+  assert.equal(marks.chapters['Book an appointment'], 'error')
+  assert.equal(marks.chapters['Salon hours'], 'improve')
+  assert.equal(marks.doors['Location']?.['Book an appointment'], 'error')
+  assert.equal(marks.doors['Location']?.['Salon hours'], 'improve')
+  assert.equal(recommendationsForVotes({ findings, votes: { Location: 'down' } }).some((finding) => finding.kind === 'offer_yes'), true)
+  assert.equal(recommendationsForVotes({ findings, votes: { 'Salon hours': 'down' } }).some((finding) => finding.kind === 'offer_yes'), true)
+  assert.equal(recommendationsForVotes({ findings, votes: { Location: 'up' } }).length, 0)
+  assert.equal(recommendationsForVotes({ findings, votes: { 'Salon welcome': 'down' } }).length, 0)
   const applied = applyChatFindings({
     chapters: asChapters(pack.flows.map((flow) => flow.name === 'Location' ? older : flow)),
     findings: [offer!],
@@ -97,6 +112,10 @@ test('a greeting that asks for a name twice keeps one ask', () => {
   })
   const named = findings.find((finding) => finding.kind === 'name_once')
   assert.ok(named)
+  assert.equal(named?.fromChapter, 'Welcome')
+  assert.deepEqual(named?.nodeIds, ['greet', 'name'])
+  assert.equal(journeyMarksFor([named!]).nodeIds['greet'], 'error')
+  assert.equal(recommendationsForVotes({ findings, votes: { Welcome: 'down' } }).some((finding) => finding.kind === 'name_once'), true)
   const applied = applyChatFindings({
     chapters: [{
       name: 'Welcome',

@@ -23,14 +23,13 @@ import {
   AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter, LayoutTemplate,
 } from 'lucide-react'
 import { Button, Badge } from '@ybot/ui'
-import { cn } from '@ybot/ui'
 import { nodeTypes } from '../../../components/canvas/FlowNode'
 import { alignHorizontal, alignVertical, tidyLayout } from '../../../components/canvas/layout'
 import { NodePalette } from '../../../components/canvas/NodePalette'
 import { NodeConfigPanel } from '../../../components/canvas/NodeConfigPanel'
 import { ChatWidget } from '../../../components/ChatWidget'
 import type { FlowNodeData } from '../../../components/canvas/FlowNode'
-import { journeyLayout, journeyTrail, versionForEnvironment, type NodeKind } from '@ybot/shared'
+import { journeyLayout, journeyTrail, versionForEnvironment, type JourneyMark, type NodeKind } from '@ybot/shared'
 
 let nodeIdCounter = 1
 function newId() {
@@ -54,6 +53,22 @@ function normalizeCanvasEdge(edge: Edge): Edge {
   const next = sourceHandle === handle ? edge : { ...edge, sourceHandle }
   const typed = next.type && next.type !== 'default' ? next : { ...next, type: 'smoothstep' }
   return { ...typed, interactionWidth: 24 }
+}
+
+function canvasMarkFor(data: FlowNodeData, kind: string | undefined): JourneyMark | undefined {
+  if (!kind) return undefined
+  if (kind === 'offer_yes' && data.kind === 'route_topic') {
+    const raw = data.config?.['routes']
+    const handles = Array.isArray(raw)
+      ? raw.map((item) => (item && typeof item === 'object' ? String((item as { handle?: string }).handle ?? '') : ''))
+      : []
+    if (handles.includes('hours') && handles.includes('book')) return 'improve'
+  }
+  if (kind === 'name_once') {
+    const text = `${data.config?.['text'] ?? ''} ${data.config?.['question'] ?? ''} ${data.label ?? ''}`
+    if (/what's your name/i.test(text)) return 'error'
+  }
+  return undefined
 }
 
 const INITIAL_NODES: Node[] = [
@@ -145,7 +160,7 @@ import { PublishCheckDialog, reviewFlow } from '../PublishCheck'
 export function FlowCanvasPage() {
   const navigate = useNavigate()
   const { flowId } = useParams({ from: '/app/build/flows/$flowId' })
-  const { from } = useSearch({ from: '/app/build/flows/$flowId' })
+  const { from, mark } = useSearch({ from: '/app/build/flows/$flowId' })
   const selectedBotId = useAppStore((s) => s.selectedBotId) ?? 'demo'
   const selectedBot = useAppStore((s) => s.bots.find((bot) => bot.id === s.selectedBotId))
   const selectedEnv = useAppStore((s) => s.selectedEnv)
@@ -182,6 +197,12 @@ export function FlowCanvasPage() {
   const envLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
   const shown = versionForEnvironment(flow?.versions, environmentId, selectedEnv)
   const canvasVersion = shown?.version ?? 0
+  const displayNodes = useMemo(() => nodes.map((node) => {
+    const data = node.data as unknown as FlowNodeData
+    const nextMark = canvasMarkFor(data, mark)
+    if (data.mark === nextMark) return node
+    return { ...node, data: { ...data, mark: nextMark } }
+  }), [nodes, mark])
   const previewGraph = useMemo(() => ({
     nodes: nodes.map((node) => {
       const data = node.data as unknown as FlowNodeData
@@ -510,7 +531,7 @@ export function FlowCanvasPage() {
                 <button
                   type="button"
                   className="text-[var(--text-secondary)]"
-                  onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: chapter.id }, search: { from: 'journey' } })}
+                  onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: chapter.id }, search: { from: 'journey', mark } })}
                 >
                   {chapter.name}
                 </button>
@@ -525,7 +546,7 @@ export function FlowCanvasPage() {
                 key={name}
                 type="button"
                 className="rounded-full bg-[var(--bg-overlay)] px-2 py-0.5 text-[var(--text-secondary)]"
-                onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: nextId }, search: { from: 'journey' } })}
+                onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: nextId }, search: { from: 'journey', mark } })}
               >
                 {name}
               </button>
@@ -553,7 +574,7 @@ export function FlowCanvasPage() {
             </div>
           )}
           <ReactFlow
-            nodes={nodes}
+            nodes={displayNodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={handleEdgesChange}
@@ -607,6 +628,10 @@ export function FlowCanvasPage() {
                     Remove
                   </button>
                 </>
+              ) : mark === 'offer_yes' ? (
+                <span>Yes after the hours offer should open Salon hours.</span>
+              ) : mark === 'name_once' ? (
+                <span>Keep one What’s your name? on this chart.</span>
               ) : (
                 <span>Click a line between steps, then press Delete to remove it.</span>
               )}

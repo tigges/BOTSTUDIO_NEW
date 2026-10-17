@@ -83,7 +83,7 @@ export function FlowsPage() {
       await saveCanvas.mutateAsync({ flowId: flow.id, version: flow.versions?.[0]?.version ?? 1, graph: input.graph })
       if (environments.some((env) => env.kind === 'sandbox')) setEnv('sandbox')
       setShowNew(false)
-      navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id }, search: { from: undefined } })
+      navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id }, search: { from: undefined, mark: undefined } })
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Could not create this flow.')
     }
@@ -159,7 +159,7 @@ export function FlowsPage() {
               {filtered.map((flow) => {
                 const latest = shown(flow)
                 return (
-                  <TR key={flow.id} onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id }, search: { from: undefined } })}>
+                  <TR key={flow.id} onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id }, search: { from: undefined, mark: undefined } })}>
                     <TD>
                       <div className="flex items-center gap-2">
                         <Workflow size={14} className="text-[var(--text-muted)]" />
@@ -179,7 +179,7 @@ export function FlowsPage() {
                     <TD>
                       <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="icon-sm" title="Rename" onClick={() => setRenaming({ id: flow.id, name: flow.name, description: flow.description ?? '' })}><Pencil size={12} /></Button>
-                        <Button variant="ghost" size="icon-sm" title="Open canvas" onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id }, search: { from: undefined } })}><Play size={12} /></Button>
+                        <Button variant="ghost" size="icon-sm" title="Open canvas" onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id }, search: { from: undefined, mark: undefined } })}><Play size={12} /></Button>
                         <Button variant="ghost" size="icon-sm" title="Delete" onClick={() => setDeleting({ id: flow.id, name: flow.name })}><Trash2 size={12} /></Button>
                       </div>
                     </TD>

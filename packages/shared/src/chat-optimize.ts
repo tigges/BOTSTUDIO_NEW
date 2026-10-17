@@ -45,7 +45,20 @@ export interface ChatFinding {
   title: string
   detail: string
   chapterName?: string
+  fromChapter?: string
+  openedChapter?: string
+  shouldOpen?: string
+  heard?: string
+  nodeIds?: string[]
   applyable: boolean
+}
+
+export type JourneyMark = 'error' | 'improve'
+
+export interface JourneyMarks {
+  chapters: Record<string, JourneyMark>
+  doors: Record<string, Record<string, JourneyMark>>
+  nodeIds: Record<string, JourneyMark>
 }
 
 export interface ChatOptimizeResult {
@@ -137,13 +150,26 @@ export function findingsFromChat(input: {
 }): ChatFinding[] {
   const findings: ChatFinding[] = []
   const hoursChapter = hoursOfferChapter(input.chapters)
+  const hoursName = input.chapters.find((chapter) => /hours/i.test(chapter.name))?.name ?? 'Salon hours'
+  const bookName = input.chapters.find((chapter) => /book/i.test(chapter.name))?.name ?? 'Book an appointment'
   if (bookOpenedAfterHours(input.lines) && hoursChapter) {
+    const opened = input.lines.find((line, index) => {
+      if (index < 2) return false
+      const ask = input.lines[index - 2]
+      const heard = input.lines[index - 1]
+      return line.role === 'assistant' && ask?.role === 'assistant' && /want the hours/i.test(ask.content)
+        && heard?.role === 'user' && YES_HEARD.test(heard.content.trim())
+    })
     findings.push({
       id: 'offer_yes',
       kind: 'offer_yes',
       title: 'Yes after the hours offer opened Book',
-      detail: 'Want the hours? then ok should open Salon hours. Apply moves yes and ok onto that door.',
+      detail: 'Want the hours? then ok should open Salon hours. Accept moves yes and ok onto that door.',
       chapterName: hoursChapter.name,
+      fromChapter: hoursChapter.name,
+      openedChapter: opened?.chapter || bookName,
+      shouldOpen: hoursName,
+      heard: 'ok',
       applyable: true,
     })
   } else if (hoursChapter && asksHours(hoursChapter.graph)) {
@@ -157,8 +183,12 @@ export function findingsFromChat(input: {
         id: 'offer_yes',
         kind: 'offer_yes',
         title: 'Yes after the hours offer still opens Book',
-        detail: 'The Location chart still hears ok as a booking. Apply moves yes and ok onto Salon hours.',
+        detail: 'The Location chart still hears ok as a booking. Accept moves yes and ok onto Salon hours.',
         chapterName: hoursChapter.name,
+        fromChapter: hoursChapter.name,
+        openedChapter: bookName,
+        shouldOpen: hoursName,
+        heard: 'ok',
         applyable: true,
       })
     }
@@ -173,6 +203,9 @@ export function findingsFromChat(input: {
       title: 'The greeting asked for a name twice',
       detail: 'Keep one What’s your name? The greeting stays a hello. The next step still asks once.',
       chapterName: chapter?.name,
+      fromChapter: chapter?.name,
+      openedChapter: chapter?.name,
+      nodeIds: chapter ? nameAskNodes(chapter.graph).map((node) => node.id) : [],
       applyable: Boolean(chapter && nameAskNodes(chapter.graph).length >= 2),
     })
   }
@@ -185,6 +218,7 @@ export function findingsFromChat(input: {
       title: 'A reply looked like website navigation',
       detail: 'Product and pricing pages should answer, not the homepage menu. Scan the site again after the import fix.',
       chapterName: chrome.chapter,
+      openedChapter: chrome.chapter,
       applyable: false,
     })
   }
@@ -269,6 +303,37 @@ function stripNameFromGreeting(graph: OptimizeGraph): OptimizeGraph {
       return { ...node, data: { ...node.data, config: next } }
     }),
   }
+}
+
+export function journeyMarksFor(findings: ChatFinding[]): JourneyMarks {
+  const chapters: Record<string, JourneyMark> = {}
+  const doors: Record<string, Record<string, JourneyMark>> = {}
+  const nodeIds: Record<string, JourneyMark> = {}
+  function door(chapter: string, name: string, mark: JourneyMark) {
+    doors[chapter] = { ...doors[chapter], [name]: mark }
+  }
+  for (const finding of findings) {
+    if (finding.openedChapter) chapters[finding.openedChapter] = 'error'
+    if (finding.shouldOpen) chapters[finding.shouldOpen] = 'improve'
+    if (finding.fromChapter && finding.openedChapter) door(finding.fromChapter, finding.openedChapter, 'error')
+    if (finding.fromChapter && finding.shouldOpen) door(finding.fromChapter, finding.shouldOpen, 'improve')
+    for (const id of finding.nodeIds ?? []) nodeIds[id] = 'error'
+  }
+  return { chapters, doors, nodeIds }
+}
+
+export function recommendationsForVotes(input: {
+  findings: ChatFinding[]
+  votes: Record<string, 'up' | 'down'>
+}): ChatFinding[] {
+  const down = Object.entries(input.votes).filter(([, vote]) => vote === 'down').map(([name]) => name.toLowerCase())
+  if (down.length === 0) return []
+  return input.findings.filter((finding) => {
+    const names = [finding.openedChapter, finding.fromChapter, finding.chapterName, finding.shouldOpen]
+      .filter(Boolean)
+      .map((name) => String(name).toLowerCase())
+    return names.some((name) => down.some((voted) => name === voted || name.includes(voted) || voted.includes(name)))
+  })
 }
 
 export function applyChatFindings(input: {

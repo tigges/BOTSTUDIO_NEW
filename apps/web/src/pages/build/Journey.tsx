@@ -1,14 +1,25 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Play, Plus } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Button, PageHeader, Skeleton } from '@ybot/ui'
 import { cn } from '@ybot/ui'
-import { CATALOG_ENTITY, catalogFromValues, journeyLayout, versionForEnvironment } from '@ybot/shared'
+import {
+  CATALOG_ENTITY,
+  applyChatFindings,
+  catalogFromValues,
+  findingsFromChat,
+  journeyLayout,
+  journeyMarksFor,
+  recommendationsForVotes,
+  versionForEnvironment,
+  type ChatFinding,
+  type OptimizeChapter,
+} from '@ybot/shared'
 import type { FlowGraph as RuntimeGraph } from '@ybot/runtime'
 import { FlowWizard } from './FlowWizard'
 import { JourneyMap, type ChapterHealth, type JourneyLens } from './JourneyMap'
-import { JourneyTest } from './JourneyTest'
+import { JourneyTest, type JourneyTestLine, type StepVote } from './JourneyTest'
 import { reviewFlow } from './PublishCheck'
 import { useCreateFlow, useEntities, useFlows, useJourneyTraffic, usePublishFlow, useSaveCanvas, useWorkflows } from '../../lib/hooks'
 import type { Flow, FlowGraph } from '../../lib/api'
@@ -61,6 +72,14 @@ export function JourneyPage() {
   const [connectError, setConnectError] = useState('')
   const [testing, setTesting] = useState(false)
   const [guestChapterId, setGuestChapterId] = useState('')
+  const [votes, setVotes] = useState<Record<string, StepVote>>({})
+  const [walkLines, setWalkLines] = useState<JourneyTestLine[]>([])
+  const [queued, setQueued] = useState(false)
+  const [ready, setReady] = useState<ChatFinding[]>([])
+  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
+  const [replayKey, setReplayKey] = useState(0)
+  const [replayLines, setReplayLines] = useState<string[]>([])
+  const [applyingId, setApplyingId] = useState('')
   const { data: flows = [], isLoading, isError, error, refetch } = useFlows()
   const traffic = useJourneyTraffic(lens === 'traffic' || lens === 'health')
   const entities = useEntities()
@@ -108,6 +127,75 @@ export function JourneyPage() {
     for (const flow of named) map.set(flow.id, flow.graph)
     return map
   }, [named])
+  const optimizeChapters = useMemo(
+    () => guestChapters as unknown as OptimizeChapter[],
+    [guestChapters],
+  )
+  const marks = useMemo(() => journeyMarksFor(ready), [ready])
+
+  useEffect(() => {
+    setVotes({})
+    setWalkLines([])
+    setReady([])
+    setQueued(false)
+    setDismissed(new Set())
+    setReplayLines([])
+  }, [selectedBotId, environmentLabel])
+
+  useEffect(() => {
+    if (!queued) return
+    const timer = window.setTimeout(() => {
+      const findings = recommendationsForVotes({
+        findings: findingsFromChat({ lines: walkLines, chapters: optimizeChapters }),
+        votes,
+      }).filter((finding) => !dismissed.has(finding.id))
+      setReady(findings)
+      setQueued(false)
+    }, 800)
+    return () => window.clearTimeout(timer)
+  }, [queued, walkLines, optimizeChapters, votes, dismissed])
+
+  function searchFor(flowId: string) {
+    const flow = named.find((item) => item.id === flowId)
+    const finding = ready.find((item) => (
+      item.fromChapter === flow?.name
+      || item.openedChapter === flow?.name
+      || item.shouldOpen === flow?.name
+      || item.chapterName === flow?.name
+    ))
+    return { from: 'journey' as const, mark: finding?.kind }
+  }
+
+  async function acceptFinding(finding: ChatFinding) {
+    if (!finding.applyable) return
+    setApplyingId(finding.id)
+    try {
+      const applied = applyChatFindings({ chapters: optimizeChapters, findings: [finding] })
+      for (const change of applied.chapters) {
+        const flow = flows.find((item) => item.name === change.name)
+        const version = flow ? shown(flow) : undefined
+        const before = optimizeChapters.find((item) => item.name === change.name)
+        if (!flow || !version || JSON.stringify(before?.graph) === JSON.stringify(change.graph)) continue
+        await saveCanvas.mutateAsync({
+          flowId: flow.id,
+          version: version.version,
+          graph: change.graph as FlowGraph,
+        })
+      }
+      if (selectedBotId) await queryClient.invalidateQueries({ queryKey: ['flows', selectedBotId] })
+      setReady((current) => current.filter((item) => item.id !== finding.id))
+      setDismissed((current) => new Set([...current, finding.id]))
+      setReplayLines(walkLines.filter((line) => line.role === 'user').map((line) => line.content))
+      setReplayKey((key) => key + 1)
+    } finally {
+      setApplyingId('')
+    }
+  }
+
+  function rejectFinding(finding: ChatFinding) {
+    setReady((current) => current.filter((item) => item.id !== finding.id))
+    setDismissed((current) => new Set([...current, finding.id]))
+  }
 
   function automationsFor(chapterName: string): string[] {
     const needle = chapterName.toLowerCase()
@@ -188,6 +276,55 @@ export function JourneyPage() {
           <p className="mb-4 text-sm text-[var(--text-secondary)]">Traffic counts are unavailable right now. The chapters are still here.</p>
         )}
         {connectError && <p className="mb-4 text-sm text-[var(--danger)]">{connectError}</p>}
+        {queued && (
+          <p className="mb-4 text-sm text-[var(--text-secondary)]" data-testid="journey-recommend-queued">
+            Looking at this step…
+          </p>
+        )}
+        {ready.length > 0 && (
+          <div className="mb-4 space-y-3" data-testid="journey-recommend">
+            {ready.map((finding) => (
+              <div
+                key={finding.id}
+                className={cn(
+                  'rounded-xl border px-4 py-3',
+                  finding.shouldOpen ? 'border-[var(--accent)] bg-[var(--accent-muted)]' : 'border-[var(--border-strong)] bg-[var(--bg-surface)]',
+                )}
+              >
+                <p className="text-sm font-semibold text-[var(--text-primary)]">{finding.title}</p>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">{finding.detail}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {finding.applyable && (
+                    <Button
+                      size="sm"
+                      disabled={applyingId === finding.id}
+                      data-testid="journey-recommend-accept"
+                      onClick={() => { void acceptFinding(finding) }}
+                    >
+                      {applyingId === finding.id ? 'Saving…' : 'Accept'}
+                    </Button>
+                  )}
+                  <Button size="sm" variant="secondary" onClick={() => rejectFinding(finding)}>
+                    Reject
+                  </Button>
+                  {named.some((item) => item.name === finding.fromChapter || item.name === finding.chapterName) && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        const flow = named.find((item) => item.name === finding.fromChapter || item.name === finding.chapterName)
+                        if (!flow) return
+                        navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id }, search: { from: 'journey', mark: finding.kind } })
+                      }}
+                    >
+                      Open chart
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         {isLoading ? (
           <div className="space-y-3">{Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-24 w-full rounded-xl" />)}</div>
         ) : isError ? (
@@ -204,7 +341,8 @@ export function JourneyPage() {
             automationsFor={automationsFor}
             connectingId={connectingId}
             activeId={lens === 'design' && testing ? guestChapterId : undefined}
-            onOpen={(flowId) => navigate({ to: '/build/flows/$flowId', params: { flowId }, search: { from: 'journey' } })}
+            marks={marks}
+            onOpen={(flowId) => navigate({ to: '/build/flows/$flowId', params: { flowId }, search: searchFor(flowId) })}
             onConnect={(flowId) => { void connect(flowId) }}
           />
         )}
@@ -218,24 +356,27 @@ export function JourneyPage() {
           environmentLabel={environmentLabel}
           chapterKey={chapterKey}
           catalog={catalog}
+          votes={votes}
+          replayKey={replayKey}
+          replayLines={replayLines}
           onChapter={(name) => {
             const match = named.find((flow) => flow.name === name)
             setGuestChapterId(match?.id ?? '')
           }}
-          onClose={() => { setTesting(false); setGuestChapterId('') }}
-          onApply={async (changes) => {
-            for (const change of changes) {
-              const flow = flows.find((item) => item.name === change.name)
-              const version = flow ? shown(flow) : undefined
-              if (!flow || !version) continue
-              await saveCanvas.mutateAsync({
-                flowId: flow.id,
-                version: version.version,
-                graph: change.graph as FlowGraph,
-              })
+          onVote={({ chapter, vote, lines }) => {
+            setVotes((current) => ({ ...current, [chapter]: vote }))
+            setWalkLines(lines)
+            if (vote === 'down') {
+              setDismissed(new Set())
+              setQueued(true)
+            } else {
+              setReady((current) => current.filter((finding) => {
+                const names = [finding.openedChapter, finding.fromChapter, finding.chapterName, finding.shouldOpen]
+                return !names.includes(chapter)
+              }))
             }
-            if (selectedBotId) await queryClient.invalidateQueries({ queryKey: ['flows', selectedBotId] })
           }}
+          onClose={() => { setTesting(false); setGuestChapterId('') }}
         />
       )}
       </div>

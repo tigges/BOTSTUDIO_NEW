@@ -6,7 +6,7 @@ import {
   Globe, Workflow, Headphones, CheckCircle, Clock, Mail,
   Sparkles, Search, Layout, Layers, Zap, FileText,
 } from 'lucide-react'
-import type { NodeKind } from '@ybot/shared'
+import type { JourneyMark, NodeKind } from '@ybot/shared'
 
 const ICON_MAP: Record<NodeKind, React.ElementType> = {
   start: Play,
@@ -81,6 +81,7 @@ export interface FlowNodeData {
   label: string
   config?: Record<string, unknown>
   selected?: boolean
+  mark?: JourneyMark
 }
 
 export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
@@ -99,6 +100,8 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
   const hasLookupSources = nodeData.kind === 'lookup_catalog'
   const hasStartSource = ['start', 'trigger_start'].includes(nodeData.kind)
 
+  const mark = nodeData.mark
+
   return (
     <div
       className={cn(
@@ -106,8 +109,13 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
         'shadow-[0_4px_12px_rgba(0,0,0,0.4)] transition-all duration-150',
         selected
           ? 'border-[var(--accent)] shadow-[0_0_0_3px_rgba(99,102,241,0.25)]'
-          : 'border-[var(--border-strong)] hover:border-[var(--border-focus)]'
+          : mark === 'improve'
+            ? 'border-[var(--accent)] shadow-[0_0_0_3px_rgba(99,102,241,0.18)]'
+            : mark === 'error'
+              ? 'border-[var(--border-strong)] shadow-[0_0_0_3px_rgba(15,23,42,0.16)]'
+              : 'border-[var(--border-strong)] hover:border-[var(--border-focus)]'
       )}
+      data-mark={mark ?? ''}
       style={routePorts.length > 2 ? { minWidth: Math.max(220, routePorts.length * 78) } : undefined}
     >
       {/* Header */}
@@ -141,6 +149,12 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
           </div>
         ) : (
           <p className="text-[11px] italic" style={{ color: 'var(--text-muted, #64748b)' }}>Click to configure</p>
+        )}
+        {mark === 'improve' && (
+          <p className="mt-1 text-[10px] font-medium text-[var(--accent)]">Ready</p>
+        )}
+        {mark === 'error' && (
+          <p className="mt-1 text-[10px] font-medium text-[var(--text-primary)]">Needs a look</p>
         )}
       </div>
 
