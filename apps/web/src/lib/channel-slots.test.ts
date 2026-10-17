@@ -2,10 +2,12 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { channelStatus, pickChannel, slotsForEnvironment } from './channel-slots.ts'
 
+const waConfig = { phoneNumberId: '15550001234', accessToken: 'token', verifyToken: 'verify' }
+const emailConfig = { fromAddress: 'hello@studio.com', inboundSecret: 'secret12' }
 const sandboxWeb = { id: 'web-test', kind: 'web', environmentId: 'sandbox', isActive: true }
 const liveWeb = { id: 'web-live', kind: 'web', environmentId: 'prod', isActive: true }
-const sandboxWa = { id: 'wa', kind: 'whatsapp', environmentId: 'sandbox', isActive: true }
-const sandboxEmail = { id: 'email', kind: 'email', environmentId: 'sandbox', isActive: false }
+const sandboxWa = { id: 'wa', kind: 'whatsapp', environmentId: 'sandbox', isActive: true, config: waConfig }
+const sandboxEmail = { id: 'email', kind: 'email', environmentId: 'sandbox', isActive: false, config: emailConfig }
 
 test('each kind appears once, including idle SMS, Telegram, and phone', () => {
   const slots = slotsForEnvironment([sandboxWeb, liveWeb, sandboxWa, sandboxEmail], 'sandbox')
@@ -37,5 +39,10 @@ test('a connected channel on the other layer still fills the card', () => {
 test('website chat cannot sit idle even without a row', () => {
   assert.equal(channelStatus('web', null), 'active')
   assert.equal(channelStatus('whatsapp', null), 'idle')
-  assert.equal(channelStatus('phone', { isActive: false }), 'inactive')
+  assert.equal(channelStatus('phone', { isActive: false, config: { accountSid: 'ACxx', authToken: 'tok', fromNumber: '+441' } }), 'inactive')
+})
+
+test('a row without credentials still counts as idle', () => {
+  assert.equal(channelStatus('sms', { isActive: false, config: {} }), 'idle')
+  assert.equal(channelStatus('whatsapp', { isActive: true, config: { phoneNumberId: '1' } }), 'idle')
 })

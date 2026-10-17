@@ -10,10 +10,17 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
 import { useChannels, useCreateChannel, useDeleteChannel, useUpdateChannel } from '../../lib/hooks'
-import type { Channel } from '../../lib/api'
+import { ApiError, type Channel } from '../../lib/api'
 import { useAppStore } from '../../store/app'
 import { WidgetSetupWizard } from './WidgetSetupWizard'
 import { slotsForEnvironment, type ChannelKind, type ChannelStatus } from '../../lib/channel-slots'
+import {
+  CHANNEL_FIELDS,
+  CHANNEL_WEBHOOK_HINT,
+  channelConfigReady,
+  channelWebhookPath,
+  isOptionalChannelKind,
+} from '@ybot/shared'
 
 const SUBNAV = [
   { label: 'Channels',      path: '/configure/channels' },
@@ -54,6 +61,24 @@ function getDemoUrl(channelId: string): string {
   return `${base}/api/v1/public/demo/${channelId}`
 }
 
+function originBase(): string {
+  return typeof window !== 'undefined' ? window.location.origin : ''
+}
+
+function webhookUrl(kind: string): string {
+  return `${originBase()}${channelWebhookPath(kind)}`
+}
+
+function fieldsFor(kind: string) {
+  return isOptionalChannelKind(kind) ? CHANNEL_FIELDS[kind] : []
+}
+
+function errorMessage(err: unknown): string {
+  if (err instanceof ApiError) return err.message
+  if (err instanceof Error) return err.message
+  return 'Could not connect that channel.'
+}
+
 function statusCopy(status: ChannelStatus, kind: ChannelKind): { label: string; hint: string } {
   if (kind === 'web') return { label: 'Active', hint: 'Always on' }
   if (status === 'active') return { label: 'Active', hint: 'Accepting conversations' }
@@ -80,26 +105,29 @@ export function ChannelsPage() {
   const [showEmbed, setShowEmbed]   = useState<Channel | null>(null)
   const [copied, setCopied]         = useState(false)
   const [showWizard, setShowWizard] = useState(false)
-  const [waPhoneNumberId, setWaPhoneNumberId] = useState('')
-  const [waAccessToken, setWaAccessToken]     = useState('')
-  const [waVerifyToken, setWaVerifyToken]     = useState('')
+  const [formConfig, setFormConfig] = useState<Record<string, string>>({})
+  const [formError, setFormError] = useState('')
+
+  function setField(key: string, value: string) {
+    setFormConfig((current) => ({ ...current, [key]: value }))
+  }
 
   function openSettings(ch: Channel) {
     setSelected(ch)
     setEditName(ch.name)
     setEditActive(ch.isActive)
-    if (ch.kind === 'whatsapp') {
-      setWaPhoneNumberId(String(ch.config['phoneNumberId'] ?? ''))
-      setWaAccessToken(String(ch.config['accessToken'] ?? ''))
-      setWaVerifyToken(String(ch.config['verifyToken'] ?? ''))
+    setFormError('')
+    const next: Record<string, string> = {}
+    for (const field of fieldsFor(ch.kind)) {
+      next[field.key] = String(ch.config[field.key] ?? '')
     }
+    setFormConfig(next)
   }
 
   function openConnect(kind: ChannelKind) {
     setConnecting(kind)
-    setWaPhoneNumberId('')
-    setWaAccessToken('')
-    setWaVerifyToken('')
+    setFormConfig({})
+    setFormError('')
   }
 
   async function handleSaveSettings() {
@@ -109,11 +137,19 @@ export function ChannelsPage() {
       name: editName.trim() || selected.name,
       isActive: selected.kind === 'web' ? true : editActive,
     }
-    if (selected.kind === 'whatsapp') {
-      patch.config = { phoneNumberId: waPhoneNumberId.trim(), accessToken: waAccessToken.trim(), verifyToken: waVerifyToken.trim() }
+    if (isOptionalChannelKind(selected.kind)) {
+      if (!channelConfigReady(selected.kind, formConfig)) {
+        setFormError('Fill every field for this channel.')
+        return
+      }
+      patch.config = { ...formConfig }
     }
-    await updateChannel.mutateAsync(patch)
-    setSelected(null)
+    try {
+      await updateChannel.mutateAsync(patch)
+      setSelected(null)
+    } catch (err) {
+      setFormError(errorMessage(err))
+    }
   }
 
   function copyEmbed(channelId: string) {
@@ -124,21 +160,36 @@ export function ChannelsPage() {
 
   async function handleConnect() {
     if (!connecting || !envId) return
-    const config = connecting === 'whatsapp'
-      ? { phoneNumberId: waPhoneNumberId.trim(), accessToken: waAccessToken.trim(), verifyToken: waVerifyToken.trim() }
-      : {}
-    await createChannel.mutateAsync({
-      name: KIND_META[connecting].label,
-      kind: connecting,
-      environmentId: envId,
-      config,
-    })
-    setConnecting(null)
+    if (!channelConfigReady(connecting, formConfig)) {
+      setFormError('Fill every field for this channel.')
+      return
+    }
+    setFormError('')
+    try {
+      const existing = slots.find((slot) => slot.kind === connecting)?.channel
+      if (existing) {
+        await updateChannel.mutateAsync({ id: existing.id, config: { ...formConfig }, isActive: false })
+      } else {
+        await createChannel.mutateAsync({
+          name: KIND_META[connecting].label,
+          kind: connecting,
+          environmentId: envId,
+          config: { ...formConfig },
+        })
+      }
+      setConnecting(null)
+    } catch (err) {
+      setFormError(errorMessage(err))
+    }
   }
 
   async function toggleActive(channel: Channel, next: boolean) {
     if (channel.kind === 'web') return
-    await updateChannel.mutateAsync({ id: channel.id, isActive: next })
+    try {
+      await updateChannel.mutateAsync({ id: channel.id, isActive: next })
+    } catch (err) {
+      setFormError(errorMessage(err))
+    }
   }
 
   function renderChannelCard(slot: (typeof slots)[number]) {
@@ -234,9 +285,10 @@ export function ChannelsPage() {
               role="switch"
               aria-checked={channel.isActive}
               aria-label={channel.isActive ? 'Turn off' : 'Turn on'}
+              disabled={updateChannel.isPending}
               onClick={(event) => { event.stopPropagation(); void toggleActive(channel, !channel.isActive) }}
               className={cn(
-                'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none',
+                'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:opacity-50',
                 channel.isActive ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
               )}
             >
@@ -265,7 +317,7 @@ export function ChannelsPage() {
 
       <div className="flex-1 overflow-auto p-6">
         <p className="mb-6 text-sm text-[var(--text-muted)]">
-          Website chat is always on. WhatsApp, SMS, Telegram, and phone stay here until you connect them.
+          Website chat is always on. Connect WhatsApp, SMS, Telegram, phone, or email with real credentials, then turn the channel on to take conversations.
         </p>
 
         {isLoading && (
@@ -282,7 +334,7 @@ export function ChannelsPage() {
             {recommended.length > 0 && (
               <div>
                 <h2 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">Recommended</h2>
-                <p className="mb-4 text-xs text-[var(--text-muted)]">Connect a channel when you are ready. It stays idle until you turn it on.</p>
+                <p className="mb-4 text-xs text-[var(--text-muted)]">Connect with credentials. It stays off until you turn it on.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {recommended.map((slot) => renderChannelCard(slot))}
                 </div>
@@ -361,38 +413,30 @@ export function ChannelsPage() {
                   </div>
                 )}
 
-                {selected.kind === 'whatsapp' && (
+                {isOptionalChannelKind(selected.kind) && (
                   <div className="space-y-3">
-                    <p className="text-xs text-[var(--text-muted)]">
-                      Credentials from{' '}
-                      <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-[var(--text-link)] hover:underline">
-                        Meta for Developers
-                      </a>
-                      {' '}→ WhatsApp → API Setup.
-                    </p>
-                    {[
-                      { label: 'Phone Number ID', value: waPhoneNumberId, set: setWaPhoneNumberId, placeholder: '1234567890', hint: 'Found in the WhatsApp API Setup page' },
-                      { label: 'Access Token', value: waAccessToken, set: setWaAccessToken, placeholder: 'EAAxxxxxxx…', hint: 'Permanent token from your Meta System User' },
-                      { label: 'Verify Token', value: waVerifyToken, set: setWaVerifyToken, placeholder: 'my-secret-verify-token', hint: 'Any string you choose — enter this in the Meta webhook form too' },
-                    ].map(({ label, value, set, placeholder, hint }) => (
-                      <div key={label}>
-                        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1 block">{label}</label>
+                    {fieldsFor(selected.kind).map((field) => (
+                      <div key={field.key}>
+                        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1 block">{field.label}</label>
                         <input
                           className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 font-mono"
-                          placeholder={placeholder}
-                          value={value}
-                          onChange={(e) => set(e.target.value)}
+                          placeholder={field.placeholder}
+                          type={field.secret ? 'password' : 'text'}
+                          autoComplete="off"
+                          value={formConfig[field.key] ?? ''}
+                          onChange={(e) => setField(field.key, e.target.value)}
                         />
-                        <p className="text-[11px] text-[var(--text-muted)] mt-1">{hint}</p>
+                        <p className="text-[11px] text-[var(--text-muted)] mt-1">{field.hint}</p>
                       </div>
                     ))}
                     <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] p-3 space-y-1">
-                      <p className="text-xs font-semibold text-[var(--text-secondary)]">Webhook URL for Meta</p>
+                      <p className="text-xs font-semibold text-[var(--text-secondary)]">Webhook URL</p>
                       <code className="text-[11px] font-mono text-[var(--text-muted)] break-all select-all">
-                        {typeof window !== 'undefined' ? window.location.origin : ''}/api/v1/webhooks/whatsapp
+                        {webhookUrl(selected.kind)}
                       </code>
-                      <p className="text-[11px] text-[var(--text-muted)]">Subscribe to the <strong>messages</strong> webhook field.</p>
+                      <p className="text-[11px] text-[var(--text-muted)]">{CHANNEL_WEBHOOK_HINT[selected.kind]}</p>
                     </div>
+                    {formError && <p className="text-xs text-[var(--error)]">{formError}</p>}
                   </div>
                 )}
 
@@ -471,39 +515,41 @@ export function ChannelsPage() {
 
       <Dialog open={!!connecting} onOpenChange={(open) => { if (!open) setConnecting(null) }}>
         {connecting && (
-          <DialogContent size="sm">
+          <DialogContent size="md">
             <DialogHeader><DialogTitle>Connect {KIND_META[connecting].label}</DialogTitle></DialogHeader>
             <DialogBody className="space-y-4">
               <p className="text-sm text-[var(--text-secondary)]">
-                This connects {KIND_META[connecting].label}. It stays inactive until you turn it on.
+                BotStudio checks these credentials, then the channel stays off until you turn it on.
               </p>
-              {connecting === 'whatsapp' && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 p-2.5 rounded-[var(--radius-md)] bg-[var(--bg-overlay)] border border-[var(--border)]">
-                    <MessageSquare size={14} className="text-[var(--accent)] shrink-0" />
-                    <p className="text-xs text-[var(--text-muted)]">Credentials from <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-[var(--text-link)] underline">Meta for Developers</a>.</p>
-                  </div>
-                  {[
-                    { label: 'Phone Number ID', value: waPhoneNumberId, set: setWaPhoneNumberId, placeholder: '1234567890' },
-                    { label: 'Access Token', value: waAccessToken, set: setWaAccessToken, placeholder: 'EAAxxxxxxx…' },
-                    { label: 'Verify Token', value: waVerifyToken, set: setWaVerifyToken, placeholder: 'my-secret-verify-token' },
-                  ].map(({ label, value, set, placeholder }) => (
-                    <div key={label}>
-                      <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">{label}</label>
-                      <input
-                        className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 font-mono"
-                        placeholder={placeholder}
-                        value={value}
-                        onChange={(e) => set(e.target.value)}
-                      />
-                    </div>
-                  ))}
+              {fieldsFor(connecting).map((field) => (
+                <div key={field.key}>
+                  <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">{field.label}</label>
+                  <input
+                    className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 font-mono"
+                    placeholder={field.placeholder}
+                    type={field.secret ? 'password' : 'text'}
+                    autoComplete="off"
+                    value={formConfig[field.key] ?? ''}
+                    onChange={(e) => setField(field.key, e.target.value)}
+                  />
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1">{field.hint}</p>
                 </div>
-              )}
+              ))}
+              <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] p-3 space-y-1">
+                <p className="text-xs font-semibold text-[var(--text-secondary)]">Webhook URL</p>
+                <code className="text-[11px] font-mono text-[var(--text-muted)] break-all select-all">
+                  {webhookUrl(connecting)}
+                </code>
+                <p className="text-[11px] text-[var(--text-muted)]">{isOptionalChannelKind(connecting) ? CHANNEL_WEBHOOK_HINT[connecting] : ''}</p>
+              </div>
+              {formError && <p className="text-xs text-[var(--error)]">{formError}</p>}
             </DialogBody>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setConnecting(null)}>Cancel</Button>
-              <Button disabled={!envId || createChannel.isPending} onClick={() => { void handleConnect() }}>
+              <Button
+                disabled={!envId || createChannel.isPending || !channelConfigReady(connecting, formConfig)}
+                onClick={() => { void handleConnect() }}
+              >
                 {createChannel.isPending ? 'Connecting…' : 'Connect'}
               </Button>
             </DialogFooter>

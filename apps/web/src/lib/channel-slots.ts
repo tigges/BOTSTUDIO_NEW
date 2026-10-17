@@ -1,5 +1,7 @@
 /** One card per channel kind. Two website-chat rows (test and live) still count as one card. */
 
+import { isOptionalChannelKind, parseChannelConfig } from '@ybot/shared'
+
 export const CHANNEL_KINDS = ['web', 'whatsapp', 'sms', 'telegram', 'phone', 'email'] as const
 
 export type ChannelKind = (typeof CHANNEL_KINDS)[number]
@@ -10,6 +12,7 @@ export interface ChannelRef {
   kind: string
   environmentId?: string
   isActive: boolean
+  config?: unknown
 }
 
 export function pickChannel<T extends ChannelRef>(
@@ -24,9 +27,10 @@ export function pickChannel<T extends ChannelRef>(
   return channels.find((channel) => channel.kind === kind)
 }
 
-export function channelStatus(kind: string, channel?: { isActive: boolean } | null): ChannelStatus {
+export function channelStatus(kind: string, channel?: { isActive: boolean; config?: unknown } | null): ChannelStatus {
   if (kind === 'web') return 'active'
   if (!channel) return 'idle'
+  if (isOptionalChannelKind(kind) && !parseChannelConfig(kind, channel.config ?? {})) return 'idle'
   return channel.isActive ? 'active' : 'inactive'
 }
 

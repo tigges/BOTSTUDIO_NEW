@@ -4,6 +4,8 @@ import { requireRole } from '../middleware/auth.js'
 import { z } from 'zod'
 import { sendEmail, inviteEmail } from '../lib/email.js'
 import { canRemoveWebChannel, ensureWebChannels } from '../lib/web-channels.js'
+import { parseChannelConfig, channelWebhookPath } from '@ybot/shared'
+import { registerTelegramWebhook, verifyChannelCredentials } from '../lib/channel-verify.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -24,7 +26,27 @@ export async function channelsRoutes(app: FastifyInstance) {
     const body = z.object({ name: z.string().min(1), kind: z.string(), environmentId: z.string(), config: z.record(z.any()).default({}) }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
     const isActive = body.data.kind === 'web'
-    return reply.status(201).send({ data: await prisma.channel.create({ data: { ...body.data, tenantId, botId, isActive } }) })
+    if (body.data.kind !== 'web') {
+      const parsed = parseChannelConfig(body.data.kind, body.data.config)
+      if (!parsed) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Fill every field for this channel.' } })
+      const check = await verifyChannelCredentials(body.data.kind, parsed)
+      if (!check.ok) return reply.status(400).send({ error: { code: 'CHANNEL_VERIFY', message: check.message } })
+      body.data.config = { ...parsed, ...(check.extra ?? {}) }
+      const existing = await prisma.channel.findFirst({
+        where: { botId, tenantId, kind: body.data.kind, environmentId: body.data.environmentId },
+      })
+      if (existing) return reply.status(409).send({ error: { code: 'CHANNEL_EXISTS', message: 'This channel is already connected.' } })
+    }
+    const created = await prisma.channel.create({ data: { ...body.data, tenantId, botId, isActive } })
+    if (created.kind === 'telegram') {
+      const parsed = parseChannelConfig(created.kind, created.config)
+      if (parsed) {
+        const proto = String(request.headers['x-forwarded-proto'] ?? request.protocol ?? 'https').split(',')[0]?.trim() || 'https'
+        const host = String(request.headers['x-forwarded-host'] ?? request.headers.host ?? request.hostname).split(',')[0]?.trim()
+        await registerTelegramWebhook(parsed, `${proto}://${host}${channelWebhookPath('telegram')}`)
+      }
+    }
+    return reply.status(201).send({ data: created })
   })
 
   app.patch('/:botId/channels/:id', async (request, reply) => {
@@ -32,8 +54,28 @@ export async function channelsRoutes(app: FastifyInstance) {
     const { botId, id } = request.params as { botId: string; id: string }
     const body = z.object({ name: z.string().optional(), config: z.record(z.any()).optional(), isActive: z.boolean().optional(), allowedDomains: z.array(z.string()).optional() }).parse(request.body)
     const existing = await prisma.channel.findFirst({ where: { id, botId, tenantId } })
-    if (existing?.kind === 'web' && body.isActive === false) body.isActive = true
-    return { data: await prisma.channel.updateMany({ where: { id, botId, tenantId }, data: body }) }
+    if (!existing) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
+    if (existing.kind === 'web' && body.isActive === false) body.isActive = true
+    if (body.config && existing.kind !== 'web') {
+      const previous = typeof existing.config === 'object' && existing.config && !Array.isArray(existing.config)
+        ? existing.config as Record<string, unknown>
+        : {}
+      const parsed = parseChannelConfig(existing.kind, { ...previous, ...body.config })
+      if (!parsed) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Fill every field for this channel.' } })
+      const check = await verifyChannelCredentials(existing.kind, parsed)
+      if (!check.ok) return reply.status(400).send({ error: { code: 'CHANNEL_VERIFY', message: check.message } })
+      body.config = { ...parsed, ...(check.extra ?? {}) }
+    }
+    const updated = await prisma.channel.updateMany({ where: { id, botId, tenantId }, data: body })
+    if (existing.kind === 'telegram' && body.config) {
+      const parsed = parseChannelConfig('telegram', body.config)
+      if (parsed) {
+        const proto = String(request.headers['x-forwarded-proto'] ?? request.protocol ?? 'https').split(',')[0]?.trim() || 'https'
+        const host = String(request.headers['x-forwarded-host'] ?? request.headers.host ?? request.hostname).split(',')[0]?.trim()
+        await registerTelegramWebhook(parsed, `${proto}://${host}${channelWebhookPath('telegram')}`)
+      }
+    }
+    return { data: updated }
   })
 
   app.delete('/:botId/channels/:id', async (request, reply) => {

@@ -16,7 +16,7 @@ import { campaignsRoutes, templatesRoutes } from './routes/engage.js'
 import { channelsRoutes, webhooksRoutes, teamRoutes, analyticsRoutes, auditRoutes } from './routes/config.js'
 import { previewRoutes } from './routes/preview.js'
 import { widgetRoutes } from './routes/widget.js'
-import { whatsappRoutes } from './routes/whatsapp.js'
+import { channelWebhookRoutes } from './routes/channel-webhooks.js'
 import { optimizationRoutes } from './routes/optimizations.js'
 import { workflowsRoutes } from './routes/workflows.js'
 import { dashboardsRoutes } from './routes/dashboards.js'
@@ -112,7 +112,7 @@ await app.register(analyticsRoutes, { prefix: '/api/v1/analytics' })
 await app.register(auditRoutes, { prefix: '/api/v1/audit' })
 await app.register(previewRoutes, { prefix: '/api/v1/bots' })
 await app.register(widgetRoutes, { prefix: '/api/v1' })
-await app.register(whatsappRoutes, { prefix: '/api/v1' })
+await app.register(channelWebhookRoutes, { prefix: '/api/v1' })
 await app.register(optimizationRoutes, { prefix: '/api/v1/bots' })
 await app.register(workflowsRoutes, { prefix: '/api/v1/bots' })
 await app.register(dashboardsRoutes, { prefix: '/api/v1/bots' })
