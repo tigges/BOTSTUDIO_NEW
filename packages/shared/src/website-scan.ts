@@ -386,7 +386,7 @@ function extractBooking(pages: ScannedPage[]): { url: string; label: string } | 
 }
 
 const JUNK_PATH = /\/(?:wp-admin|wp-json|feed|tag|category|author|sample-page|hello-world)(?:\/|$)/i
-const SKIP_PATH = /\/(?:blog|company-news|careers-blog|glossary|case-stud(?:y|ies)|bid)(?:\/|$)/i
+const SKIP_PATH = /\/(?:blog|company-news|careers-blog|glossary|case-stud(?:y|ies)|bid|investors?|shareholders?|governance|annual-report|code-of-conduct)(?:\/|$|-[^/]*)/i
 const ASSET_PATH = /\.(?:png|jpe?g|gif|svg|css|js|pdf|zip|webp|ico|mp4|xml)(?:\?|$)/i
 const PAGE_RANK: Array<[string, number]> = [
   ['pricing', 8], ['price', 6], ['product', 6], ['plan', 5], ['faq', 6], ['question', 6],
@@ -397,6 +397,7 @@ const PAGE_RANK: Array<[string, number]> = [
 ]
 const PAGE_PENALTY: Array<[string, number]> = [
   ['/blog', 8], ['company-news', 8], ['glossary', 6], ['case-stud', 6], ['webinar', 4], ['/resources/', 3],
+  ['investor', 8], ['shareholder', 8], ['computershare', 8], ['governance', 6], ['code of conduct', 6],
 ]
 
 /**
@@ -968,6 +969,7 @@ function draftVendorWebsiteChat(input: {
     companyName: company,
     personaName: persona,
     clusterId: input.clusterId,
+    keepBrand: true,
   })
   const pack = packFromLearned(spec, company, persona)
   const doors: ScanDoor[] = pack.doors.map((door) => {

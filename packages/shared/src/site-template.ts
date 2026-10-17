@@ -84,8 +84,8 @@ export function abstractBrand(text: string): string {
   }
   return out
     .replace(/\bthe the\b/gi, 'the')
-    .replace(/\s+/g, ' ')
-    .replace(/\s+([.,!?])/g, '$1')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/[ \t]+([.,!?])/g, '$1')
     .trim()
 }
 
@@ -516,17 +516,90 @@ function titleCaseHost(host: string): string {
   return stem.charAt(0).toUpperCase() + stem.slice(1)
 }
 
+const JUNK_SITE_PATH = /\/(?:investor|investors|shareholder|shareholders|governance|annual-report|code-of-conduct|conduct|computershare|equiniti|sustainability)(?:\/|$)/i
+
+function pathOf(page: ScannedPage): string {
+  try {
+    return new URL(page.url).pathname.toLowerCase()
+  } catch {
+    return page.url.toLowerCase()
+  }
+}
+
+function isHomePage(page: ScannedPage): boolean {
+  const path = pathOf(page)
+  return path === '/' || path === ''
+}
+
+function isJunkSitePage(page: ScannedPage): boolean {
+  if (JUNK_SITE_PATH.test(pathOf(page))) return true
+  if (isHomePage(page)) return false
+  const head = `${page.title} ${page.text.slice(0, 280)}`
+  return /computershare|shareview|ordinary shares|adr holding|investor relations/i.test(head)
+}
+
+function isJunkAnswer(text: string): boolean {
+  if (isNavChrome(text)) return true
+  return /computershare|shareview|ordinary shares|code of conduct|adr holding|equiniti|holders of ordinary|possible findings are subject|mitigation plans/i.test(text)
+}
+
+function titleFromPage(page: ScannedPage): string {
+  if (isHomePage(page)) return 'What we do'
+  if (pricingPage(page)) return 'Plans'
+  const stem = (pathOf(page).split('/').filter(Boolean).pop() ?? '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\.html?$/, '')
+  const fromTitle = page.title.replace(/\s*[|–—•].*$/, '').replace(/\s*-\s*[^-]+$/, '').trim()
+  if (fromTitle && fromTitle.length >= 3 && fromTitle.length <= 42 && !/^home$/i.test(fromTitle)) return fromTitle
+  if (stem) return stem.replace(/\b[a-z]/g, (ch) => ch.toUpperCase())
+  return 'About'
+}
+
+function leadFromPage(page: ScannedPage): string | null {
+  let best: { text: string; score: number } | null = null
+  for (const part of splitCopy(page.text)) {
+    if (part.length < 32 || part.length > 280) continue
+    if (isJunkAnswer(part)) continue
+    let score = 8
+    if (/[.!?]$/.test(part)) score += 3
+    if (part.length >= 48 && part.length <= 160) score += 2
+    if (part.length > 180) score -= 2
+    if (/^["“]|we are pleased|join hands/i.test(part)) score -= 10
+    if (/^don't |^do not /i.test(part)) score -= 8
+    if (!best || score > best.score) best = { text: part, score }
+  }
+  if (!best || best.score < 4) return null
+  return clip(best.text)
+}
+
+function siteMentionsDemo(pages: ScannedPage[]): boolean {
+  return pages.some((page) => /book a demo|get a demo|request a demo|schedule a demo|talk to sales/i.test(`${page.title} ${page.text}`))
+}
+
+function phrasesForDoor(name: string): string[] {
+  const clean = name.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const words = clean.split(' ').filter((word) => word.length > 3)
+  return [...new Set([clean, ...words.slice(0, 3)].filter(Boolean))]
+}
+
+function uniqueFlowName(name: string, used: Set<string>): string | null {
+  const base = name.trim() || 'About'
+  if (!used.has(base)) return base
+  return null
+}
+
 /**
- * Read public pages, drop brand names, and draft a cluster template from what the site states.
- * Empty blueprint rooms stay off. Book a demo (email walk) and a plan door when the site
- * has pricing still land, so software/CRM scans keep a next step. The start-wizard
- * blueprints remain the path when there is no website.
+ * Read public pages and draft a map from those pages — not from a cluster blueprint.
+ * One useful page becomes one chapter. Investor/legal copy stays off. Book a demo and a
+ * plan walk land only when the site actually has them. Wizard blueprints stay the path
+ * when there is no website.
  */
 export function draftClusteredTemplate(input: {
   pages: ScannedPage[]
   companyName: string
   personaName?: string | null
   clusterId?: ClusterId
+  keepBrand?: boolean
 }): LearnedTemplateSpec {
   const pages = input.pages.filter((page) => page.text.trim().length > 0)
   const branded = pages.map((page) => ({
@@ -534,6 +607,7 @@ export function draftClusteredTemplate(input: {
     title: abstractBrand(page.title),
     text: abstractBrand(page.text),
   }))
+  const working = input.keepBrand ? pages : branded
   const clusterId = input.clusterId && input.clusterId !== 'custom'
     ? input.clusterId
     : suggestCluster(`${input.pages.map((page) => `${page.text} ${page.url}`).join('\n')}`)
@@ -544,66 +618,60 @@ export function draftClusteredTemplate(input: {
       ? `Hi, I'm ${persona} at ${company}. What's your name?`
       : `Hi, I'm ${persona} at ${company}.`
     : assistantGreeting(company)
-  const seeds = clusterId === 'custom' ? SEEDS.software : SEEDS[clusterId]
-  const hadPricingUrl = input.pages.some((page) => /pric|\/plans?\b/i.test(`${page.url} ${page.title}`))
-  const pricingPages = branded.filter((page) => /pric|\/plans?\b/i.test(`${page.url} ${page.title}`))
-  const tierText = (hadPricingUrl ? pricingPages : branded).map((page) => page.text).join('\n')
-  const tiers = clusterId === 'hair' || clusterId === 'email' ? [] : extractPlanTiers(tierText)
+  const pricingPages = working.filter((page) => pricingPage(page))
+  const tiers = clusterId === 'hair' || clusterId === 'email' ? [] : extractPlanTiers(pricingPages.map((page) => page.text).join('\n'))
   const topics: SiteTopic[] = []
-  for (const seed of seeds) {
-    const found = sentenceFor(branded, seed.phrases, { fromPricing: isPlanTopic(seed) })
-    const keepDemo = isDemoTopic(seed) && clusterId !== 'hair' && clusterId !== 'email'
-    const keepPlan = isPlanTopic(seed) && (hadPricingUrl || tiers.length >= 2)
-    if (!found && !keepDemo && !keepPlan) continue
-    const answer = found ?? `The pages did not state this for ${seed.choice.toLowerCase()}. Edit the line to match ${company}.`
+  const used = new Set<string>()
+  for (const page of working) {
+    if (isJunkSitePage(page)) continue
+    if (pricingPage(page) && tiers.length >= 2) continue
+    const found = leadFromPage(page)
+    if (!found) continue
+    const name = uniqueFlowName(titleFromPage(page), used)
+    if (!name) continue
+    used.add(name)
     topics.push({
-      ...seed,
-      answer,
-      blurb: found ? clip(found, 80) : seed.blurb,
+      flowName: name,
+      choice: name,
+      phrases: phrasesForDoor(name),
+      question: `What about ${name.toLowerCase()}?`,
+      answer: found,
+      blurb: clip(found, 80),
     })
+    if (topics.length >= 8) break
   }
   if (tiers.length >= 2) {
-    const plan = topics.find((topic) => /plan|pricing/i.test(topic.flowName))
-    if (plan) {
-      plan.answer = planSummary(tiers)
-      plan.blurb = tiers.map((tier) => (tier.price ? `${tier.name} ${tier.price}` : tier.name)).join(', ')
-      plan.walk = 'plans'
-      plan.choices = planChoices(tiers)
-      plan.question = 'Which plan are you asking about?'
-    }
-  } else if (hadPricingUrl) {
-    const plan = topics.find((topic) => /plan|pricing/i.test(topic.flowName))
-    if (plan) {
-      const fromPricing = sentenceFor(pricingPages, plan.phrases, { fromPricing: true })
-      plan.answer = fromPricing ?? `The pages did not state this for ${plan.choice.toLowerCase()}. Edit the line to match ${company}.`
-      plan.blurb = fromPricing ? clip(fromPricing, 80) : plan.blurb
-    }
+    topics.push({
+      flowName: 'Plans and pricing',
+      choice: 'Plans',
+      phrases: ['pricing', 'plans', 'how much', 'cost', 'plan'],
+      question: 'Which plan are you asking about?',
+      answer: planSummary(tiers),
+      blurb: tiers.map((tier) => (tier.price ? `${tier.name} ${tier.price}` : tier.name)).join(', '),
+      walk: 'plans',
+      choices: planChoices(tiers),
+    })
   }
-  const demo = topics.find((topic) => /demo/i.test(topic.flowName))
-  if (demo && clusterId !== 'hair' && clusterId !== 'email') {
-    demo.walk = 'email'
-    if (/did not state this/i.test(demo.answer) || isNavChrome(demo.answer) || /get started free|play video|get a demo|free trial|start \d+-day/i.test(demo.answer)) {
-      demo.answer = `I'll take one email, then someone from ${company} sales continues here.`
-      demo.blurb = 'Email, then sales'
-    }
+  if (clusterId !== 'hair' && clusterId !== 'email' && siteMentionsDemo(working)) {
+    topics.push({
+      flowName: 'Book a demo',
+      choice: 'A demo',
+      phrases: ['demo', 'book a demo', 'get a demo', 'talk to sales'],
+      question: 'How do I book a demo?',
+      answer: `I'll take one email, then someone from ${company} sales continues here.`,
+      blurb: 'Email, then sales',
+      walk: 'email',
+    })
   }
   topics.push(talkTopic(company))
   const sourceUrl = pages[0]?.url ?? input.pages[0]?.url ?? ''
   const host = hostOf(sourceUrl)
-  const clusterTitle: Record<ClusterId, string> = {
-    hair: 'Hair and Spa Salon',
-    commerce: 'Commerce support',
-    software: 'Software vendor',
-    crm: 'CRM platform',
-    email: 'Inbox assistant',
-    custom: titleCaseHost(host) || 'From a website',
-  }
-  const title = clusterTitle[clusterId]
+  const title = titleCaseHost(host) || company
   return {
     clusterId: clusterId === 'custom' ? 'software' : clusterId,
     title,
-    body: `From ${host || 'a public site'}. Brand names are left off. Edit the lines to match ${company}.`,
-    welcomeName: `${title} welcome`,
+    body: `From ${host || 'a public site'}. Chapters follow the pages that were read.`,
+    welcomeName: `${company} welcome`,
     packTag: clusterId === 'custom' ? 'software' : clusterId,
     greeting,
     followUp: `Hi {{contact.name}}. What do you need help with?`,
