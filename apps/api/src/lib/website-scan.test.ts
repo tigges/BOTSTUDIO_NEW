@@ -835,3 +835,30 @@ test('private and local addresses are refused before a request', () => {
   }
   assert.equal(normalizeScanUrl('yuzu.hair').href, 'https://yuzu.hair/')
 })
+
+test('a UK shop homepage of switching copy is not a job, and SIM still answers plans', () => {
+  const home = pageFromHtml(
+    'https://www.vodafone.co.uk/',
+    `<html><head><title>Vodafone on The Nation's Network</title></head><body>
+      <p>Switching to us is easy and we'll help you at every step.</p>
+      <p>Phones, SIM only and broadband on the UK network.</p>
+    </body></html>`,
+  )
+  const sim = pageFromHtml(
+    'https://www.vodafone.co.uk/sim-only/best-sim-only-deals',
+    `<html><head><title>Best SIM Only Deals</title></head><body>
+      <p>Unlimited data and EU roaming just £26 a month on a SIM only plan.</p>
+    </body></html>`,
+  )
+  const draft = draftWebsiteChat({
+    pages: [home, sim],
+    companyName: 'Vodafone',
+    personaName: 'Voda',
+  })
+  const spoken = draft.doors.map((door) => `${door.flowName} ${door.answer}`).join('\n')
+  assert.equal(/switching to us is easy|help you at every step/i.test(spoken), false)
+  const plans = draft.doors.find((door) => /^plans?/i.test(door.flowName) || /^plans?/i.test(door.title))
+  assert.ok(plans)
+  assert.match(plans!.answer, /£26 a month/)
+  assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
+})

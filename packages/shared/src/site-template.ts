@@ -465,6 +465,8 @@ function isStoryCopy(text: string): boolean {
 function isJunkAnswer(text: string): boolean {
   if (isNavChrome(text)) return true
   if (isStoryCopy(text)) return true
+  if (/\bswitching to (?:us|them) is easy\b/i.test(text)) return true
+  if (/\bwe(?:'| wi)ll help you at every step\b/i.test(text)) return true
   return /computershare|shareview|ordinary shares|code of conduct|adr holding|equiniti|holders of ordinary|possible findings are subject|mitigation plans/i.test(text)
 }
 
