@@ -55,4 +55,5 @@ export interface ExecutionServices {
   redis?: import('ioredis').Redis
   httpFetch: typeof fetch
   catalog?: import('@ybot/shared').StudioCatalog
+  now?: () => Date
 }

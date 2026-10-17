@@ -212,14 +212,26 @@ test('colour qualifies the booking instead of reading a Tuesday offer', async ()
     environmentLabel: 'Sandbox',
     session: stylist.session,
   })
-  assert.match(when.text, /What's your name/)
+  assert.match(when.text, /Tuesday with a senior stylist/)
+  assert.match(when.text, /12pm, 2pm, or 3pm/)
+  assert.match(when.text, /Which time/)
+  assert.equal((when.text.match(/\?/g) ?? []).length, 1)
+  const slot = await runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message: '2pm',
+    environmentLabel: 'Sandbox',
+    session: when.session,
+  })
+  assert.match(slot.text, /What's your name/)
   const named = await runJourneyPreview({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'Sophie',
     environmentLabel: 'Sandbox',
-    session: when.session,
+    session: slot.session,
   })
   assert.match(named.text, /mobile/i)
   const mobile = await runJourneyPreview({
@@ -231,10 +243,54 @@ test('colour qualifies the booking instead of reading a Tuesday offer', async ()
     session: named.session,
   })
   assert.match(mobile.text, /confirm/i)
+  assert.match(mobile.text, /Tuesday at 2pm/)
+  assert.equal(/Tuesday afternoon/.test(mobile.text), false)
   assert.match(chatPlain(mobile.text), /Phorest/)
   assert.equal(/https?:\/\//.test(chatPlain(mobile.text)), false)
   assert.match(mobile.text, /\[Phorest\]\(/)
   assert.equal(mobile.chapter, 'Book an appointment')
+})
+
+test('a mistyped tomorrow offers senior slots and confirms a clock time', async () => {
+  const saturday = new Date('2026-10-17T12:00:00')
+  const home = pageFromHtml('https://yuzu.hair/', `<title>Yuzu</title>
+<p>Yuzu Hair and Beauty works at 5 Dickens Yard, Longfield Avenue, Ealing, W5 2TD.</p>
+<p>Open Tuesday to Friday 10am to 8pm and Saturday 9am to 6pm. Monday and Sunday closed.</p>
+<a href="https://www.phorest.com/salon/yuzuhairandbeauty">Book</a>`)
+  const draft = draftWebsiteChat({ pages: [home], companyName: 'Yuzu', personaName: 'Bella' })
+  const chapters = draft.flows.map((flow) => ({
+    name: flow.name,
+    graph: flow.graph as unknown as FlowGraph,
+  }))
+  const turn = (message: string, session?: Parameters<typeof runJourneyPreview>[0]['session']) => runJourneyPreview({
+    chapters,
+    catalog: draft.catalog,
+    startChapter: 'Salon welcome',
+    message,
+    environmentLabel: 'Sandbox',
+    session,
+    now: saturday,
+  })
+  const open = await turn('')
+  const colour = await turn('color', open.session)
+  const need = await turn('full head', colour.session)
+  const upsell = await turn('yes', need.session)
+  const stylist = await turn('senior', upsell.session)
+  assert.match(stylist.text, /When would suit/i)
+  const when = await turn('tomoeeow', stylist.session)
+  assert.match(when.text, /closed Sunday/)
+  assert.match(when.text, /Tuesday with a senior stylist I have 11am, 2pm, or 5pm/)
+  assert.equal(/tomoeeow/i.test(when.text), false)
+  assert.equal((when.text.match(/\?/g) ?? []).length, 1)
+  const slot = await turn('11am', when.session)
+  assert.match(slot.text, /What's your name/)
+  const named = await turn('CT', slot.session)
+  assert.match(named.text, /mobile/i)
+  const mobile = await turn('788888877', named.session)
+  assert.match(mobile.text, /confirm/i)
+  assert.match(mobile.text, /Tuesday at 11am/)
+  assert.equal(/tomoeeow/i.test(mobile.text), false)
+  assert.match(chatPlain(mobile.text), /Phorest/)
 })
 
 test('a named colour stays on the walk and a deal only appears when they ask', async () => {

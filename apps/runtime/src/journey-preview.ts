@@ -21,7 +21,7 @@ export interface JourneyTurn {
   session?: JourneyPreviewSnapshot
 }
 
-function previewServices(catalog?: StudioCatalog): ExecutionServices {
+function previewServices(catalog?: StudioCatalog, now?: Date): ExecutionServices {
   return {
     llm: {
       classify: async () => ({ category: 'other', confidence: 0 }),
@@ -32,6 +32,7 @@ function previewServices(catalog?: StudioCatalog): ExecutionServices {
     db: {},
     httpFetch: fetch,
     catalog,
+    now: now ? () => now : undefined,
   } as unknown as ExecutionServices
 }
 
@@ -120,6 +121,7 @@ export async function runJourneyPreview(input: {
   environmentLabel: string
   session?: JourneyPreviewSnapshot
   catalog?: StudioCatalog
+  now?: Date
 }): Promise<JourneyTurn> {
   const byName = new Map<string, FlowGraph>()
   for (const chapter of input.chapters) {
@@ -165,7 +167,7 @@ export async function runJourneyPreview(input: {
     }
   }
 
-  const machine = new SessionMachine(previewServices(input.catalog))
+  const machine = new SessionMachine(previewServices(input.catalog, input.now))
   const lines: string[] = []
   let stopped = false
   const seen = new Set<string>()
@@ -241,7 +243,8 @@ export async function runJourneyPreview(input: {
     }
 
     const asked = result.session.waitingFor?.question ?? questionFrom(lines.at(-1) ?? '')
-    if (!opening && asked && sameQuestion(asked, previous?.lastQuestion) && !retriedSameQuestion) {
+    const holdingTime = result.session.waitingFor?.variable === 'preferred_time'
+    if (!opening && asked && !holdingTime && sameQuestion(asked, previous?.lastQuestion) && !retriedSameQuestion) {
       const restarted = beginChapter(graph, chapterName, input.message, saved)
       if (restarted) {
         retriedSameQuestion = true
@@ -251,7 +254,7 @@ export async function runJourneyPreview(input: {
         continue
       }
     }
-    if (!opening && asked && sameQuestion(asked, previous?.lastQuestion)) {
+    if (!opening && asked && !holdingTime && sameQuestion(asked, previous?.lastQuestion)) {
       const offer = offerOnMap(input.chapters, chapterName)
       if (lines.length > hopStart) lines[lines.length - 1] = offer
       else lines.push(offer)
