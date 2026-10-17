@@ -20,6 +20,9 @@ export const NEUTRAL_NAME = 'there'
 /** Asked once, after a neutral greeting, until the visitor gives a real name. */
 export const NAME_QUESTION = "What's your name?"
 
+/** Sales follow-up on CRM and software maps. One question, then a person from sales. */
+export const EMAIL_QUESTION = "What's a good email address for the team to follow up with?"
+
 /** A name we can say out loud. Greetings, placeholders, and sentences are not names. */
 export function usableContactName(raw: string | null | undefined): string | undefined {
   const name = (raw ?? '').trim().replace(/\s+/g, ' ')

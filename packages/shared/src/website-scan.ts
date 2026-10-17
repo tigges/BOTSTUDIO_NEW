@@ -12,6 +12,8 @@ import { emptyCatalog } from './catalog.js'
 import { BOOKING_HOSTS, namedLink } from './chat-links.js'
 import { catalogLookupFlow, SALON_WELCOME_NAME } from './salon-pack.js'
 import type { StarterFlow } from './flow-templates.js'
+import { draftClusteredTemplate, packFromLearned, suggestCluster, type ClusterId } from './site-template.js'
+import { identityFor } from './start-catalog.js'
 
 export interface ScannedLink {
   href: string
@@ -357,8 +359,8 @@ function extractBooking(pages: ScannedPage[]): { url: string; label: string } | 
 const JUNK_PATH = /\/(?:wp-admin|wp-json|feed|tag|category|author|sample-page|hello-world)(?:\/|$)/i
 const ASSET_PATH = /\.(?:png|jpe?g|gif|svg|css|js|pdf|zip|webp|ico|mp4|xml)(?:\?|$)/i
 const PAGE_RANK: Array<[string, number]> = [
-  ['price', 6], ['faq', 6], ['question', 6], ['career', 6], ['vacancy', 6], ['cv', 5],
-  ['team', 5], ['service', 5], ['offer', 4], ['job', 4], ['contact', 4], ['menu', 4],
+  ['price', 6], ['pricing', 6], ['plan', 5], ['faq', 6], ['question', 6], ['career', 6], ['vacancy', 6], ['cv', 5],
+  ['team', 5], ['service', 5], ['demo', 5], ['offer', 4], ['job', 4], ['contact', 4], ['menu', 4],
   ['hour', 3], ['patch', 2], ['about', 2], ['book', 2], ['visit', 1],
 ]
 
@@ -900,6 +902,60 @@ function firstSay(spoke: Spoke): string {
   return spoke.choices?.[0]?.say ?? spoke.say ?? ''
 }
 
+function draftVendorWebsiteChat(input: {
+  pages: ScannedPage[]
+  companyName: string
+  personaName?: string | null
+  clusterId: ClusterId
+}): WebsiteChatDraft {
+  const pages = input.pages
+  const company = input.companyName.trim() || 'your company'
+  const identity = identityFor(input.clusterId)
+  const persona = input.personaName?.trim() || identity.persona || 'the assistant'
+  const spec = draftClusteredTemplate({
+    pages,
+    companyName: company,
+    personaName: persona,
+    clusterId: input.clusterId,
+  })
+  const pack = packFromLearned(spec, company, persona)
+  const doors: ScanDoor[] = pack.doors.map((door) => {
+    const topic = spec.topics.find((item) => item.flowName === door.flowName)
+    const found = Boolean(topic && !/did not state this/i.test(topic.answer))
+    return {
+      title: door.title,
+      flowName: door.flowName,
+      blurb: door.blurb,
+      answer: topic?.answer ?? door.blurb,
+      found,
+      phrases: topic?.phrases ?? [door.title.toLowerCase()],
+    }
+  })
+  const facts: ScanFact[] = spec.topics
+    .filter((topic) => topic.flowName !== 'Talk to a person' && !/did not state this/i.test(topic.answer))
+    .slice(0, 20)
+    .map((topic) => ({ label: topic.choice, text: clip(topic.answer, 180) }))
+  const first = pages[0]
+  return {
+    url: first?.url ?? '',
+    pages: pages.map((page) => page.url),
+    greeting: pack.greeting,
+    doors,
+    facts,
+    note: spec.body,
+    flows: pack.flows.map((flow) => ({ ...flow, publish: false })),
+    faqs: pack.faqs,
+    intents: pack.intents,
+    documents: pages.map((page) => ({
+      title: page.title || page.url,
+      url: page.url,
+      content: page.text.slice(0, 20_000),
+    })),
+    catalog: emptyCatalog(),
+    booking: null,
+  }
+}
+
 /** The map, the charts, and the knowledge lines. No network. */
 export function draftWebsiteChat(input: {
   pages: ScannedPage[]
@@ -907,9 +963,18 @@ export function draftWebsiteChat(input: {
   personaName?: string | null
 }): WebsiteChatDraft {
   const pages = input.pages.filter((page) => page.text.trim().length > 0)
+  const text = pages.map((page) => page.text).join('\n')
+  const cluster = suggestCluster(`${text} ${pages.map((page) => page.url).join(' ')}`)
+  if (cluster !== 'hair') {
+    return draftVendorWebsiteChat({
+      pages,
+      companyName: input.companyName,
+      personaName: input.personaName,
+      clusterId: cluster === 'custom' ? 'software' : cluster,
+    })
+  }
   const company = companyLabel(input.companyName)
   const persona = input.personaName?.trim() || 'Bella'
-  const text = pages.map((page) => page.text).join('\n')
   const address = extractAddress(text)
   const hours = extractHours(text)
   const patch = extractPatch(text)

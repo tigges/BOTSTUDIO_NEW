@@ -294,6 +294,91 @@ test('chooseSitePages keeps a price list, questions, and the team page once', ()
   assert.equal(chosen.some((href) => href.includes('sample-page') || href.includes('hello-world') || href.includes('phorest')), false)
 })
 
+const HUBSPOT_PRICING = `<!doctype html>
+<html><head><title>Pricing</title></head>
+<body>
+<p>HubSpot CRM pipeline marketing automation</p>
+<h1>Sales. Marketing. Service. All together.</h1>
+<section>
+  <h2>Free</h2>
+  <p>No credit card required</p>
+  <p>£0/mo</p>
+  <p>Get started free</p>
+  <p>Get AI-powered help across the CRM</p>
+  <p>Get a unified view of your contacts</p>
+  <p>Organize and manage your companies</p>
+  <p>Create automations from your records</p>
+</section>
+<section>
+  <h2>Starter</h2>
+  <p>Limited-time · 65% off</p>
+  <p>£7/mo/seat</p>
+  <p>Buy now</p>
+  <p>Email and in-app chat support</p>
+  <p>Keep your CRM up to date with AI</p>
+  <p>Plan and create campaigns with Marketing Studio</p>
+</section>
+<section>
+  <h2>Professional</h2>
+  <p>For mature teams</p>
+  <p>£81/mo/seat</p>
+  <p>Buy now</p>
+  <p>Talk to Sales</p>
+  <p>Organize teams across hubs</p>
+  <p>Test changes with a sandbox</p>
+  <p>Control which data users can access</p>
+</section>
+<section>
+  <h2>Enterprise</h2>
+  <p>For sophisticated teams</p>
+  <p>£155/mo/seat</p>
+  <p>Buy now</p>
+  <p>Connect multiple workspaces</p>
+  <p>Set up marketing email</p>
+</section>
+</body></html>`
+
+test('a CRM pricing page becomes plan doors and an email follow-up, not a salon map', async () => {
+  const page = pageFromHtml('https://www.hubspot.com/pricing', HUBSPOT_PRICING)
+  const draft = draftWebsiteChat({ pages: [page], companyName: 'test', personaName: '' })
+  assert.match(draft.greeting, /Maya at test/)
+  assert.equal(/Bella/.test(draft.greeting), false)
+  assert.equal(draft.doors.some((door) => door.flowName === 'Location' || door.flowName === 'Salon hours'), false)
+  const plans = draft.doors.find((door) => /plan|pricing/i.test(door.flowName) || /plan/i.test(door.title))
+  assert.ok(plans)
+  assert.match(plans!.blurb, /Free/)
+  assert.match(plans!.blurb, /Starter/)
+  assert.match(JSON.stringify(draft.flows), /£0 a month/)
+  assert.match(JSON.stringify(draft.flows), /£7 a month per seat/)
+  assert.match(JSON.stringify(draft.flows), /£81 a month per seat/)
+  assert.match(JSON.stringify(draft.flows), /£155 a month per seat/)
+  assert.equal(/HubSpot/i.test(JSON.stringify(draft.flows)), false)
+  const demo = draft.flows.find((flow) => flow.name === 'Book a demo')
+  assert.ok(demo)
+  assert.match(JSON.stringify(demo.graph), /good email address/)
+  assert.match(JSON.stringify(demo.graph), /One moment please/)
+  assert.match(JSON.stringify(demo.graph), /from test sales/)
+  assert.ok(draft.doors.length >= 12)
+  assert.ok(draft.doors.some((door) => /marketing/i.test(door.title)))
+  assert.ok(draft.doors.some((door) => /sales/i.test(door.title)))
+  assert.ok(draft.doors.some((door) => /contacts/i.test(door.title)))
+  const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
+  const demoGraph = demo.graph as unknown as FlowGraph
+  const asked = await machine.run(session('talk to sales'), demoGraph, 'talk to sales')
+  assert.match(asked.newMessages.map((message) => message.content.text).join('\n'), /good email address/)
+  asked.session.variables.flow['_last_user_message'] = 'toto.limbo@gmail.com'
+  asked.session.variables.flow['email'] = 'toto.limbo@gmail.com'
+  const next = await machine.run(asked.session, demoGraph, 'toto.limbo@gmail.com')
+  const nextText = next.newMessages.map((message) => message.content.text).join('\n')
+  assert.match(nextText, /One moment please/)
+  assert.match(nextText, /Maya from test sales/)
+  const names = draft.flows.map((flow) => flow.name)
+  for (const flow of draft.flows) {
+    const issues = inspectFlowGraph(flow.graph as Parameters<typeof inspectFlowGraph>[0], { flowNames: names })
+    assert.deepEqual(issues.filter((issue) => issue.level === 'block' || issue.level === 'repair'), [], flow.name)
+  }
+})
+
 test('private and local addresses are refused before a request', () => {
   for (const ip of ['127.0.0.1', '10.1.2.3', '192.168.0.4', '172.16.0.1', '169.254.169.254', '::1', 'fd00::1']) {
     assert.equal(isBlockedIp(ip), true, ip)

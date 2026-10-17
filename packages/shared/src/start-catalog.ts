@@ -17,6 +17,7 @@ import {
   type SiteTemplatePack,
   type SiteTopic,
 } from './site-template.js'
+import { CRM_PLAN_TIERS, planChoices, planSummary } from './plan-tiers.js'
 
 export type BotStart =
   | 'hair-studio'
@@ -185,7 +186,7 @@ export const BAKED_TEMPLATES: StartTemplate[] = [
     id: 'crm-platform',
     clusterId: 'crm',
     title: 'CRM platform',
-    body: 'Marketing, sales, service, contacts, meetings, tickets, reporting, plans, billing, login, and a demo.',
+    body: 'Marketing, sales, service, contacts, and Free through Enterprise plans. A demo asks for one email, then sales continues.',
     tag: 'From hubspot.com',
     source: { host: 'hubspot.com', note: 'Public crawl. Product brand names are left off.' },
   }),
@@ -295,8 +296,9 @@ function softwareTopics(company: string): SiteTopic[] {
       choice: 'A demo',
       phrases: ['demo', 'book a demo', 'schedule', 'request demo', 'roi'],
       question: 'How do I book a demo?',
-      answer: 'I can note a demo. What is a good day, and who should the team talk to?',
-      blurb: 'A day, then the team',
+      answer: 'I can ask sales to follow up. One email, then a person from the team continues.',
+      blurb: 'Email, then sales',
+      walk: 'email',
     },
     {
       flowName: 'Talk to a person',
@@ -379,10 +381,12 @@ function crmTopics(company: string): SiteTopic[] {
     {
       flowName: 'Plans and pricing',
       choice: 'Plans',
-      phrases: ['pricing', 'plans', 'free', 'starter', 'cost', 'professional', 'enterprise'],
-      question: 'What are the plans?',
-      answer: 'There is a free set of tools and paid plans for marketing, sales, and service. A small-business bundle puts the starter edition of each together. I can note which plan you are asking about.',
-      blurb: 'Free tools and paid plans',
+      phrases: ['pricing', 'plans', 'free', 'starter', 'cost', 'professional', 'enterprise', 'how much'],
+      question: 'Which plan are you asking about?',
+      answer: planSummary(CRM_PLAN_TIERS),
+      blurb: 'Free, Starter, Professional, Enterprise',
+      walk: 'plans',
+      choices: planChoices(CRM_PLAN_TIERS),
     },
     {
       flowName: 'Billing',
@@ -405,8 +409,9 @@ function crmTopics(company: string): SiteTopic[] {
       choice: 'A demo',
       phrases: ['demo', 'book a demo', 'get a demo', 'talk to sales'],
       question: 'How do I book a demo?',
-      answer: 'I can note a demo of the customer platform. What is a good day, and which team should we start with — marketing, sales, or service?',
-      blurb: 'A walkthrough with the team',
+      answer: 'I can ask sales to follow up. One email, then a person from the team continues.',
+      blurb: 'Email, then sales',
+      walk: 'email',
     },
     {
       flowName: 'Talk to a person',
