@@ -35,8 +35,9 @@ function session(text: string, name = 'Ada'): Session {
   }
 }
 
-test('the wizard starts with scan, blank, and templates — not clusters first', () => {
-  assert.deepEqual(START_OPTIONS.map((item) => item.id), ['template', 'website', 'sample', 'blank'])
+test('the wizard starts with scan, sample, and blank — templates stay parked', () => {
+  assert.deepEqual(START_OPTIONS.map((item) => item.id), ['website', 'sample', 'blank'])
+  assert.equal(START_OPTIONS.some((item) => item.id === 'template'), false)
   assert.equal(BAKED_TEMPLATES.some((item) => item.id === 'website' || item.id === 'blank'), false)
   assert.equal(templatesInCluster('hair').some((item) => item.id === 'hair-studio'), true)
   assert.equal(templatesInCluster('commerce').some((item) => item.id === 'corporate'), true)

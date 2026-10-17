@@ -4,7 +4,6 @@ import { prisma } from '@ybot/db'
 import { normalizedBotName } from '../lib/bot-name.js'
 import { deleteBotRecords } from '../lib/delete-bot.js'
 import {
-  BAKED_TEMPLATES,
   BOT_STARTS,
   START_CLUSTERS,
   bakedPack,
@@ -99,7 +98,7 @@ export async function botsRoutes(app: FastifyInstance) {
     return {
       data: {
         clusters: START_CLUSTERS,
-        templates: [...BAKED_TEMPLATES, ...learned],
+        templates: learned,
       },
     }
   })

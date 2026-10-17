@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import { Avatar, Badge, Button, Input, Card } from '@ybot/ui'
 import type { FlowGraph } from '@ybot/runtime'
 import {
-  BAKED_TEMPLATES,
   SALON_WELCOME_NAME,
   START_CLUSTERS,
   START_OPTIONS,
@@ -43,7 +42,7 @@ export function BotNewPage() {
   const [name, setName] = useState('')
   const [personaName, setPersonaName] = useState('')
   const [description, setDescription] = useState('')
-  const [path, setPath] = useState<StartPath>('template')
+  const [path, setPath] = useState<StartPath>('website')
   const [start, setStart] = useState<BotStart | null>(null)
   const [templateId, setTemplateId] = useState<string | null>(null)
   const [clusterFilter, setClusterFilter] = useState<ClusterId | 'all'>('all')
@@ -61,7 +60,7 @@ export function BotNewPage() {
   })
 
   const clusters = catalog.data?.clusters ?? START_CLUSTERS
-  const templates: CatalogTemplate[] = (catalog.data?.templates as CatalogTemplate[] | undefined) ?? BAKED_TEMPLATES
+  const templates: CatalogTemplate[] = (catalog.data?.templates as CatalogTemplate[] | undefined) ?? []
   const gallery = clusterFilter === 'all'
     ? templates
     : templates.filter((item) => item.clusterId === clusterFilter)
@@ -305,7 +304,7 @@ export function BotNewPage() {
         <>
           <h1 className="text-xl font-bold text-[var(--text-primary)]">How should {name.trim()} start?</h1>
           <p className="mb-4 mt-1 text-sm text-[var(--text-muted)]">
-            Scan a site, start empty, or pick a template. Templates open the mapped cases — hair studio, CRM, and the rest.
+            Scan a site, paste a conversation, or start empty.
           </p>
           <div className="grid items-start gap-4 lg:grid-cols-[1.15fr_0.85fr]">
             <div className="grid gap-2" role="radiogroup" aria-label="How it starts">

@@ -325,7 +325,7 @@ function TemplatesFromSites() {
         clusterId: clusterId || preview?.clusterId,
       })
       setPreview(result.data)
-      setSavedNote(`${result.data.title} is in the start wizard’s templates, under ${START_CLUSTERS.find((item) => item.id === result.data.clusterId)?.title ?? result.data.clusterId}.`)
+      setSavedNote(`${result.data.title} is saved under ${START_CLUSTERS.find((item) => item.id === result.data.clusterId)?.title ?? result.data.clusterId}. The start wizard does not offer templates right now.`)
     } catch (err: unknown) {
       if (err instanceof Error) setError(err.message)
     } finally {
@@ -389,7 +389,7 @@ function TemplatesFromSites() {
             <p className="mt-1 text-xs text-[var(--text-muted)]">{preview.body}</p>
             <p className="mt-2 text-[11px] text-[var(--text-secondary)]">From {preview.sourceHost || 'the site'}. Brand names are left off.</p>
             <Button size="sm" className="mt-3" disabled={saving} onClick={() => { void saveTemplate() }}>
-              {saving ? 'Saving…' : 'Add to start wizard'}
+              {saving ? 'Saving…' : 'Save this map'}
             </Button>
             {savedNote && <p className="mt-2 text-xs text-emerald-700">{savedNote}</p>}
           </div>

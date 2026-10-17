@@ -166,7 +166,7 @@ const BOTSTUDIO_HOME = `<!doctype html>
   <span>Colour</span><span>Cut</span>
   <span>Location</span><span>Hours</span><span>Book</span>
 </div>
-<p>Scan your website address and let the BotStudio do the rest. Use a blueprint if you don't have a website.</p>
+<p>Scan your website address and let the BotStudio do the rest. No website yet? Start from a blank welcome.</p>
 <p>Start with the website widget. Activate further channels like WhatsApp and email in Channels.</p>
 <div class="inbox" aria-hidden="true">
   <div>Inbox</div>

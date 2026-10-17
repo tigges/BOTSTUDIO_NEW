@@ -1,7 +1,7 @@
 /**
- * Start wizard: name, then how to start (scan, sample, blank, or a template).
- * Templates are the mapped cases (hair studio, CRM, software, inbox).
- * Each template has its own persona, avatar colour, and kind of conversation.
+ * Start wizard: name, then how to start (scan a site, paste a sample, or blank).
+ * Baked templates stay in this file for packs and tests, but they are not offered
+ * as a start path until we bring them back.
  */
 
 import { assistantGreeting } from './greeting-welcome.js'
@@ -60,6 +60,7 @@ export interface StartTemplate {
   source?: { host: string; note: string }
 }
 
+/** `template` stays on the type so parked wizard UI still typechecks. It is not in START_OPTIONS. */
 export type StartPath = 'template' | 'website' | 'sample' | 'blank'
 
 export interface StartOption {
@@ -77,12 +78,6 @@ export interface TemplateIdentity {
 }
 
 export const START_OPTIONS: StartOption[] = [
-  {
-    id: 'template',
-    title: 'From a template',
-    body: 'Hair and Spa Salon, CRM, software, inbox, or commerce — then the map for that kind of conversation.',
-    tag: 'Mapped cases',
-  },
   {
     id: 'website',
     title: 'Scan my website',
@@ -159,6 +154,7 @@ function withIdentity(item: Omit<StartTemplate, 'persona' | 'accent' | 'role'>):
   return { ...item, persona: identity.persona, accent: identity.accent, role: identity.role }
 }
 
+/** Parked: not listed in START_OPTIONS or GET /start-catalog. Packs stay for tests and POST start=. */
 export const BAKED_TEMPLATES: StartTemplate[] = [
   withIdentity({
     id: 'hair-studio',
