@@ -4,7 +4,6 @@
  */
 
 import { NAME_QUESTION } from './contact-speech.js'
-import { offersHoursNext } from './salon-pack.js'
 
 export interface OptimizeGraph {
   nodes: Array<{
@@ -96,7 +95,7 @@ function routeList(node: OptimizeGraph['nodes'][number]): Array<{ handle: string
 }
 
 function asksHours(graph: OptimizeGraph): boolean {
-  return graph.nodes.some((node) => node.data.kind === 'ask_question' && offersHoursNext(String(node.data.config['question'] ?? '')))
+  return graph.nodes.some((node) => node.data.kind === 'ask_question' && /want the hours/i.test(String(node.data.config['question'] ?? '')))
 }
 
 function nameAskNodes(graph: OptimizeGraph): OptimizeGraph['nodes'] {
@@ -150,8 +149,11 @@ export function findingsFromChat(input: {
 }): ChatFinding[] {
   const findings: ChatFinding[] = []
   const hoursChapter = hoursOfferChapter(input.chapters)
-  const hoursName = input.chapters.find((chapter) => /hours/i.test(chapter.name))?.name ?? 'Salon hours'
+  const hoursName = input.chapters.find((chapter) => /^salon hours$/i.test(chapter.name))?.name
+    ?? input.chapters.find((chapter) => /hours/i.test(chapter.name) && !/welcome/i.test(chapter.name))?.name
+    ?? 'Salon hours'
   const bookName = input.chapters.find((chapter) => /book/i.test(chapter.name))?.name ?? 'Book an appointment'
+  const hoursAsk = input.lines.find((line) => line.role === 'assistant' && /want the hours/i.test(line.content))
   if (bookOpenedAfterHours(input.lines) && hoursChapter) {
     const opened = input.lines.find((line, index) => {
       if (index < 2) return false
@@ -165,8 +167,8 @@ export function findingsFromChat(input: {
       kind: 'offer_yes',
       title: 'Yes after the hours offer opened Book',
       detail: 'Want the hours? then ok should open Salon hours. Accept moves yes and ok onto that door.',
-      chapterName: hoursChapter.name,
-      fromChapter: hoursChapter.name,
+      chapterName: hoursAsk?.chapter || hoursChapter.name,
+      fromChapter: hoursAsk?.chapter || hoursChapter.name,
       openedChapter: opened?.chapter || bookName,
       shouldOpen: hoursName,
       heard: 'ok',
@@ -240,7 +242,7 @@ export function findingsFromChat(input: {
 function patchHoursOfferGraph(graph: OptimizeGraph): OptimizeGraph {
   const hoursAsks = new Set(
     graph.nodes
-      .filter((node) => node.data.kind === 'ask_question' && offersHoursNext(String(node.data.config['question'] ?? '')))
+      .filter((node) => node.data.kind === 'ask_question' && /want the hours/i.test(String(node.data.config['question'] ?? '')))
       .map((node) => node.id),
   )
   const routeIds = new Set(graph.edges.filter((edge) => hoursAsks.has(edge.source)).map((edge) => edge.target))
