@@ -94,16 +94,35 @@ const CLUSTER_HINTS: Array<[ClusterId, RegExp]> = [
   ['crm', /\b(hubspot|crm|pipeline|marketing automation|sales hub)\b/i],
   // After CRM: inbox sites name gmail/inbox. Bare "email" is CRM plan copy ("Email and in-app chat").
   ['email', /\b(gmail|inbox|mailbox|compose)\b/i],
-  ['software', /\b(cevro|operator|kyc|vendor|integration|platform|saas)\b/i],
+  ['software', /\b(cevro|operator|kyc|vendor|integration|platform|saas|chatbots?|hybrid agents?|agent workforce|website widgets?|bots answer)\b/i],
   ['commerce', /\b(shipping|return policy|order tracking|checkout)\b/i],
 ]
 
+const CLUSTER_RANK: ClusterId[] = ['crm', 'email', 'software', 'commerce', 'hair']
+
+function hintHits(pattern: RegExp, text: string): number {
+  return [...text.matchAll(new RegExp(pattern.source, 'gi'))].length
+}
+
+/**
+ * A salon word on a product page is usually a sample (Hair & Spa on BotStudio).
+ * Hair only wins when it is the only match, or the page names the studio often.
+ */
 export function suggestCluster(text: string): ClusterId {
   const blob = `${text}`
-  for (const [id, pattern] of CLUSTER_HINTS) {
-    if (pattern.test(blob)) return id
+  const scored = CLUSTER_HINTS
+    .map(([id, pattern]) => [id, hintHits(pattern, blob)] as const)
+    .filter(([, n]) => n > 0)
+  if (scored.length === 0) return 'custom'
+  const hair = scored.find(([id]) => id === 'hair')?.[1] ?? 0
+  const product = scored.filter(([id]) => id !== 'hair')
+  if (product.length > 0) {
+    const bestProduct = product.reduce((best, row) => (row[1] > best[1] ? row : best))
+    if (hair >= 4 && hair > bestProduct[1] * 2) return 'hair'
+    product.sort((a, b) => b[1] - a[1] || CLUSTER_RANK.indexOf(a[0]) - CLUSTER_RANK.indexOf(b[0]))
+    return product[0]![0]
   }
-  return 'custom'
+  return hair > 0 ? 'hair' : 'custom'
 }
 
 function handleFor(name: string): string {
@@ -308,14 +327,14 @@ const SEEDS: Record<Exclude<ClusterId, 'custom'>, SiteTopic[]> = {
     { flowName: 'Warranty', choice: 'Warranty', phrases: ['warranty', 'guarantee', 'broken'], question: 'What is the warranty?', answer: '', blurb: 'What is covered' },
   ],
   software: [
-    { flowName: 'Product', choice: 'What we do', phrases: ['product', 'platform', 'what do you do', 'features'], question: 'What does the product do?', answer: '', blurb: 'The product in one line' },
+    { flowName: 'Product', choice: 'What we do', phrases: ['product', 'platform', 'what do you do', 'features', 'bots answer', 'hybrid agent'], question: 'What does the product do?', answer: '', blurb: 'The product in one line' },
     { flowName: 'Support', choice: 'Support', phrases: ['support', 'help desk', 'queue'], question: 'How does support work?', answer: '', blurb: 'The usual questions, then a person' },
     { flowName: 'Accounts', choice: 'Accounts', phrases: ['account', 'login', 'password', 'sign in'], question: 'How do accounts and login work?', answer: '', blurb: 'Login, password, locked out' },
     { flowName: 'Payments and identity', choice: 'Payments', phrases: ['payment', 'payout', 'kyc', 'verification', 'identity'], question: 'How do payments and identity checks work?', answer: '', blurb: 'Payouts and checks' },
     { flowName: 'Safety', choice: 'Safety', phrases: ['compliance', 'safety', 'responsible', 'guardrail'], question: 'How do you handle safety?', answer: '', blurb: 'Checks on every reply' },
-    { flowName: 'Onboarding', choice: 'Get started', phrases: ['onboarding', 'get started', 'setup', 'go live'], question: 'How do we get started?', answer: '', blurb: 'Setup, then a first live week' },
-    { flowName: 'Integrations', choice: 'Integrations', phrases: ['integration', 'connect', 'api', 'crm'], question: 'What does it connect to?', answer: '', blurb: 'Helpdesks, CRMs, payments' },
-    { flowName: 'Pricing', choice: 'Pricing', phrases: ['pricing', 'how much', 'cost', 'plan'], question: 'What does it cost?', answer: '', blurb: 'Volume, then a quote' },
+    { flowName: 'Onboarding', choice: 'Get started', phrases: ['onboarding', 'get started', 'setup', 'go live', 'start free', 'live today'], question: 'How do we get started?', answer: '', blurb: 'Setup, then a first live week' },
+    { flowName: 'Integrations', choice: 'Integrations', phrases: ['integration', 'connect', 'api', 'crm', 'whatsapp', 'channels'], question: 'What does it connect to?', answer: '', blurb: 'Helpdesks, CRMs, payments' },
+    { flowName: 'Pricing', choice: 'Pricing', phrases: ['pricing', 'how much', 'cost', 'plan', 'free plan'], question: 'What does it cost?', answer: '', blurb: 'Volume, then a quote' },
     { flowName: 'Status', choice: 'Status', phrases: ['status', 'outage', 'incident', 'downtime'], question: 'Is there an outage?', answer: '', blurb: 'Incidents and downtime' },
     { flowName: 'API', choice: 'API', phrases: ['api', 'developer', 'docs', 'webhook'], question: 'Is there an API?', answer: '', blurb: 'Docs, webhooks, events' },
     { flowName: 'Book a demo', choice: 'A demo', phrases: ['demo', 'book a demo', 'schedule'], question: 'How do I book a demo?', answer: '', blurb: 'A day, then the team' },
@@ -368,6 +387,7 @@ function escapeRe(value: string): string {
 function isNavChrome(text: string): boolean {
   const t = text.replace(/\s+/g, ' ').trim()
   if (/\ba11y\b/i.test(t)) return true
+  if (/\bsign in\b/i.test(t) && /\bstart free\b/i.test(t)) return true
   if (/skip to (?:main )?content/i.test(t)) return true
   if (/opens in a new tab/i.test(t)) return true
   if (/see all /i.test(t) && /case stud/i.test(t)) return true
