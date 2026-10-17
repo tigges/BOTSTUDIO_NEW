@@ -61,6 +61,8 @@ export type ChannelKind =
   | 'whatsapp'
   | 'sms'
   | 'email'
+  | 'telegram'
+  | 'phone'
   | 'google_chat'
   | 'facebook'
   | 'teams'

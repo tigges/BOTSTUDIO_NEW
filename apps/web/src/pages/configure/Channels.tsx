@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import {
-  Globe, MessageSquare, Phone, Mail, Facebook,
+  Globe, MessageSquare, Phone, Mail, Smartphone,
   Send, CheckCircle2, Circle, Pencil, Trash2, Code2,
   Copy, Loader2, FlaskConical, Wand2,
 } from 'lucide-react'
@@ -24,12 +24,12 @@ const SUBNAV = [
 ]
 
 const KIND_META: Record<ChannelKind, { label: string; description: string; icon: React.ReactNode }> = {
-  web:       { label: 'Website chat',        description: 'Always connected. Walks the journey map.', icon: <Globe size={22} /> },
-  whatsapp:  { label: 'WhatsApp',            description: 'Connect a WhatsApp Business number.',      icon: <MessageSquare size={22} /> },
-  sms:       { label: 'SMS',                 description: 'Send and receive texts.',                  icon: <Phone size={22} /> },
-  email:     { label: 'Email',               description: 'Receive and reply to mail.',               icon: <Mail size={22} /> },
-  facebook:  { label: 'Messenger',           description: 'A Facebook Page inbox.',                   icon: <Facebook size={22} /> },
-  telegram:  { label: 'Telegram',            description: 'A Telegram bot.',                          icon: <Send size={22} /> },
+  web:       { label: 'Website chat',  description: 'Always on. Walks the journey map.',                 icon: <Globe size={22} /> },
+  whatsapp:  { label: 'WhatsApp',      description: 'Connect a WhatsApp Business number.',               icon: <MessageSquare size={22} /> },
+  sms:       { label: 'SMS',           description: 'Send and receive texts.',                           icon: <Smartphone size={22} /> },
+  telegram:  { label: 'Telegram',      description: 'A Telegram bot.',                                   icon: <Send size={22} /> },
+  phone:     { label: 'Phone',         description: 'A voice number for calls.',                         icon: <Phone size={22} /> },
+  email:     { label: 'Email',         description: 'Receive and reply to mail.',                        icon: <Mail size={22} /> },
 }
 
 function getEmbedCode(channelId: string): string {
@@ -55,7 +55,7 @@ function getDemoUrl(channelId: string): string {
 }
 
 function statusCopy(status: ChannelStatus, kind: ChannelKind): { label: string; hint: string } {
-  if (kind === 'web') return { label: 'Active', hint: 'Always on for this layer' }
+  if (kind === 'web') return { label: 'Active', hint: 'Always on' }
   if (status === 'active') return { label: 'Active', hint: 'Accepting conversations' }
   if (status === 'inactive') return { label: 'Inactive', hint: 'Connected — turn on to take chats' }
   return { label: 'Idle', hint: 'Not connected' }
@@ -70,6 +70,8 @@ export function ChannelsPage() {
   const deleteChannel = useDeleteChannel()
   const updateChannel = useUpdateChannel()
   const slots = useMemo(() => slotsForEnvironment(channels, envId), [channels, envId])
+  const connected = slots.filter((slot) => slot.status !== 'idle')
+  const recommended = slots.filter((slot) => slot.status === 'idle')
 
   const [selected, setSelected]     = useState<Channel | null>(null)
   const [editName, setEditName]     = useState('')
@@ -139,6 +141,114 @@ export function ChannelsPage() {
     await updateChannel.mutateAsync({ id: channel.id, isActive: next })
   }
 
+  function renderChannelCard(slot: (typeof slots)[number]) {
+    const meta = KIND_META[slot.kind]
+    const channel = slot.channel
+    const copy = statusCopy(slot.status, slot.kind)
+    const on = slot.status === 'active'
+    return (
+      <div
+        key={slot.kind}
+        className={cn(
+          'rounded-[var(--radius-lg)] border bg-[var(--bg-surface)] p-5 transition-colors group',
+          slot.status === 'idle' ? 'border-[var(--border)] opacity-80' : 'border-[var(--border)] hover:border-[var(--accent)]/40',
+          channel ? 'cursor-pointer' : '',
+        )}
+        onClick={() => { if (channel) openSettings(channel) }}
+      >
+        <div className="flex items-start justify-between mb-4">
+          <div className={cn(
+            'p-3 rounded-[var(--radius-md)]',
+            on ? 'bg-[var(--accent-muted)] text-[var(--accent)]' : 'bg-[var(--bg-overlay)] text-[var(--text-muted)]'
+          )}>
+            {meta.icon}
+          </div>
+          {channel && (
+            <div className="flex items-center gap-1">
+              {slot.kind === 'web' && (
+                <>
+                  <button
+                    title="Test widget in new tab"
+                    onClick={(e) => { e.stopPropagation(); window.open(getTestUrl(channel.id), '_blank') }}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-[var(--bg-overlay)] text-[var(--text-muted)] hover:text-[var(--accent)] transition-all"
+                  >
+                    <FlaskConical size={14} />
+                  </button>
+                  <button
+                    title="View embed code"
+                    onClick={(e) => { e.stopPropagation(); setShowEmbed(channel) }}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-[var(--bg-overlay)] text-[var(--text-muted)] hover:text-[var(--accent)] transition-all"
+                  >
+                    <Code2 size={14} />
+                  </button>
+                </>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    onClick={(e) => e.stopPropagation()}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-[var(--bg-overlay)] text-[var(--text-muted)] transition-all"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => openSettings(channel)}><Pencil size={13} /> Settings</DropdownMenuItem>
+                  {slot.kind === 'web' && <DropdownMenuItem onClick={() => { setShowWizard(true) }}><Wand2 size={13} /> Setup wizard</DropdownMenuItem>}
+                  {slot.kind === 'web' && <DropdownMenuItem onClick={() => window.open(getTestUrl(channel.id), '_blank')}><FlaskConical size={13} /> Test widget</DropdownMenuItem>}
+                  {slot.kind === 'web' && <DropdownMenuItem onClick={() => setShowEmbed(channel)}><Code2 size={13} /> Embed code</DropdownMenuItem>}
+                  {slot.kind !== 'web' && <DropdownMenuSeparator />}
+                  {slot.kind !== 'web' && (
+                    <DropdownMenuItem destructive onClick={() => deleteChannel.mutate(channel.id)}>
+                      <Trash2 size={13} /> Disconnect
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+        </div>
+
+        <h3 className="font-semibold text-[var(--text-primary)] mb-0.5">{meta.label}</h3>
+        <p className="text-xs text-[var(--text-muted)] mb-3">{meta.description}</p>
+
+        <div className="flex items-center justify-between gap-2">
+          <span className={cn('flex items-center gap-1.5 text-xs font-medium', on ? 'text-[var(--success)]' : 'text-[var(--text-muted)]')}>
+            {on ? <CheckCircle2 size={12} /> : <Circle size={12} />}
+            {copy.label}
+          </span>
+          {slot.kind === 'web' ? (
+            <Badge variant="muted" className="text-[10px] uppercase tracking-wide">Always on</Badge>
+          ) : slot.status === 'idle' ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-7"
+              disabled={!envId || createChannel.isPending}
+              onClick={(event) => { event.stopPropagation(); openConnect(slot.kind) }}
+            >
+              Connect
+            </Button>
+          ) : channel ? (
+            <button
+              role="switch"
+              aria-checked={channel.isActive}
+              aria-label={channel.isActive ? 'Turn off' : 'Turn on'}
+              onClick={(event) => { event.stopPropagation(); void toggleActive(channel, !channel.isActive) }}
+              className={cn(
+                'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none',
+                channel.isActive ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
+              )}
+            >
+              <span className={cn('pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform', channel.isActive ? 'translate-x-4' : 'translate-x-0')} />
+            </button>
+          ) : null}
+        </div>
+        <p className="mt-2 text-[11px] text-[var(--text-muted)]">{copy.hint}</p>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-full">
       {showWizard && <WidgetSetupWizard onClose={() => setShowWizard(false)} />}
@@ -155,7 +265,7 @@ export function ChannelsPage() {
 
       <div className="flex-1 overflow-auto p-6">
         <p className="mb-6 text-sm text-[var(--text-muted)]">
-          Website chat is always on. Other channels stay idle until you connect them, then you can turn them on. Sandbox and production are the switch at the top — each layer has its own connections.
+          Website chat is always on. WhatsApp, SMS, Telegram, and phone stay here until you connect them.
         </p>
 
         {isLoading && (
@@ -165,114 +275,19 @@ export function ChannelsPage() {
         )}
 
         {!isLoading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {slots.map((slot) => {
-              const meta = KIND_META[slot.kind]
-              const channel = slot.channel
-              const copy = statusCopy(slot.status, slot.kind)
-              const on = slot.status === 'active'
-              return (
-                <div
-                  key={slot.kind}
-                  className={cn(
-                    'rounded-[var(--radius-lg)] border bg-[var(--bg-surface)] p-5 transition-colors group',
-                    slot.status === 'idle' ? 'border-[var(--border)] opacity-80' : 'border-[var(--border)] hover:border-[var(--accent)]/40',
-                    channel ? 'cursor-pointer' : '',
-                  )}
-                  onClick={() => { if (channel) openSettings(channel) }}
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className={cn(
-                      'p-3 rounded-[var(--radius-md)]',
-                      on ? 'bg-[var(--accent-muted)] text-[var(--accent)]' : 'bg-[var(--bg-overlay)] text-[var(--text-muted)]'
-                    )}>
-                      {meta.icon}
-                    </div>
-                    {channel && (
-                      <div className="flex items-center gap-1">
-                        {slot.kind === 'web' && (
-                          <>
-                            <button
-                              title="Test widget in new tab"
-                              onClick={(e) => { e.stopPropagation(); window.open(getTestUrl(channel.id), '_blank') }}
-                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-[var(--bg-overlay)] text-[var(--text-muted)] hover:text-[var(--accent)] transition-all"
-                            >
-                              <FlaskConical size={14} />
-                            </button>
-                            <button
-                              title="View embed code"
-                              onClick={(e) => { e.stopPropagation(); setShowEmbed(channel) }}
-                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-[var(--bg-overlay)] text-[var(--text-muted)] hover:text-[var(--accent)] transition-all"
-                            >
-                              <Code2 size={14} />
-                            </button>
-                          </>
-                        )}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              onClick={(e) => e.stopPropagation()}
-                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-[var(--bg-overlay)] text-[var(--text-muted)] transition-all"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openSettings(channel)}><Pencil size={13} /> Settings</DropdownMenuItem>
-                            {slot.kind === 'web' && <DropdownMenuItem onClick={() => { setShowWizard(true) }}><Wand2 size={13} /> Setup wizard</DropdownMenuItem>}
-                            {slot.kind === 'web' && <DropdownMenuItem onClick={() => window.open(getTestUrl(channel.id), '_blank')}><FlaskConical size={13} /> Test widget</DropdownMenuItem>}
-                            {slot.kind === 'web' && <DropdownMenuItem onClick={() => setShowEmbed(channel)}><Code2 size={13} /> Embed code</DropdownMenuItem>}
-                            {slot.kind !== 'web' && <DropdownMenuSeparator />}
-                            {slot.kind !== 'web' && (
-                              <DropdownMenuItem destructive onClick={() => deleteChannel.mutate(channel.id)}>
-                                <Trash2 size={13} /> Disconnect
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    )}
-                  </div>
-
-                  <h3 className="font-semibold text-[var(--text-primary)] mb-0.5">{meta.label}</h3>
-                  <p className="text-xs text-[var(--text-muted)] mb-3">{meta.description}</p>
-
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={cn('flex items-center gap-1.5 text-xs font-medium', on ? 'text-[var(--success)]' : 'text-[var(--text-muted)]')}>
-                      {on ? <CheckCircle2 size={12} /> : <Circle size={12} />}
-                      {copy.label}
-                    </span>
-                    {slot.kind === 'web' ? (
-                      <Badge variant="muted" className="text-[10px] uppercase tracking-wide">Always on</Badge>
-                    ) : slot.status === 'idle' ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="h-7"
-                        disabled={!envId || createChannel.isPending}
-                        onClick={(event) => { event.stopPropagation(); openConnect(slot.kind) }}
-                      >
-                        Connect
-                      </Button>
-                    ) : channel ? (
-                      <button
-                        role="switch"
-                        aria-checked={channel.isActive}
-                        aria-label={channel.isActive ? 'Turn off' : 'Turn on'}
-                        onClick={(event) => { event.stopPropagation(); void toggleActive(channel, !channel.isActive) }}
-                        className={cn(
-                          'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none',
-                          channel.isActive ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
-                        )}
-                      >
-                        <span className={cn('pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform', channel.isActive ? 'translate-x-4' : 'translate-x-0')} />
-                      </button>
-                    ) : null}
-                  </div>
-                  <p className="mt-2 text-[11px] text-[var(--text-muted)]">{copy.hint}</p>
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {connected.map((slot) => renderChannelCard(slot))}
+            </div>
+            {recommended.length > 0 && (
+              <div>
+                <h2 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">Recommended</h2>
+                <p className="mb-4 text-xs text-[var(--text-muted)]">Connect a channel when you are ready. It stays idle until you turn it on.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {recommended.map((slot) => renderChannelCard(slot))}
                 </div>
-              )
-            })}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -303,7 +318,7 @@ export function ChannelsPage() {
                       </span>
                       <div>
                         <p className="text-sm font-medium text-[var(--text-primary)]">Always on</p>
-                        <p className="text-xs text-[var(--text-muted)]">Connected and active on this layer. Guests do not wait on a wizard.</p>
+                        <p className="text-xs text-[var(--text-muted)]">Connected and active. Guests do not wait on a wizard.</p>
                       </div>
                     </div>
                   </div>
@@ -460,7 +475,7 @@ export function ChannelsPage() {
             <DialogHeader><DialogTitle>Connect {KIND_META[connecting].label}</DialogTitle></DialogHeader>
             <DialogBody className="space-y-4">
               <p className="text-sm text-[var(--text-secondary)]">
-                This connects {KIND_META[connecting].label} on the {selectedEnv === 'sandbox' ? 'sandbox' : 'production'} layer. It stays inactive until you turn it on.
+                This connects {KIND_META[connecting].label}. It stays inactive until you turn it on.
               </p>
               {connecting === 'whatsapp' && (
                 <div className="space-y-3">
