@@ -12,7 +12,6 @@ import {
   DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel,
 } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
-import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
 import { useConversations, useConversation, useSendMessage, useAssignConversation, useResolveConversation, useCreateConversation } from '../../lib/hooks'
 import { useConversationWS, useTenantWS } from '../../lib/ws'
@@ -24,13 +23,6 @@ import { claimChat, queueContact } from '../../lib/inbox-nav'
 import { ChatText } from '../../components/ChatText'
 import { chatMarkup, chatText } from '../../lib/chat-text'
 import { useCannedReplies, useTeamMembers, useLabels, useCreateLabel, useCreateTicket } from '../../lib/hooks'
-
-const SUBNAV = [
-  { label: 'Chats', path: '/inbox/chats' },
-  { label: 'Tickets', path: '/inbox/tickets' },
-  { label: 'Contacts', path: '/inbox/contacts' },
-  { label: 'Settings', path: '/inbox/settings' },
-]
 
 type ConvoStatus = 'active' | 'resolved' | 'escalated' | 'pending' | 'bot'
 type View = 'all' | 'mine' | 'unassigned' | 'escalated'
@@ -275,13 +267,12 @@ export function ChatsPage() {
       <div className="flex w-[280px] flex-col border-r border-[var(--border)] bg-[var(--bg-surface)] shrink-0">
         {/* Header + subnav */}
         <div className="border-b border-[var(--border)]">
-          <div className="flex items-center justify-between px-4 pt-4 pb-0">
+          <div className="flex items-center justify-between px-4 py-4">
             <h1 className="text-base font-semibold text-[var(--text-primary)]">Inbox</h1>
             <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setShowNewConvo(true)} title="New conversation">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
             </Button>
           </div>
-          <SubNav items={SUBNAV} />
         </div>
 
         {/* Views + search */}
