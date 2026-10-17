@@ -11,6 +11,7 @@ import {
   bakedPack,
   draftClusteredTemplate,
   identityFor,
+  learnedSpecFromJobs,
   inspectFlowGraph,
   pageFromHtml,
   personaAvatar,
@@ -197,4 +198,43 @@ test('a vendor homepage becomes a software template with brand names off', () =>
   assert.equal(spec.topics.find((topic) => topic.flowName === 'Book a demo')?.walk, 'email')
   assert.ok(spec.topics.length < 8)
   assert.equal(/accounts/i.test(spec.menu), false)
+})
+
+test('jobs from a model skip 404 names and still offer a person', () => {
+  const page = pageFromHtml(
+    'https://www.vodafone.co.uk/sim-only/best-sim-only-deals',
+    `<html><head><title>Best SIM Only Deals</title></head><body>
+      <p>Unlimited data and EU roaming just £26 a month on a SIM only plan.</p>
+    </body></html>`,
+  )
+  const spec = learnedSpecFromJobs({
+    pages: [page],
+    companyName: 'Vodafone',
+    personaName: 'Voda',
+    keepBrand: true,
+    topics: [
+      {
+        flowName: 'Page not found',
+        choice: 'Page not found',
+        phrases: ['404'],
+        question: 'Where is the page?',
+        answer: "You've come to a page of the Vodafone website that doesn't exist.",
+        blurb: 'Missing',
+      },
+      {
+        flowName: 'Plans',
+        choice: 'Plans',
+        phrases: ['plans', 'sim only'],
+        question: 'What about plans?',
+        answer: 'Unlimited data and EU roaming just £26 a month on a SIM only plan.',
+        blurb: 'SIM only',
+      },
+    ],
+  })
+  assert.equal(spec.topics.some((topic) => /page not found|\b404\b/i.test(topic.flowName)), false)
+  const plans = spec.topics.find((topic) => topic.flowName === 'Plans')
+  assert.ok(plans)
+  assert.match(plans!.answer, /£26 a month/)
+  assert.ok(spec.topics.some((topic) => topic.flowName === 'Talk to a person'))
+  assert.match(spec.greeting, /Voda at Vodafone/)
 })

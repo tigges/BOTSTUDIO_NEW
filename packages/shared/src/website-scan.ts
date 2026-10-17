@@ -12,7 +12,7 @@ import { emptyCatalog } from './catalog.js'
 import { BOOKING_HOSTS, namedLink } from './chat-links.js'
 import { catalogLookupFlow, doorsForNextOffer, SALON_WELCOME_NAME } from './salon-pack.js'
 import type { StarterFlow } from './flow-templates.js'
-import { draftClusteredTemplate, isOpaqueStem, isStoryLeafPath, packFromLearned, suggestCluster, type ClusterId } from './site-template.js'
+import { draftClusteredTemplate, isOpaqueStem, isStoryLeafPath, packFromLearned, suggestCluster, type ClusterId, type LearnedTemplateSpec } from './site-template.js'
 import { identityFor } from './start-catalog.js'
 
 export interface ScannedLink {
@@ -1017,23 +1017,16 @@ function firstSay(spoke: Spoke): string {
   return spoke.choices?.[0]?.say ?? spoke.say ?? ''
 }
 
-function draftVendorWebsiteChat(input: {
+export function websiteChatFromLearnedSpec(input: {
   pages: ScannedPage[]
   companyName: string
   personaName?: string | null
-  clusterId: ClusterId
+  spec: LearnedTemplateSpec
 }): WebsiteChatDraft {
   const pages = input.pages
   const company = input.companyName.trim() || 'your company'
-  const identity = identityFor(input.clusterId)
-  const persona = input.personaName?.trim() || identity.persona || 'the assistant'
-  const spec = draftClusteredTemplate({
-    pages,
-    companyName: company,
-    personaName: persona,
-    clusterId: input.clusterId,
-    keepBrand: true,
-  })
+  const persona = input.personaName?.trim() || 'the assistant'
+  const spec = input.spec
   const pack = packFromLearned(spec, company, persona)
   const doors: ScanDoor[] = pack.doors.map((door) => {
     const topic = spec.topics.find((item) => item.flowName === door.flowName)
@@ -1055,7 +1048,7 @@ function draftVendorWebsiteChat(input: {
   return {
     url: first?.url ?? '',
     pages: pages.map((page) => page.url),
-    clusterId: input.clusterId === 'custom' ? 'software' : input.clusterId,
+    clusterId: spec.clusterId === 'custom' ? 'software' : spec.clusterId,
     greeting: pack.greeting,
     doors,
     facts,
@@ -1071,6 +1064,30 @@ function draftVendorWebsiteChat(input: {
     catalog: emptyCatalog(),
     booking: null,
   }
+}
+
+function draftVendorWebsiteChat(input: {
+  pages: ScannedPage[]
+  companyName: string
+  personaName?: string | null
+  clusterId: ClusterId
+}): WebsiteChatDraft {
+  const company = input.companyName.trim() || 'your company'
+  const identity = identityFor(input.clusterId)
+  const persona = input.personaName?.trim() || identity.persona || 'the assistant'
+  const spec = draftClusteredTemplate({
+    pages: input.pages,
+    companyName: company,
+    personaName: persona,
+    clusterId: input.clusterId,
+    keepBrand: true,
+  })
+  return websiteChatFromLearnedSpec({
+    pages: input.pages,
+    companyName: company,
+    personaName: persona,
+    spec,
+  })
 }
 
 /** The map, the charts, and the knowledge lines. No network. */
