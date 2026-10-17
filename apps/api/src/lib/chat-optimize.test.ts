@@ -6,7 +6,12 @@ import {
   findingsFromChat,
   hairStudioPack,
   pageFromHtml,
+  type OptimizeChapter,
 } from '@ybot/shared'
+
+function asChapters(flows: Array<{ name: string; graph: unknown }>): OptimizeChapter[] {
+  return flows as OptimizeChapter[]
+}
 
 function locationRoutes(graph: { nodes: Array<{ data: { kind: string; config: Record<string, unknown> } }> }) {
   const node = graph.nodes.find((item) => item.data.kind === 'route_topic')
@@ -56,13 +61,13 @@ test('ok after Want the hours is a finding, and apply moves yes onto Salon hours
   ]
   const findings = findingsFromChat({
     lines,
-    chapters: pack.flows.map((flow) => flow.name === 'Location' ? older : flow),
+    chapters: asChapters(pack.flows.map((flow) => flow.name === 'Location' ? older : flow)),
   })
   const offer = findings.find((finding) => finding.kind === 'offer_yes')
   assert.ok(offer)
   assert.equal(offer?.applyable, true)
   const applied = applyChatFindings({
-    chapters: pack.flows.map((flow) => flow.name === 'Location' ? older : flow),
+    chapters: asChapters(pack.flows.map((flow) => flow.name === 'Location' ? older : flow)),
     findings: [offer!],
   })
   const next = applied.chapters.find((chapter) => chapter.name === 'Location')!
@@ -120,7 +125,7 @@ test('a hair welcome that asks for a name once is not a double-ask', () => {
       { role: 'user', content: 'where are you' },
       { role: 'assistant', content: 'Yuzu is at 14 Rosewood Lane.\n\nWant the hours?', chapter: 'Location' },
     ],
-    chapters: pack.flows,
+    chapters: asChapters(pack.flows),
   })
   assert.equal(findings.some((finding) => finding.kind === 'name_once'), false)
   assert.equal(findings.some((finding) => finding.kind === 'offer_yes'), false)
