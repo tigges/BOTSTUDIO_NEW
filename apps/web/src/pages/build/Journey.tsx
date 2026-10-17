@@ -80,6 +80,7 @@ export function JourneyPage() {
   const [replayKey, setReplayKey] = useState(0)
   const [replayLines, setReplayLines] = useState<string[]>([])
   const [applyingId, setApplyingId] = useState('')
+  const [applyError, setApplyError] = useState('')
   const { data: flows = [], isLoading, isError, error, refetch } = useFlows()
   const traffic = useJourneyTraffic(lens === 'traffic' || lens === 'health')
   const entities = useEntities()
@@ -169,6 +170,7 @@ export function JourneyPage() {
   async function acceptFinding(finding: ChatFinding) {
     if (!finding.applyable) return
     setApplyingId(finding.id)
+    setApplyError('')
     try {
       const applied = applyChatFindings({ chapters: optimizeChapters, findings: [finding] })
       for (const change of applied.chapters) {
@@ -187,6 +189,8 @@ export function JourneyPage() {
       setDismissed((current) => new Set([...current, finding.id]))
       setReplayLines(walkLines.filter((line) => line.role === 'user').map((line) => line.content))
       setReplayKey((key) => key + 1)
+    } catch (err) {
+      setApplyError(err instanceof Error ? err.message : 'Could not save this change.')
     } finally {
       setApplyingId('')
     }
@@ -276,6 +280,7 @@ export function JourneyPage() {
           <p className="mb-4 text-sm text-[var(--text-secondary)]">Traffic counts are unavailable right now. The chapters are still here.</p>
         )}
         {connectError && <p className="mb-4 text-sm text-[var(--danger)]">{connectError}</p>}
+        {applyError && <p className="mb-4 text-sm text-[var(--danger)]">{applyError}</p>}
         {queued && (
           <p className="mb-4 text-sm text-[var(--text-secondary)]" data-testid="journey-recommend-queued">
             Looking at this step…
