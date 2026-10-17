@@ -359,7 +359,29 @@ function titleCaseHost(host: string): string {
   return stem.charAt(0).toUpperCase() + stem.slice(1)
 }
 
-const JUNK_SITE_PATH = /\/(?:investor|investors|shareholder|shareholders|governance|annual-report|code-of-conduct|conduct|computershare|equiniti|sustainability)(?:\/|$)/i
+/** BBC-style article ids and numeric CMS keys are not chapter names. */
+export function isOpaqueStem(stem: string): boolean {
+  const token = stem.replace(/\.html?$/i, '').toLowerCase()
+  if (!token) return false
+  if (/^[0-9]{6,}$/.test(token)) return true
+  if (/^[a-z]{1,4}[0-9][a-z0-9]{6,}$/i.test(token)) return true
+  if (token.length >= 10 && /\d/.test(token) && /[a-z]/i.test(token) && !/[-_]/.test(token)) return true
+  return false
+}
+
+/** News/sport story leaves stay off the map. /news and /sport hubs can still land. */
+export function isStoryLeafPath(pathname: string): boolean {
+  const path = pathname.toLowerCase()
+  if (/\/(?:articles|videos|live)(?:\/|$)/i.test(path)) return true
+  if (/\/(?:iplayer\/episodes|sounds\/play)(?:\/|$)/i.test(path)) return true
+  const segments = path.split('/').filter(Boolean)
+  const stem = (segments[segments.length - 1] ?? '').replace(/\.html?$/i, '')
+  if (isOpaqueStem(stem)) return true
+  if (segments.length >= 2 && /^(news|sport|weather|sounds|iplayer)$/i.test(segments[0] ?? '')) return true
+  return false
+}
+
+const JUNK_SITE_PATH = /\/(?:investor|investors|shareholder|shareholders|governance|annual-report|code-of-conduct|conduct|computershare|equiniti|sustainability|articles|videos)(?:\/|$)/i
 
 function pathOf(page: ScannedPage): string {
   try {
@@ -377,6 +399,9 @@ function isHomePage(page: ScannedPage): boolean {
 function isJunkSitePage(page: ScannedPage): boolean {
   if (JUNK_SITE_PATH.test(pathOf(page))) return true
   if (isHomePage(page)) return false
+  if (isStoryLeafPath(pathOf(page))) return true
+  const stem = pathOf(page).split('/').filter(Boolean).pop() ?? ''
+  if (isOpaqueStem(stem)) return true
   const head = `${page.title} ${page.text.slice(0, 280)}`
   return /computershare|shareview|ordinary shares|adr holding|investor relations/i.test(head)
 }
@@ -386,15 +411,36 @@ function isJunkAnswer(text: string): boolean {
   return /computershare|shareview|ordinary shares|code of conduct|adr holding|equiniti|holders of ordinary|possible findings are subject|mitigation plans/i.test(text)
 }
 
+function titleLooksLikeNav(title: string): boolean {
+  if (/^learn more\b/i.test(title)) return true
+  if (/scores,\s*fixtures/i.test(title)) return true
+  if (/,.+,/.test(title) && !/[.!?']/.test(title)) return true
+  return false
+}
+
 function titleFromPage(page: ScannedPage): string {
   if (isHomePage(page)) return 'What we do'
   if (pricingPage(page)) return 'Plans'
   const stem = (pathOf(page).split('/').filter(Boolean).pop() ?? '')
     .replace(/[-_]+/g, ' ')
     .replace(/\.html?$/, '')
+  if (isOpaqueStem(stem.replace(/\s+/g, ''))) return 'About'
   const fromTitle = page.title.replace(/\s*[|–—•].*$/, '').replace(/\s*-\s*[^-]+$/, '').trim()
-  if (fromTitle && fromTitle.length >= 3 && fromTitle.length <= 42 && !/^home$/i.test(fromTitle)) return fromTitle
-  if (stem) return stem.replace(/\b[a-z]/g, (ch) => ch.toUpperCase())
+  if (fromTitle && /^contact(?:\s+home)?$/i.test(fromTitle)) return 'Contact'
+  const afterLearn = fromTitle.replace(/^learn more about /i, '').trim()
+  if (afterLearn && afterLearn !== fromTitle && afterLearn.length >= 3 && afterLearn.length <= 42) {
+    return afterLearn.charAt(0).toUpperCase() + afterLearn.slice(1)
+  }
+  if (
+    fromTitle
+    && fromTitle.length >= 3
+    && fromTitle.length <= 42
+    && !/^home$/i.test(fromTitle)
+    && !titleLooksLikeNav(fromTitle)
+  ) {
+    return fromTitle
+  }
+  if (stem && !titleLooksLikeNav(stem)) return stem.replace(/\b[a-z]/g, (ch) => ch.toUpperCase())
   return 'About'
 }
 
@@ -427,6 +473,8 @@ function phrasesForDoor(name: string): string[] {
 
 function uniqueFlowName(name: string, used: Set<string>): string | null {
   const base = name.trim() || 'About'
+  if (isOpaqueStem(base.replace(/\s+/g, ''))) return null
+  if (/^learn more\b/i.test(base)) return null
   if (!used.has(base)) return base
   return null
 }

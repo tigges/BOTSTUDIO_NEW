@@ -12,7 +12,7 @@ import { emptyCatalog } from './catalog.js'
 import { BOOKING_HOSTS, namedLink } from './chat-links.js'
 import { catalogLookupFlow, doorsForNextOffer, SALON_WELCOME_NAME } from './salon-pack.js'
 import type { StarterFlow } from './flow-templates.js'
-import { draftClusteredTemplate, packFromLearned, suggestCluster, type ClusterId } from './site-template.js'
+import { draftClusteredTemplate, isOpaqueStem, isStoryLeafPath, packFromLearned, suggestCluster, type ClusterId } from './site-template.js'
 import { identityFor } from './start-catalog.js'
 
 export interface ScannedLink {
@@ -386,14 +386,14 @@ function extractBooking(pages: ScannedPage[]): { url: string; label: string } | 
 }
 
 const JUNK_PATH = /\/(?:wp-admin|wp-json|feed|tag|category|author|sample-page|hello-world)(?:\/|$)/i
-const SKIP_PATH = /\/(?:blog|company-news|careers-blog|glossary|case-stud(?:y|ies)|bid|investors?|shareholders?|governance|annual-report|code-of-conduct)(?:\/|$|-[^/]*)/i
+const SKIP_PATH = /\/(?:blog|company-news|careers-blog|glossary|case-stud(?:y|ies)|bid|investors?|shareholders?|governance|annual-report|code-of-conduct|articles|videos)(?:\/|$|-[^/]*)/i
 const ASSET_PATH = /\.(?:png|jpe?g|gif|svg|css|js|pdf|zip|webp|ico|mp4|xml)(?:\?|$)/i
 const PAGE_RANK: Array<[string, number]> = [
   ['pricing', 8], ['price', 6], ['product', 6], ['plan', 5], ['faq', 6], ['question', 6],
   ['career', 6], ['vacancy', 6], ['cv', 5], ['team', 5], ['service', 5], ['demo', 5],
-  ['offer', 4], ['job', 4], ['contact', 4], ['menu', 4], ['integrat', 4], ['billing', 4],
+  ['complain', 7], ['offer', 4], ['job', 4], ['contact', 4], ['menu', 4], ['integrat', 4], ['billing', 4],
   ['hour', 3], ['login', 3], ['platform', 3], ['feature', 3], ['crm', 3],
-  ['patch', 2], ['about', 2], ['book', 2], ['visit', 1],
+  ['patch', 2], ['about', 4], ['help', 5], ['book', 2], ['visit', 1],
 ]
 const PAGE_PENALTY: Array<[string, number]> = [
   ['/blog', 8], ['company-news', 8], ['glossary', 6], ['case-stud', 6], ['webinar', 4], ['/resources/', 3],
@@ -423,8 +423,9 @@ export function chooseSitePages(input: {
     url.search = ''
     if (url.pathname === '/' || url.pathname === '') return
     if (JUNK_PATH.test(url.pathname) || ASSET_PATH.test(url.pathname) || SKIP_PATH.test(url.pathname)) return
+    if (isStoryLeafPath(url.pathname)) return
     const stem = (url.pathname.split('/').filter(Boolean).pop() ?? '').replace(/\.html?$/i, '').toLowerCase()
-    if (!stem || stem === 'index') return
+    if (!stem || stem === 'index' || isOpaqueStem(stem)) return
     const blob = `${url.pathname} ${text}`.toLowerCase()
     let score = bonus
     for (const [word, weight] of PAGE_RANK) {

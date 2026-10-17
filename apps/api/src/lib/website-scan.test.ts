@@ -386,6 +386,78 @@ test('chooseSitePages skips investor and shareholder leaves', () => {
   assert.equal(chosen.some((href) => /investor|shareholder|conduct/i.test(href)), false)
 })
 
+test('chooseSitePages skips news articles and sport leaves, and keeps contact', () => {
+  const chosen = chooseSitePages({
+    homeUrl: 'https://www.bbc.co.uk/',
+    links: [
+      { href: 'https://www.bbc.co.uk/contact', text: 'Contact the BBC' },
+      { href: 'https://www.bbc.co.uk/contact/complaints', text: 'Complaints' },
+      { href: 'https://www.bbc.co.uk/aboutthebbc/whatwedo', text: 'What we do' },
+      { href: 'https://www.bbc.co.uk/news', text: 'News' },
+      { href: 'https://www.bbc.co.uk/sport', text: 'Sport' },
+      { href: 'https://www.bbc.co.uk/sport/boxing', text: 'Boxing' },
+      { href: 'https://www.bbc.co.uk/sport/golf', text: 'Golf' },
+      { href: 'https://www.bbc.co.uk/news/articles/c9zrd84zy87ro', text: 'A headline' },
+      { href: 'https://www.bbc.co.uk/sport/boxing/live/cr20wlq8ee74t', text: 'Live boxing' },
+      { href: 'https://www.bbc.co.uk/sport/football/videos/c65yn28p859wo', text: 'Highlights' },
+    ],
+    limit: 9,
+  })
+  assert.equal(chosen.some((href) => href.includes('/contact')), true)
+  assert.equal(chosen.some((href) => href.includes('complain')), true)
+  assert.equal(chosen.some((href) => /\/news\/?$/.test(href) || href.endsWith('/news')), true)
+  assert.equal(chosen.some((href) => /\/sport\/?$/.test(href) || href.endsWith('/sport')), true)
+  assert.equal(chosen.some((href) => /boxing|golf|c9zrd84zy87ro|articles|videos|live/i.test(href)), false)
+})
+
+test('a news homepage does not mint boxing, golf, or article-id rooms', () => {
+  const home = pageFromHtml(
+    'https://www.bbc.co.uk/',
+    `<html><head><title>BBC - Home</title></head><body>
+      <h1>BBC</h1>
+      <p>The BBC is the world's leading public service broadcaster. We inform, educate and entertain.</p>
+      <a href="/sport/boxing">Boxing</a>
+      <a href="/contact">Contact</a>
+    </body></html>`,
+  )
+  const boxing = pageFromHtml(
+    'https://www.bbc.co.uk/sport/boxing',
+    `<html><head><title>Boxing</title></head><body>
+      <p>Follow live boxing scores, fixtures, results and the latest fight news from around the world.</p>
+    </body></html>`,
+  )
+  const article = pageFromHtml(
+    'https://www.bbc.co.uk/news/articles/c9zrd84zy87ro',
+    `<html><head><title>France protests</title></head><body>
+      <p>Violent clashes, looting and buildings ablaze in France as more than a thousand people were arrested overnight.</p>
+    </body></html>`,
+  )
+  const contact = pageFromHtml(
+    'https://www.bbc.co.uk/contact',
+    `<html><head><title>Contact Home</title></head><body>
+      <p>Contact the BBC about a programme, make a complaint, or get in touch with BBC News.</p>
+    </body></html>`,
+  )
+  const learn = pageFromHtml(
+    'https://www.bbc.co.uk/aboutthebbc/whatwedo',
+    `<html><head><title>Learn more about what we do</title></head><body>
+      <p>Learn more about what we do across news, sport, radio and television in the UK and around the world.</p>
+    </body></html>`,
+  )
+  const draft = draftWebsiteChat({
+    pages: [home, boxing, article, contact, learn],
+    companyName: 'BBC',
+    personaName: 'Beeb',
+  })
+  assert.equal(draft.doors.some((door) => /boxing|golf|c9zrd84zy87ro/i.test(door.flowName)), false)
+  assert.equal(draft.doors.some((door) => /^learn more/i.test(door.flowName) || /^learn more/i.test(door.title)), false)
+  assert.equal(draft.doors.filter((door) => /what we do/i.test(door.flowName)).length, 1)
+  assert.ok(draft.doors.some((door) => /what we do/i.test(door.flowName)))
+  assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
+  assert.ok(draft.doors.some((door) => /contact/i.test(door.flowName)))
+  assert.equal(draft.greeting, "Hi, I'm Beeb at BBC.")
+})
+
 const HUBSPOT_PRICING = `<!doctype html>
 <html><head><title>Pricing</title></head>
 <body>
