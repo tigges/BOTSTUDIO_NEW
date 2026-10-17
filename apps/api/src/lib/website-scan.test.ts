@@ -3,9 +3,11 @@ import { test } from 'node:test'
 import { SessionMachine, type FlowGraph } from '@ybot/runtime'
 import type { ExecutionServices, Session } from '@ybot/runtime'
 import {
+  chooseShopHomes,
   chooseSitePages,
   draftWebsiteChat,
   inspectFlowGraph,
+  isMissingPage,
   journeyLayout,
   pageFromHtml,
   welcomeDoors,
@@ -458,6 +460,44 @@ test('a news homepage does not mint boxing, golf, or article-id rooms', () => {
   assert.equal(draft.greeting, "Hi, I'm Beeb at BBC.")
 })
 
+test('chooseShopHomes follows the English country shop off a group homepage', () => {
+  const shops = chooseShopHomes({
+    homeUrl: 'https://www.vodafone.com/',
+    links: [
+      { href: 'https://www.vodafone.de/', text: 'Deutschland' },
+      { href: 'https://www.vodafone.co.uk/', text: 'United Kingdom' },
+      { href: 'https://investors.vodafone.com/', text: 'Investors' },
+      { href: 'https://www.phorest.com/salon/demo', text: 'Book' },
+    ],
+    limit: 1,
+  })
+  assert.deepEqual(shops, ['https://www.vodafone.co.uk/'])
+  assert.deepEqual(chooseShopHomes({
+    homeUrl: 'https://www.vodafone.co.uk/',
+    links: [{ href: 'https://www.vodafone.de/', text: 'Deutschland' }],
+  }), [])
+  assert.deepEqual(chooseShopHomes({
+    homeUrl: 'https://yuzu.hair/',
+    links: [{ href: 'https://www.phorest.com/salon/yuzu', text: 'Book' }],
+  }), [])
+})
+
+test('chooseSitePages prefers SIM and pay-monthly leaves over a handset URL', () => {
+  const chosen = chooseSitePages({
+    homeUrl: 'https://www.vodafone.co.uk/',
+    links: [
+      { href: 'https://www.vodafone.co.uk/sim-only/best-sim-only-deals', text: 'SIM only' },
+      { href: 'https://www.vodafone.co.uk/mobile/pay-monthly-contracts', text: 'Pay monthly' },
+      { href: 'https://www.vodafone.co.uk/mobile/pay-monthly-contracts/apple/iphone-18-pro-max', text: 'iPhone 18 Pro Max' },
+      { href: 'https://www.vodafone.co.uk/our-impact', text: 'Our impact' },
+    ],
+    limit: 2,
+  })
+  assert.equal(chosen.some((href) => href.includes('/sim-only')), true)
+  assert.equal(chosen.some((href) => /\/mobile\/pay-monthly-contracts\/?$/.test(href)), true)
+  assert.equal(chosen.some((href) => /iphone/i.test(href)), false)
+})
+
 const HUBSPOT_PRICING = `<!doctype html>
 <html><head><title>Pricing</title></head>
 <body>
@@ -668,8 +708,64 @@ test('a telco homepage of investor copy does not stamp a software blueprint', ()
   assert.equal(/ordinary shares|computershare|code of conduct|in-depth reports/i.test(draft.doors.map((door) => door.answer).join('\n')), false)
   assert.ok(draft.doors.some((door) => /connect everyone/i.test(door.answer)))
   assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
+  assert.equal(draft.doors.some((door) => /^plans?/i.test(door.flowName) || /^plans?/i.test(door.title)), false)
   assert.equal(/did not state this/i.test(draft.doors.map((door) => door.answer).join('\n')), false)
   assert.equal(/Software vendor/i.test(draft.flows.map((flow) => flow.name).join(' ')), false)
+})
+
+test('a telco 404 is not a chapter, and the shop SIM page answers plans', async () => {
+  const home = pageFromHtml(
+    'https://www.vodafone.com/',
+    `<html><head><title>Vodafone</title></head><body>
+      <h1>Welcome to Vodafone</h1>
+      <p>As one of the largest telcos in Europe and Africa, Vodafone's mission is to connect everyone.</p>
+      <a href="https://www.vodafone.co.uk/">United Kingdom</a>
+      <a href="/plans">Plans</a>
+    </body></html>`,
+  )
+  const missing = pageFromHtml(
+    'https://www.vodafone.com/plans',
+    `<html><head><title>Page not found</title></head><body>
+      <p>You've come to a page of the Vodafone website that doesn't exist. Try the homepage or search.</p>
+    </body></html>`,
+  )
+  const shop = pageFromHtml(
+    'https://www.vodafone.co.uk/',
+    `<html><head><title>Vodafone on The Nation's Network</title></head><body>
+      <p>Phones, SIM only and broadband on the UK network. Shop pay monthly and SIM only deals.</p>
+      <a href="/sim-only/best-sim-only-deals">SIM only</a>
+    </body></html>`,
+  )
+  const sim = pageFromHtml(
+    'https://www.vodafone.co.uk/sim-only/best-sim-only-deals',
+    `<html><head><title>Best SIM Only Deals</title></head><body>
+      <p>Unlimited data and EU roaming just £26 a month on a SIM only plan.</p>
+      <p>All our pay monthly SIM only plans come with 5G as standard across the UK.</p>
+    </body></html>`,
+  )
+  assert.equal(isMissingPage(missing), true)
+  const draft = draftWebsiteChat({
+    pages: [home, missing, shop, sim],
+    companyName: 'Vodafone',
+    personaName: 'Voda',
+  })
+  assert.equal(draft.doors.some((door) => /page not found|doesn't exist|does not exist/i.test(`${door.flowName} ${door.title} ${door.answer}`)), false)
+  const plans = draft.doors.find((door) => /^plans?/i.test(door.flowName) || /^plans?/i.test(door.title))
+  assert.ok(plans)
+  assert.equal(plans!.phrases.includes('plans'), true)
+  assert.match(plans!.answer, /SIM only|£26|pay monthly/i)
+  const welcome = JSON.stringify(draft.flows.find((flow) => /welcome/i.test(flow.name))?.graph ?? {})
+  assert.match(welcome, /"plans"/)
+  const planFlow = draft.flows.find((flow) => flow.name === plans!.flowName)
+  assert.ok(planFlow)
+  const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
+  const spoken = await machine.run(session('plans'), planFlow!.graph as unknown as FlowGraph, 'plans')
+  assert.match(spoken.newMessages.map((message) => message.content.text).join('\n'), /SIM only|£26|pay monthly/i)
+  const names = draft.flows.map((flow) => flow.name)
+  for (const flow of draft.flows) {
+    const issues = inspectFlowGraph(flow.graph as Parameters<typeof inspectFlowGraph>[0], { flowNames: names })
+    assert.deepEqual(issues.filter((issue) => issue.level === 'block' || issue.level === 'repair'), [], flow.name)
+  }
 })
 
 test('private and local addresses are refused before a request', () => {

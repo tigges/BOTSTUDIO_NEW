@@ -350,8 +350,39 @@ function splitCopy(text: string): string[] {
     .filter(Boolean)
 }
 
-function pricingPage(page: ScannedPage): boolean {
-  return /pric|\/plans?\b/i.test(`${page.url} ${page.title}`)
+const PLAN_PATH = /pric|\/plans?\b|sim[-_/ ]?only|pay[-_/ ]?monthly|tariff|\/mobile\/|\/shop(?:\/|$)/i
+const PLAN_COPY = /sim[-_/ ]?only|\bsim only\b|pay[-_/ ]?monthly|\btariff|\bunlimited sim\b|\bpay as you go\b/i
+
+export function isPricingPage(page: ScannedPage): boolean {
+  return PLAN_PATH.test(`${page.url} ${page.title}`)
+}
+
+const PLAN_PHRASES = ['plans', 'plan', 'pricing', 'how much', 'sim', 'tariff', 'pay monthly']
+
+export function isMissingPage(page: ScannedPage): boolean {
+  if (/page not found|\b404\b/i.test(page.title)) return true
+  return /you(?:'| ha)ve come to a page of the .{0,80}(?:web)?site/i.test(page.text.slice(0, 400))
+}
+
+function looksLikePlanCopy(page: ScannedPage): boolean {
+  if (isMissingPage(page)) return false
+  if (isPricingPage(page)) return true
+  return PLAN_COPY.test(`${page.title} ${page.text.slice(0, 800)}`)
+}
+
+function planAnswer(page: ScannedPage): string | null {
+  const parts = splitCopy(page.text)
+  const hit = parts.find((part) => {
+    if (part.length < 32 || part.length > 280) return false
+    if (isJunkAnswer(part)) return false
+    return PLAN_COPY.test(part) || /\b(?:plan|sim|tariff|a month)\b/i.test(part)
+  })
+  if (hit) return clip(hit)
+  return leadFromPage(page)
+}
+
+function hasPlanTopic(topics: SiteTopic[]): boolean {
+  return topics.some((topic) => topic.walk === 'plans' || /^plans?/i.test(topic.choice) || /^plans?/i.test(topic.flowName))
 }
 
 function titleCaseHost(host: string): string {
@@ -397,6 +428,7 @@ function isHomePage(page: ScannedPage): boolean {
 }
 
 function isJunkSitePage(page: ScannedPage): boolean {
+  if (isMissingPage(page)) return true
   if (JUNK_SITE_PATH.test(pathOf(page))) return true
   if (isHomePage(page)) return false
   if (isStoryLeafPath(pathOf(page))) return true
@@ -420,7 +452,7 @@ function titleLooksLikeNav(title: string): boolean {
 
 function titleFromPage(page: ScannedPage): string {
   if (isHomePage(page)) return 'What we do'
-  if (pricingPage(page)) return 'Plans'
+  if (isPricingPage(page)) return 'Plans'
   const stem = (pathOf(page).split('/').filter(Boolean).pop() ?? '')
     .replace(/[-_]+/g, ' ')
     .replace(/\.html?$/, '')
@@ -508,27 +540,52 @@ export function draftClusteredTemplate(input: {
       ? `Hi, I'm ${persona} at ${company}. What's your name?`
       : `Hi, I'm ${persona} at ${company}.`
     : assistantGreeting(company)
-  const pricingPages = working.filter((page) => pricingPage(page))
+  const pricingPages = working.filter((page) => isPricingPage(page) && !isMissingPage(page))
   const tiers = clusterId === 'hair' || clusterId === 'email' ? [] : extractPlanTiers(pricingPages.map((page) => page.text).join('\n'))
   const topics: SiteTopic[] = []
   const used = new Set<string>()
-  for (const page of working) {
+  const rest = working.filter((page) => !isHomePage(page))
+  const ordered = [
+    ...working.filter((page) => isHomePage(page)),
+    ...rest.filter((page) => isPricingPage(page)),
+    ...rest.filter((page) => !isPricingPage(page)),
+  ]
+  for (const page of ordered) {
     if (isJunkSitePage(page)) continue
-    if (pricingPage(page) && tiers.length >= 2) continue
+    if (isPricingPage(page) && tiers.length >= 2) continue
     const found = leadFromPage(page)
     if (!found) continue
     const name = uniqueFlowName(titleFromPage(page), used)
     if (!name) continue
     used.add(name)
+    const planDoor = isPricingPage(page) || /^plans?/i.test(name)
     topics.push({
       flowName: name,
-      choice: name,
-      phrases: phrasesForDoor(name),
-      question: `What about ${name.toLowerCase()}?`,
+      choice: planDoor ? 'Plans' : name,
+      phrases: planDoor ? [...new Set([...PLAN_PHRASES, ...phrasesForDoor(name)])] : phrasesForDoor(name),
+      question: planDoor ? 'Which plan are you asking about?' : `What about ${name.toLowerCase()}?`,
       answer: found,
       blurb: clip(found, 80),
     })
     if (topics.length >= 8) break
+  }
+  if (!hasPlanTopic(topics) && tiers.length < 2) {
+    const source = working.find((page) => !isJunkSitePage(page) && looksLikePlanCopy(page))
+    const answer = source ? planAnswer(source) : null
+    if (source && answer) {
+      const topic: SiteTopic = {
+        flowName: 'Plans',
+        choice: 'Plans',
+        phrases: [...PLAN_PHRASES],
+        question: 'Which plan are you asking about?',
+        answer,
+        blurb: clip(answer, 80),
+      }
+      const insertAt = Math.min(1, topics.length)
+      topics.splice(insertAt, 0, topic)
+      used.add('Plans')
+      if (topics.length > 8) topics.pop()
+    }
   }
   if (tiers.length >= 2) {
     topics.push({

@@ -389,10 +389,11 @@ const JUNK_PATH = /\/(?:wp-admin|wp-json|feed|tag|category|author|sample-page|he
 const SKIP_PATH = /\/(?:blog|company-news|careers-blog|glossary|case-stud(?:y|ies)|bid|investors?|shareholders?|governance|annual-report|code-of-conduct|articles|videos)(?:\/|$|-[^/]*)/i
 const ASSET_PATH = /\.(?:png|jpe?g|gif|svg|css|js|pdf|zip|webp|ico|mp4|xml)(?:\?|$)/i
 const PAGE_RANK: Array<[string, number]> = [
-  ['pricing', 8], ['price', 6], ['product', 6], ['plan', 5], ['faq', 6], ['question', 6],
+  ['pricing', 8], ['price', 6], ['product', 6], ['plan', 5], ['sim', 8], ['tariff', 6], ['shop', 5],
+  ['faq', 6], ['question', 6],
   ['career', 6], ['vacancy', 6], ['cv', 5], ['team', 5], ['service', 5], ['demo', 5],
   ['complain', 7], ['offer', 4], ['job', 4], ['contact', 4], ['menu', 4], ['integrat', 4], ['billing', 4],
-  ['hour', 3], ['login', 3], ['platform', 3], ['feature', 3], ['crm', 3],
+  ['hour', 3], ['login', 3], ['platform', 3], ['feature', 3], ['crm', 3], ['mobile', 3],
   ['patch', 2], ['about', 4], ['help', 5], ['book', 2], ['visit', 1],
 ]
 const PAGE_PENALTY: Array<[string, number]> = [
@@ -437,10 +438,12 @@ export function chooseSitePages(input: {
     if (url.pathname.includes('wp-content')) score -= 2
     const segments = url.pathname.split('/').filter(Boolean)
     if (/^\/(?:pricing|plans)(?:\/|$)/i.test(url.pathname)) score += 14
+    if (/sim-only|pay-monthly|pay-as-you-go|\/shop(?:\/|$)/i.test(url.pathname)) score += 12
     if (/^\/products?\/[^/]+\/?$/i.test(url.pathname)) score += 5
     if (/^\/products?\/(marketing|sales|service|crm)\/?$/i.test(url.pathname)) score += 4
-    if (segments.length <= 2 && /^(products?|pricing|plans|faq|questions?|team|about)$/i.test(segments[0] ?? '')) score += 3
+    if (segments.length <= 2 && /^(products?|pricing|plans|faq|questions?|team|about|sim-only|shop|mobile)$/i.test(segments[0] ?? '')) score += 3
     if (segments.length >= 3) score -= 3
+    if (segments.length >= 4) score -= 5
     const pathLength = url.pathname.length
     const themeFile = /\/wp-content\/|\/themes\/|\/static\//i.test(url.pathname)
     const key = themeFile ? `stem:${stem}` : `path:${url.pathname.replace(/\/$/, '').toLowerCase()}`
@@ -460,6 +463,65 @@ export function chooseSitePages(input: {
   return [...byKey.values()]
     .sort((a, b) => b.score - a.score || a.pathLength - b.pathLength)
     .slice(0, Math.max(0, input.limit))
+    .map((item) => item.href)
+}
+
+const SHOP_TLD = /(?:^|\.)(?:co\.uk|com\.au|co\.nz|co\.za|co\.in|com\.tr|ie|de|es|it|pt|nl|gr|ro|cz|hu|al|eg|gh|ke|tz)$/i
+const SHOP_HINT = /shop|plans?|sim|mobile|tariff|pay[- ]?monthly|store|\bbuy\b/i
+const ENGLISH_MARKET = /united kingdom|\buk\b|great britain|\bengland\b/i
+
+function brandLabel(hostname: string): string {
+  const host = hostname.replace(/^www\./, '').toLowerCase()
+  const parts = host.split('.').filter(Boolean)
+  if (parts.length >= 3 && /^(co|com|org|net|gov)$/i.test(parts[parts.length - 2] ?? '')) {
+    return parts[parts.length - 3] ?? ''
+  }
+  return parts[parts.length - 2] ?? parts[0] ?? ''
+}
+
+function isShopHost(hostname: string): boolean {
+  return SHOP_TLD.test(hostname.replace(/^www\./, '').toLowerCase())
+}
+
+/**
+ * Group homepages (vodafone.com) often keep consumer plans on a country shop
+ * (vodafone.co.uk). Follow one sibling shop, preferring an English market.
+ * Already-on-a-shop hosts stay put.
+ */
+export function chooseShopHomes(input: {
+  homeUrl: string
+  links: ScannedLink[]
+  limit?: number
+}): string[] {
+  let home: URL
+  try { home = new URL(input.homeUrl) } catch { return [] }
+  const brand = brandLabel(home.hostname)
+  if (!brand || brand.length < 3) return []
+  if (isShopHost(home.hostname)) return []
+  const ranked: Array<{ href: string; score: number }> = []
+  const seen = new Set<string>()
+  for (const link of input.links) {
+    let url: URL
+    try { url = new URL(link.href, home) } catch { continue }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') continue
+    if (url.origin === home.origin) continue
+    if (brandLabel(url.hostname) !== brand) continue
+    const host = url.hostname.replace(/^www\./, '').toLowerCase()
+    const href = `${url.protocol}//${url.hostname}/`
+    if (seen.has(href)) continue
+    let score = 2
+    if (isShopHost(url.hostname)) score += 8
+    if (SHOP_HINT.test(`${url.pathname} ${link.text}`)) score += 6
+    if (ENGLISH_MARKET.test(link.text) || /\.co\.uk$/i.test(host)) score += 10
+    const labels = host.split('.')
+    if (labels[0] !== brand) score -= 6
+    if (score < 8) continue
+    seen.add(href)
+    ranked.push({ href, score })
+  }
+  return ranked
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.max(0, input.limit ?? 1))
     .map((item) => item.href)
 }
 

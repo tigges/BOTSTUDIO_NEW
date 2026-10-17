@@ -6,7 +6,7 @@
 
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
-import { chooseSitePages, pageFromHtml, type ScannedPage } from '@ybot/shared'
+import { chooseShopHomes, chooseSitePages, isMissingPage, isPricingPage, pageFromHtml, type ScannedPage } from '@ybot/shared'
 
 export class PublicSiteError extends Error {
   constructor(message: string, readonly code: 'INVALID_URL' | 'BLOCKED' | 'UNREADABLE') {
@@ -220,17 +220,44 @@ export async function readPublicSite(input: string): Promise<ScannedPage[]> {
   if (home.text.length < 40) {
     throw new PublicSiteError('Could not read that site. Check the address and try again.', 'UNREADABLE')
   }
+  const shops = chooseShopHomes({ homeUrl: home.url, links: home.links, limit: 1 })
+  const reserve = shops.length > 0 ? 4 : 0
   const sitemap = await readSitemap(new URL(home.url).origin).catch(() => [])
   const pages = [home]
-  for (const href of chooseSitePages({ homeUrl: home.url, links: home.links, sitemap, limit: MAX_PAGES - 1 })) {
+  const sameOriginLimit = Math.max(1, MAX_PAGES - 1 - reserve)
+  for (const href of chooseSitePages({ homeUrl: home.url, links: home.links, sitemap, limit: sameOriginLimit })) {
     try {
       const next = await fetchHtml(new URL(href))
       const page = pageFromHtml(next.url, next.html)
-      if (page.text.length > 40) pages.push(page)
+      if (page.text.length > 40 && !isMissingPage(page)) pages.push(page)
     } catch {
       // A side page can fail. The homepage is enough to draft the map.
     }
     if (pages.length >= MAX_PAGES) break
+  }
+  const hasPlans = pages.some((page) => isPricingPage(page) && !isMissingPage(page))
+  if (!hasPlans && shops[0] && pages.length < MAX_PAGES) {
+    try {
+      const shopDoc = await fetchHtml(new URL(shops[0]))
+      const shopHome = pageFromHtml(shopDoc.url, shopDoc.html)
+      if (shopHome.text.length > 40 && !isMissingPage(shopHome)) {
+        pages.push(shopHome)
+        const shopSitemap = await readSitemap(new URL(shopHome.url).origin).catch(() => [])
+        const remaining = MAX_PAGES - pages.length
+        for (const href of chooseSitePages({ homeUrl: shopHome.url, links: shopHome.links, sitemap: shopSitemap, limit: remaining })) {
+          try {
+            const next = await fetchHtml(new URL(href))
+            const page = pageFromHtml(next.url, next.html)
+            if (page.text.length > 40 && !isMissingPage(page)) pages.push(page)
+          } catch {
+            // A shop leaf can fail. The shop homepage may still name plans.
+          }
+          if (pages.length >= MAX_PAGES) break
+        }
+      }
+    } catch {
+      // The country shop can fail. Keep the group pages that did load.
+    }
   }
   cache.set(key, { at: Date.now(), pages })
   return pages
