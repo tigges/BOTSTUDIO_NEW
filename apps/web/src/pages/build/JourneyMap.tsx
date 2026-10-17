@@ -1,7 +1,8 @@
 import React from 'react'
 import { Link } from '@tanstack/react-router'
-import type { JourneyChapter, JourneyLayout } from '@ybot/shared'
+import type { JourneyChapter, JourneyLayout, JourneyMark, JourneyMarks } from '@ybot/shared'
 import { Button } from '@ybot/ui'
+import { cn } from '@ybot/ui'
 
 export type JourneyLens = 'design' | 'traffic' | 'health'
 
@@ -10,9 +11,17 @@ export interface ChapterHealth {
   detail: string
 }
 
+const EMPTY_MARKS: JourneyMarks = { chapters: {}, doors: {}, nodeIds: {} }
+
 function clip(text: string, max = 42): string {
   const clean = text.replace(/\s+/g, ' ').trim()
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean
+}
+
+function doorMarkClass(mark: JourneyMark | undefined): string {
+  if (mark === 'improve') return 'border-[var(--accent)] bg-[var(--accent-muted)] text-[var(--accent)]'
+  if (mark === 'error') return 'border-[var(--border-strong)] bg-[var(--bg-base)] text-[var(--text-primary)]'
+  return 'border-indigo-200 bg-indigo-50 text-indigo-700'
 }
 
 function Chart({
@@ -23,6 +32,8 @@ function Chart({
   automations,
   connecting,
   active,
+  mark,
+  doorMarks,
   onOpen,
   onConnect,
 }: {
@@ -33,6 +44,8 @@ function Chart({
   automations: string[]
   connecting: boolean
   active: boolean
+  mark?: JourneyMark
+  doorMarks: Record<string, JourneyMark>
   onOpen: (id: string) => void
   onConnect: (id: string) => void
 }) {
@@ -46,9 +59,12 @@ function Chart({
         !chapter.welcome && !chapter.suggested ? 'border-[var(--border)]' : '',
         loose && !chapter.published ? 'border-dashed' : '',
         active ? 'ring-2 ring-[var(--accent)]' : '',
+        mark === 'improve' ? 'border-[var(--accent)]' : '',
+        mark === 'error' ? 'border-[var(--border-strong)]' : '',
       ].join(' ')}
       data-chapter={chapter.name}
       data-active={active ? 'true' : 'false'}
+      data-mark={mark ?? ''}
     >
       <button type="button" className="block w-full text-left" onClick={() => onOpen(chapter.id)}>
         <span className={`block text-sm font-semibold ${chapter.welcome ? 'text-emerald-800' : 'text-[var(--text-primary)]'}`}>
@@ -72,8 +88,9 @@ function Chart({
               </span>
             ))}
             {chapter.jumps.filter((name) => !chapter.children.some((child) => child.name === name)).map((name) => (
-              <span key={name} className="rounded-lg border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[11px] text-indigo-700">
+              <span key={name} className={cn('rounded-lg border px-1.5 py-0.5 text-[11px]', doorMarkClass(doorMarks[name]))}>
                 {clip(name)}
+                {doorMarks[name] === 'improve' ? ' · Ready' : doorMarks[name] === 'error' ? ' · Look' : ''}
               </span>
             ))}
             {chapter.steps.length === 0 && chapter.jumps.length === 0 && chapter.looksUp.length === 0 && (
@@ -82,6 +99,8 @@ function Chart({
           </span>
         )}
         {active && <span className="mt-2 block text-[11px] font-medium text-[var(--accent)]">Guest is here</span>}
+        {!active && mark === 'improve' && <span className="mt-2 block text-[11px] font-medium text-[var(--accent)]">Ready</span>}
+        {!active && mark === 'error' && <span className="mt-2 block text-[11px] font-medium text-[var(--text-primary)]">Needs a look</span>}
         {lens === 'traffic' && (
           <span className="mt-1 block text-xs text-[var(--text-secondary)]">
             {chats ? `${chats} ${chats === 1 ? 'chat' : 'chats'} in 30 days` : 'No chats yet'}
@@ -124,6 +143,7 @@ function Column({
   automationsFor,
   connectingId,
   activeId,
+  marks,
   onOpen,
   onConnect,
 }: {
@@ -135,6 +155,7 @@ function Column({
   automationsFor: (name: string) => string[]
   connectingId: string
   activeId?: string
+  marks: JourneyMarks
   onOpen: (id: string) => void
   onConnect: (id: string) => void
 }) {
@@ -148,6 +169,8 @@ function Column({
         automations={automationsFor(chapter.name)}
         connecting={connectingId === chapter.id}
         active={activeId === chapter.id}
+        mark={marks.chapters[chapter.name]}
+        doorMarks={marks.doors[chapter.name] ?? {}}
         onOpen={onOpen}
         onConnect={onConnect}
       />
@@ -163,6 +186,7 @@ function Column({
               automationsFor={automationsFor}
               connectingId={connectingId}
               activeId={activeId}
+              marks={marks}
               onOpen={onOpen}
               onConnect={onConnect}
             />
@@ -186,6 +210,7 @@ export function JourneyMap({
   automationsFor,
   connectingId,
   activeId,
+  marks = EMPTY_MARKS,
   onOpen,
   onConnect,
 }: {
@@ -196,6 +221,7 @@ export function JourneyMap({
   automationsFor: (name: string) => string[]
   connectingId: string
   activeId?: string
+  marks?: JourneyMarks
   onOpen: (id: string) => void
   onConnect: (id: string) => void
 }) {
@@ -208,6 +234,7 @@ export function JourneyMap({
     automationsFor,
     connectingId,
     activeId,
+    marks,
     onOpen,
     onConnect,
   }

@@ -125,6 +125,7 @@ const flowCanvasRoute = createRoute({
   path: '/build/flows/$flowId',
   validateSearch: (search: Record<string, unknown>) => ({
     from: search.from === 'journey' ? 'journey' as const : undefined,
+    mark: typeof search.mark === 'string' && search.mark ? search.mark : undefined,
   }),
   component: FlowCanvasPage,
 })
