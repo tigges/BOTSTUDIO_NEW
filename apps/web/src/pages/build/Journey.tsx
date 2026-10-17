@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { Play, Plus } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Button, PageHeader, Skeleton } from '@ybot/ui'
 import { cn } from '@ybot/ui'
@@ -67,6 +68,8 @@ export function JourneyPage() {
   const createFlow = useCreateFlow()
   const saveCanvas = useSaveCanvas()
   const publishFlow = usePublishFlow()
+  const queryClient = useQueryClient()
+  const selectedBotId = useAppStore((s) => s.selectedBotId)
   const environments = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments) ?? NO_ENVIRONMENTS
   const selectedEnv = useAppStore((s) => s.selectedEnv)
   const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((env) => env.kind === s.selectedEnv)?.id ?? '')
@@ -220,6 +223,19 @@ export function JourneyPage() {
             setGuestChapterId(match?.id ?? '')
           }}
           onClose={() => { setTesting(false); setGuestChapterId('') }}
+          onApply={async (changes) => {
+            for (const change of changes) {
+              const flow = flows.find((item) => item.name === change.name)
+              const version = flow ? shown(flow) : undefined
+              if (!flow || !version) continue
+              await saveCanvas.mutateAsync({
+                flowId: flow.id,
+                version: version.version,
+                graph: change.graph as FlowGraph,
+              })
+            }
+            if (selectedBotId) await queryClient.invalidateQueries({ queryKey: ['flows', selectedBotId] })
+          }}
         />
       )}
       </div>
