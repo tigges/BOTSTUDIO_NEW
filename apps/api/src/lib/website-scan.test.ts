@@ -3,9 +3,11 @@ import { test } from 'node:test'
 import { SessionMachine, type FlowGraph } from '@ybot/runtime'
 import type { ExecutionServices, Session } from '@ybot/runtime'
 import {
+  chooseShopHomes,
   chooseSitePages,
   draftWebsiteChat,
   inspectFlowGraph,
+  isMissingPage,
   journeyLayout,
   pageFromHtml,
   welcomeDoors,
@@ -386,6 +388,116 @@ test('chooseSitePages skips investor and shareholder leaves', () => {
   assert.equal(chosen.some((href) => /investor|shareholder|conduct/i.test(href)), false)
 })
 
+test('chooseSitePages skips news articles and sport leaves, and keeps contact', () => {
+  const chosen = chooseSitePages({
+    homeUrl: 'https://www.bbc.co.uk/',
+    links: [
+      { href: 'https://www.bbc.co.uk/contact', text: 'Contact the BBC' },
+      { href: 'https://www.bbc.co.uk/contact/complaints', text: 'Complaints' },
+      { href: 'https://www.bbc.co.uk/aboutthebbc/whatwedo', text: 'What we do' },
+      { href: 'https://www.bbc.co.uk/news', text: 'News' },
+      { href: 'https://www.bbc.co.uk/sport', text: 'Sport' },
+      { href: 'https://www.bbc.co.uk/sport/boxing', text: 'Boxing' },
+      { href: 'https://www.bbc.co.uk/sport/golf', text: 'Golf' },
+      { href: 'https://www.bbc.co.uk/news/articles/c9zrd84zy87ro', text: 'A headline' },
+      { href: 'https://www.bbc.co.uk/sport/boxing/live/cr20wlq8ee74t', text: 'Live boxing' },
+      { href: 'https://www.bbc.co.uk/sport/football/videos/c65yn28p859wo', text: 'Highlights' },
+    ],
+    limit: 9,
+  })
+  assert.equal(chosen.some((href) => href.includes('/contact')), true)
+  assert.equal(chosen.some((href) => href.includes('complain')), true)
+  assert.equal(chosen.some((href) => /\/news\/?$/.test(href) || href.endsWith('/news')), true)
+  assert.equal(chosen.some((href) => /\/sport\/?$/.test(href) || href.endsWith('/sport')), true)
+  assert.equal(chosen.some((href) => /boxing|golf|c9zrd84zy87ro|articles|videos|live/i.test(href)), false)
+})
+
+test('a news homepage does not mint boxing, golf, or article-id rooms', () => {
+  const home = pageFromHtml(
+    'https://www.bbc.co.uk/',
+    `<html><head><title>BBC - Home</title></head><body>
+      <h1>BBC</h1>
+      <p>The BBC is the world's leading public service broadcaster. We inform, educate and entertain.</p>
+      <a href="/sport/boxing">Boxing</a>
+      <a href="/contact">Contact</a>
+    </body></html>`,
+  )
+  const boxing = pageFromHtml(
+    'https://www.bbc.co.uk/sport/boxing',
+    `<html><head><title>Boxing</title></head><body>
+      <p>Follow live boxing scores, fixtures, results and the latest fight news from around the world.</p>
+    </body></html>`,
+  )
+  const article = pageFromHtml(
+    'https://www.bbc.co.uk/news/articles/c9zrd84zy87ro',
+    `<html><head><title>France protests</title></head><body>
+      <p>Violent clashes, looting and buildings ablaze in France as more than a thousand people were arrested overnight.</p>
+    </body></html>`,
+  )
+  const contact = pageFromHtml(
+    'https://www.bbc.co.uk/contact',
+    `<html><head><title>Contact Home</title></head><body>
+      <p>Contact the BBC about a programme, make a complaint, or get in touch with BBC News.</p>
+    </body></html>`,
+  )
+  const learn = pageFromHtml(
+    'https://www.bbc.co.uk/aboutthebbc/whatwedo',
+    `<html><head><title>Learn more about what we do</title></head><body>
+      <p>Learn more about what we do across news, sport, radio and television in the UK and around the world.</p>
+    </body></html>`,
+  )
+  const draft = draftWebsiteChat({
+    pages: [home, boxing, article, contact, learn],
+    companyName: 'BBC',
+    personaName: 'Beeb',
+  })
+  assert.equal(draft.doors.some((door) => /boxing|golf|c9zrd84zy87ro/i.test(door.flowName)), false)
+  assert.equal(draft.doors.some((door) => /^learn more/i.test(door.flowName) || /^learn more/i.test(door.title)), false)
+  assert.equal(draft.doors.filter((door) => /what we do/i.test(door.flowName)).length, 1)
+  assert.ok(draft.doors.some((door) => /what we do/i.test(door.flowName)))
+  assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
+  assert.ok(draft.doors.some((door) => /contact/i.test(door.flowName)))
+  assert.equal(draft.greeting, "Hi, I'm Beeb at BBC.")
+})
+
+test('chooseShopHomes follows the English country shop off a group homepage', () => {
+  const shops = chooseShopHomes({
+    homeUrl: 'https://www.vodafone.com/',
+    links: [
+      { href: 'https://www.vodafone.de/', text: 'Deutschland' },
+      { href: 'https://www.vodafone.co.uk/', text: 'United Kingdom' },
+      { href: 'https://investors.vodafone.com/', text: 'Investors' },
+      { href: 'https://www.phorest.com/salon/demo', text: 'Book' },
+    ],
+    limit: 1,
+  })
+  assert.deepEqual(shops, ['https://www.vodafone.co.uk/'])
+  assert.deepEqual(chooseShopHomes({
+    homeUrl: 'https://www.vodafone.co.uk/',
+    links: [{ href: 'https://www.vodafone.de/', text: 'Deutschland' }],
+  }), [])
+  assert.deepEqual(chooseShopHomes({
+    homeUrl: 'https://yuzu.hair/',
+    links: [{ href: 'https://www.phorest.com/salon/yuzu', text: 'Book' }],
+  }), [])
+})
+
+test('chooseSitePages prefers SIM and pay-monthly leaves over a handset URL', () => {
+  const chosen = chooseSitePages({
+    homeUrl: 'https://www.vodafone.co.uk/',
+    links: [
+      { href: 'https://www.vodafone.co.uk/sim-only/best-sim-only-deals', text: 'SIM only' },
+      { href: 'https://www.vodafone.co.uk/mobile/pay-monthly-contracts', text: 'Pay monthly' },
+      { href: 'https://www.vodafone.co.uk/mobile/pay-monthly-contracts/apple/iphone-18-pro-max', text: 'iPhone 18 Pro Max' },
+      { href: 'https://www.vodafone.co.uk/our-impact', text: 'Our impact' },
+    ],
+    limit: 2,
+  })
+  assert.equal(chosen.some((href) => href.includes('/sim-only')), true)
+  assert.equal(chosen.some((href) => /\/mobile\/pay-monthly-contracts\/?$/.test(href)), true)
+  assert.equal(chosen.some((href) => /iphone/i.test(href)), false)
+})
+
 const HUBSPOT_PRICING = `<!doctype html>
 <html><head><title>Pricing</title></head>
 <body>
@@ -596,8 +708,73 @@ test('a telco homepage of investor copy does not stamp a software blueprint', ()
   assert.equal(/ordinary shares|computershare|code of conduct|in-depth reports/i.test(draft.doors.map((door) => door.answer).join('\n')), false)
   assert.ok(draft.doors.some((door) => /connect everyone/i.test(door.answer)))
   assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
+  assert.equal(draft.doors.some((door) => /^plans?/i.test(door.flowName) || /^plans?/i.test(door.title)), false)
   assert.equal(/did not state this/i.test(draft.doors.map((door) => door.answer).join('\n')), false)
   assert.equal(/Software vendor/i.test(draft.flows.map((flow) => flow.name).join(' ')), false)
+})
+
+test('a telco 404 is not a chapter, and the shop SIM page answers plans', async () => {
+  const home = pageFromHtml(
+    'https://www.vodafone.com/',
+    `<html><head><title>Vodafone</title></head><body>
+      <h1>Welcome to Vodafone</h1>
+      <p>As one of the largest telcos in Europe and Africa, Vodafone's mission is to connect everyone.</p>
+      <a href="https://www.vodafone.co.uk/">United Kingdom</a>
+      <a href="/plans">Plans</a>
+    </body></html>`,
+  )
+  const missing = pageFromHtml(
+    'https://www.vodafone.com/plans',
+    `<html><head><title>Page not found</title></head><body>
+      <p>You've come to a page of the Vodafone website that doesn't exist. Try the homepage or search.</p>
+    </body></html>`,
+  )
+  const shop = pageFromHtml(
+    'https://www.vodafone.co.uk/',
+    `<html><head><title>Vodafone on The Nation's Network</title></head><body>
+      <p>Phones, SIM only and broadband on the UK network. Shop pay monthly and SIM only deals.</p>
+      <a href="/sim-only/best-sim-only-deals">SIM only</a>
+    </body></html>`,
+  )
+  const hub = pageFromHtml(
+    'https://www.vodafone.co.uk/sim-only',
+    `<html><head><title>What is a SIM only deal?</title></head><body>
+      <p>Switching to us is easy and we'll help you at every step. A SIM only deal is a contract without a phone.</p>
+    </body></html>`,
+  )
+  const sim = pageFromHtml(
+    'https://www.vodafone.co.uk/sim-only/best-sim-only-deals',
+    `<html><head><title>Best SIM Only Deals</title></head><body>
+      <p>Unlimited Extra Plus £10 Stay Free at £100</p>
+      <p>Unlimited data and EU roaming just £26 a month on a SIM only plan.</p>
+      <p>All our pay monthly SIM only plans come with 5G as standard across the UK.</p>
+    </body></html>`,
+  )
+  assert.equal(isMissingPage(missing), true)
+  const draft = draftWebsiteChat({
+    pages: [home, missing, shop, hub, sim],
+    companyName: 'Vodafone',
+    personaName: 'Voda',
+  })
+  assert.equal(draft.doors.some((door) => /page not found|doesn't exist|does not exist/i.test(`${door.flowName} ${door.title} ${door.answer}`)), false)
+  const plans = draft.doors.find((door) => /^plans?/i.test(door.flowName) || /^plans?/i.test(door.title))
+  assert.ok(plans)
+  assert.equal(plans!.phrases.includes('plans'), true)
+  assert.match(plans!.answer, /£26 a month|SIM only/i)
+  assert.equal(/switching to us is easy/i.test(plans!.answer), false)
+  assert.equal(/Free at £100|Plus at £10/i.test(plans!.answer), false)
+  const welcome = JSON.stringify(draft.flows.find((flow) => /welcome/i.test(flow.name))?.graph ?? {})
+  assert.match(welcome, /"plans"/)
+  const planFlow = draft.flows.find((flow) => flow.name === plans!.flowName)
+  assert.ok(planFlow)
+  const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
+  const spoken = await machine.run(session('plans'), planFlow!.graph as unknown as FlowGraph, 'plans')
+  assert.match(spoken.newMessages.map((message) => message.content.text).join('\n'), /SIM only|£26|pay monthly/i)
+  const names = draft.flows.map((flow) => flow.name)
+  for (const flow of draft.flows) {
+    const issues = inspectFlowGraph(flow.graph as Parameters<typeof inspectFlowGraph>[0], { flowNames: names })
+    assert.deepEqual(issues.filter((issue) => issue.level === 'block' || issue.level === 'repair'), [], flow.name)
+  }
 })
 
 test('private and local addresses are refused before a request', () => {

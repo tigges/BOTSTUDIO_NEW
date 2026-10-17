@@ -350,8 +350,50 @@ function splitCopy(text: string): string[] {
     .filter(Boolean)
 }
 
-function pricingPage(page: ScannedPage): boolean {
-  return /pric|\/plans?\b/i.test(`${page.url} ${page.title}`)
+const PLAN_PATH = /pric|\/plans?\b|sim[-_/ ]?only|pay[-_/ ]?monthly|tariff|\/mobile\/|\/shop(?:\/|$)/i
+const PLAN_COPY = /sim[-_/ ]?only|\bsim only\b|pay[-_/ ]?monthly|\btariff|\bunlimited sim\b|\bpay as you go\b/i
+
+export function isPricingPage(page: ScannedPage): boolean {
+  return PLAN_PATH.test(`${page.url} ${page.title}`)
+}
+
+const PLAN_PHRASES = ['plans', 'plan', 'pricing', 'how much', 'sim', 'tariff', 'pay monthly']
+
+export function isMissingPage(page: ScannedPage): boolean {
+  if (/page not found|\b404\b/i.test(page.title)) return true
+  return /you(?:'| ha)ve come to a page of the .{0,80}(?:web)?site/i.test(page.text.slice(0, 400))
+}
+
+function looksLikePlanCopy(page: ScannedPage): boolean {
+  if (isMissingPage(page)) return false
+  if (isPricingPage(page)) return true
+  return PLAN_COPY.test(`${page.title} ${page.text.slice(0, 800)}`)
+}
+
+function planAnswer(page: ScannedPage): string | null {
+  const parts = splitCopy(page.text)
+  const hit = parts.find((part) => {
+    if (part.length < 32 || part.length > 280) return false
+    if (isJunkAnswer(part)) return false
+    return PLAN_COPY.test(part) || /\b(?:plan|sim|tariff|a month)\b/i.test(part)
+  })
+  if (hit) return clip(hit)
+  return leadFromPage(page)
+}
+
+function hasPlanTopic(topics: SiteTopic[]): boolean {
+  return topics.some((topic) => topic.walk === 'plans' || /^plans?/i.test(topic.choice) || /^plans?/i.test(topic.flowName))
+}
+
+function planPageScore(page: ScannedPage): number {
+  const blob = `${page.url} ${page.title} ${page.text.slice(0, 1200)}`
+  let score = 0
+  if (/[£$€]\s*\d+/.test(blob)) score += 6
+  if (PLAN_COPY.test(blob)) score += 4
+  if (/\bunlimited\b|\ba month\b/i.test(blob)) score += 2
+  if (/best-sim-only|pay-monthly|\/plans?(?:\/|$)/i.test(page.url)) score += 3
+  if (/\/sim-only\/?$/i.test(pathOf(page))) score -= 2
+  return score
 }
 
 function titleCaseHost(host: string): string {
@@ -359,7 +401,29 @@ function titleCaseHost(host: string): string {
   return stem.charAt(0).toUpperCase() + stem.slice(1)
 }
 
-const JUNK_SITE_PATH = /\/(?:investor|investors|shareholder|shareholders|governance|annual-report|code-of-conduct|conduct|computershare|equiniti|sustainability)(?:\/|$)/i
+/** BBC-style article ids and numeric CMS keys are not chapter names. */
+export function isOpaqueStem(stem: string): boolean {
+  const token = stem.replace(/\.html?$/i, '').toLowerCase()
+  if (!token) return false
+  if (/^[0-9]{6,}$/.test(token)) return true
+  if (/^[a-z]{1,4}[0-9][a-z0-9]{6,}$/i.test(token)) return true
+  if (token.length >= 10 && /\d/.test(token) && /[a-z]/i.test(token) && !/[-_]/.test(token)) return true
+  return false
+}
+
+/** News/sport story leaves stay off the map. /news and /sport hubs can still land. */
+export function isStoryLeafPath(pathname: string): boolean {
+  const path = pathname.toLowerCase()
+  if (/\/(?:articles|videos|live)(?:\/|$)/i.test(path)) return true
+  if (/\/(?:iplayer\/episodes|sounds\/play)(?:\/|$)/i.test(path)) return true
+  const segments = path.split('/').filter(Boolean)
+  const stem = (segments[segments.length - 1] ?? '').replace(/\.html?$/i, '')
+  if (isOpaqueStem(stem)) return true
+  if (segments.length >= 2 && /^(news|sport|weather|sounds|iplayer)$/i.test(segments[0] ?? '')) return true
+  return false
+}
+
+const JUNK_SITE_PATH = /\/(?:investor|investors|shareholder|shareholders|governance|annual-report|code-of-conduct|conduct|computershare|equiniti|sustainability|articles|videos)(?:\/|$)/i
 
 function pathOf(page: ScannedPage): string {
   try {
@@ -375,8 +439,12 @@ function isHomePage(page: ScannedPage): boolean {
 }
 
 function isJunkSitePage(page: ScannedPage): boolean {
+  if (isMissingPage(page)) return true
   if (JUNK_SITE_PATH.test(pathOf(page))) return true
   if (isHomePage(page)) return false
+  if (isStoryLeafPath(pathOf(page))) return true
+  const stem = pathOf(page).split('/').filter(Boolean).pop() ?? ''
+  if (isOpaqueStem(stem)) return true
   const head = `${page.title} ${page.text.slice(0, 280)}`
   return /computershare|shareview|ordinary shares|adr holding|investor relations/i.test(head)
 }
@@ -386,15 +454,36 @@ function isJunkAnswer(text: string): boolean {
   return /computershare|shareview|ordinary shares|code of conduct|adr holding|equiniti|holders of ordinary|possible findings are subject|mitigation plans/i.test(text)
 }
 
+function titleLooksLikeNav(title: string): boolean {
+  if (/^learn more\b/i.test(title)) return true
+  if (/scores,\s*fixtures/i.test(title)) return true
+  if (/,.+,/.test(title) && !/[.!?']/.test(title)) return true
+  return false
+}
+
 function titleFromPage(page: ScannedPage): string {
   if (isHomePage(page)) return 'What we do'
-  if (pricingPage(page)) return 'Plans'
+  if (isPricingPage(page)) return 'Plans'
   const stem = (pathOf(page).split('/').filter(Boolean).pop() ?? '')
     .replace(/[-_]+/g, ' ')
     .replace(/\.html?$/, '')
+  if (isOpaqueStem(stem.replace(/\s+/g, ''))) return 'About'
   const fromTitle = page.title.replace(/\s*[|–—•].*$/, '').replace(/\s*-\s*[^-]+$/, '').trim()
-  if (fromTitle && fromTitle.length >= 3 && fromTitle.length <= 42 && !/^home$/i.test(fromTitle)) return fromTitle
-  if (stem) return stem.replace(/\b[a-z]/g, (ch) => ch.toUpperCase())
+  if (fromTitle && /^contact(?:\s+home)?$/i.test(fromTitle)) return 'Contact'
+  const afterLearn = fromTitle.replace(/^learn more about /i, '').trim()
+  if (afterLearn && afterLearn !== fromTitle && afterLearn.length >= 3 && afterLearn.length <= 42) {
+    return afterLearn.charAt(0).toUpperCase() + afterLearn.slice(1)
+  }
+  if (
+    fromTitle
+    && fromTitle.length >= 3
+    && fromTitle.length <= 42
+    && !/^home$/i.test(fromTitle)
+    && !titleLooksLikeNav(fromTitle)
+  ) {
+    return fromTitle
+  }
+  if (stem && !titleLooksLikeNav(stem)) return stem.replace(/\b[a-z]/g, (ch) => ch.toUpperCase())
   return 'About'
 }
 
@@ -427,6 +516,8 @@ function phrasesForDoor(name: string): string[] {
 
 function uniqueFlowName(name: string, used: Set<string>): string | null {
   const base = name.trim() || 'About'
+  if (isOpaqueStem(base.replace(/\s+/g, ''))) return null
+  if (/^learn more\b/i.test(base)) return null
   if (!used.has(base)) return base
   return null
 }
@@ -460,27 +551,55 @@ export function draftClusteredTemplate(input: {
       ? `Hi, I'm ${persona} at ${company}. What's your name?`
       : `Hi, I'm ${persona} at ${company}.`
     : assistantGreeting(company)
-  const pricingPages = working.filter((page) => pricingPage(page))
-  const tiers = clusterId === 'hair' || clusterId === 'email' ? [] : extractPlanTiers(pricingPages.map((page) => page.text).join('\n'))
+  const pricingPages = working.filter((page) => isPricingPage(page) && !isMissingPage(page))
+  const telcoShop = working.some((page) => PLAN_COPY.test(`${page.url} ${page.title} ${page.text.slice(0, 800)}`))
+  const tiers = clusterId === 'hair' || clusterId === 'email' || telcoShop
+    ? []
+    : extractPlanTiers(pricingPages.map((page) => page.text).join('\n'))
   const topics: SiteTopic[] = []
   const used = new Set<string>()
-  for (const page of working) {
+  const rest = working.filter((page) => !isHomePage(page))
+  const ordered = [
+    ...working.filter((page) => isHomePage(page)),
+    ...rest.filter((page) => isPricingPage(page)).sort((a, b) => planPageScore(b) - planPageScore(a)),
+    ...rest.filter((page) => !isPricingPage(page)),
+  ]
+  for (const page of ordered) {
     if (isJunkSitePage(page)) continue
-    if (pricingPage(page) && tiers.length >= 2) continue
-    const found = leadFromPage(page)
+    if (isPricingPage(page) && tiers.length >= 2) continue
+    const found = isPricingPage(page) ? (planAnswer(page) ?? leadFromPage(page)) : leadFromPage(page)
     if (!found) continue
     const name = uniqueFlowName(titleFromPage(page), used)
     if (!name) continue
     used.add(name)
+    const planDoor = isPricingPage(page) || /^plans?/i.test(name)
     topics.push({
       flowName: name,
-      choice: name,
-      phrases: phrasesForDoor(name),
-      question: `What about ${name.toLowerCase()}?`,
+      choice: planDoor ? 'Plans' : name,
+      phrases: planDoor ? [...new Set([...PLAN_PHRASES, ...phrasesForDoor(name)])] : phrasesForDoor(name),
+      question: planDoor ? 'Which plan are you asking about?' : `What about ${name.toLowerCase()}?`,
       answer: found,
       blurb: clip(found, 80),
     })
     if (topics.length >= 8) break
+  }
+  if (!hasPlanTopic(topics) && tiers.length < 2) {
+    const source = working.find((page) => !isJunkSitePage(page) && looksLikePlanCopy(page))
+    const answer = source ? planAnswer(source) : null
+    if (source && answer) {
+      const topic: SiteTopic = {
+        flowName: 'Plans',
+        choice: 'Plans',
+        phrases: [...PLAN_PHRASES],
+        question: 'Which plan are you asking about?',
+        answer,
+        blurb: clip(answer, 80),
+      }
+      const insertAt = Math.min(1, topics.length)
+      topics.splice(insertAt, 0, topic)
+      used.add('Plans')
+      if (topics.length > 8) topics.pop()
+    }
   }
   if (tiers.length >= 2) {
     topics.push({

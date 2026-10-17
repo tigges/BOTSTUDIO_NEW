@@ -55,3 +55,11 @@ test('inline Free £0/mo Starter £7/mo/seat still keeps per seat', () => {
   assert.deepEqual(tiers.map((tier) => tier.name), ['Free', 'Starter', 'Professional', 'Enterprise'])
   assert.equal(tiers[1]?.price, '£7 a month per seat')
 })
+
+test('a telco SIM page is not a Free/Plus software grid', () => {
+  const text = `Unlimited Extra Plus £10 a month
+Stay Free at £100 connection
+Unlimited data and EU roaming just £26 a month on a SIM only plan
+All our pay monthly SIM only plans come with 5G as standard`
+  assert.deepEqual(extractPlanTiers(text), [])
+})
