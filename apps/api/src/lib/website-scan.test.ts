@@ -166,7 +166,7 @@ const BOTSTUDIO_HOME = `<!doctype html>
   <span>Colour</span><span>Cut</span>
   <span>Location</span><span>Hours</span><span>Book</span>
 </div>
-<p>Scan your website address and let the BotStudio do the rest. Use a blueprint if you don't have a website.</p>
+<p>Scan your website address and let the BotStudio do the rest. No website yet? Start from a blank welcome.</p>
 <p>Start with the website widget. Activate further channels like WhatsApp and email in Channels.</p>
 <div class="inbox" aria-hidden="true">
   <div>Inbox</div>
@@ -188,13 +188,13 @@ test('botstudio.uk is a software map, not an empty salon from the Hair & Spa sam
   assert.equal(/What's your name/.test(draft.greeting), false)
   assert.equal(draft.doors.some((door) => door.flowName === 'Location' || door.flowName === 'Salon hours'), false)
   assert.ok(draft.doors.some((door) => /product|what we do/i.test(`${door.title} ${door.flowName}`)))
-  assert.ok(draft.doors.some((door) => /demo/i.test(`${door.title} ${door.flowName}`)))
+  assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
   assert.equal(/did not state an address/.test(draft.doors.map((door) => door.blurb).join(' ')), false)
-  const product = draft.doors.find((door) => door.flowName === 'Product')
+  const product = draft.doors.find((door) => /what we do/i.test(door.flowName) || /hybrid agent|bots answer from your own content/i.test(door.answer))
   assert.ok(product?.found)
-  assert.match(product!.answer, /bots answer from your own content/i)
-  const accounts = draft.doors.find((door) => door.flowName === 'Accounts')
-  assert.equal(/sign in/i.test(accounts?.answer ?? ''), false)
+  assert.match(`${product!.answer} ${product!.blurb}`, /hybrid agent|bots answer from your own content/i)
+  assert.equal(draft.doors.some((door) => door.flowName === 'Accounts'), false)
+  assert.equal(/did not state this/i.test(draft.doors.map((door) => door.answer).join('\n')), false)
 })
 
 const PRICE_LIST = `<title>Price list</title>
@@ -371,6 +371,21 @@ test('chooseSitePages keeps product and pricing leaves, and skips blog sitemap r
   assert.equal(chosen.some((href) => href.includes('/blog') || href.includes('company-news') || href.includes('case-studies') || href.includes('glossary')), false)
 })
 
+test('chooseSitePages skips investor and shareholder leaves', () => {
+  const chosen = chooseSitePages({
+    homeUrl: 'https://www.vodafone.com/',
+    links: [
+      { href: 'https://www.vodafone.com/about', text: 'About' },
+      { href: 'https://www.vodafone.com/investors', text: 'Investors' },
+      { href: 'https://www.vodafone.com/shareholder-information', text: 'Shareholders' },
+      { href: 'https://www.vodafone.com/governance/code-of-conduct', text: 'Code of conduct' },
+    ],
+    limit: 9,
+  })
+  assert.equal(chosen.some((href) => href.includes('/about')), true)
+  assert.equal(chosen.some((href) => /investor|shareholder|conduct/i.test(href)), false)
+})
+
 const HUBSPOT_PRICING = `<!doctype html>
 <html><head><title>Pricing</title></head>
 <body>
@@ -442,6 +457,7 @@ const HUBSPOT_MARKETING_PAGE = `<!doctype html>
 <html><head><title>Marketing</title></head>
 <body>
 <p>Grow awareness, convert leads into revenue, and run every campaign without adding more tools.</p>
+<p>Provide your marketing team with logins and access to the appropriate tools, and they’ll be running lead generation campaigns that same day.</p>
 <p>Starter is listed on some product cards at $10/mo, which is not the pricing grid.</p>
 <p>Enterprise banner $150.</p>
 </body></html>`
@@ -469,35 +485,36 @@ test('a CRM homepage does not turn nav chrome into answers, and reads product pa
   assert.equal(/What's your name/.test(draft.greeting), false)
   const welcome = JSON.stringify(draft.flows.find((flow) => /welcome/i.test(flow.name))?.graph ?? {})
   assert.match(welcome, /What's your name/)
-  const contacts = draft.doors.find((door) => /contacts/i.test(door.flowName))
-  assert.ok(contacts)
-  assert.match(contacts!.answer, /one customer record/)
-  assert.equal(/convert visitors into contacts/i.test(contacts!.answer), false)
-  const meetings = draft.doors.find((door) => /meetings/i.test(door.flowName))
-  assert.ok(meetings)
-  assert.match(meetings!.answer, /calendar/)
-  assert.equal(/transcripts/i.test(meetings!.answer), false)
-  const tickets = draft.doors.find((door) => /tickets/i.test(door.flowName))
-  assert.ok(tickets)
-  assert.match(tickets!.answer, /assign the case|follow it/)
-  assert.equal(/129%/.test(tickets!.answer), false)
-  const integrations = draft.doors.find((door) => /integrations/i.test(door.flowName))
-  assert.ok(integrations)
-  assert.equal(/a11y/i.test(integrations!.answer), false)
-  const billing = draft.doors.find((door) => /billing/i.test(door.flowName))
-  assert.ok(billing)
-  assert.equal(/data software billing/i.test(billing!.answer), false)
-  const marketingDoor = draft.doors.find((door) => /marketing/i.test(door.flowName))
+  const spoken = draft.doors.map((door) => door.answer).join('\n')
+  assert.equal(/a11y/i.test(spoken), false)
+  assert.equal(/data software billing/i.test(spoken), false)
+  assert.equal(/convert visitors into contacts/i.test(spoken), false)
+  assert.equal(draft.doors.some((door) => /integrations|billing|login|accounts/i.test(door.flowName)), false)
+  const marketingDoor = draft.doors.find((door) => /marketing/i.test(`${door.title} ${door.flowName}`))
   assert.ok(marketingDoor)
   assert.match(marketingDoor!.answer, /campaign/)
-  const plans = draft.doors.find((door) => /plan|pricing/i.test(door.flowName))
+  const record = draft.doors.find((door) => /one customer record/i.test(door.answer))
+  assert.ok(record)
+  const plans = draft.doors.find((door) => /plan|pricing/i.test(`${door.flowName} ${door.title}`))
   assert.ok(plans)
   assert.match(plans!.answer, /£0 a month/)
   assert.equal(/\$10/.test(plans!.answer), false)
-  const demoFaq = draft.faqs.find((faq) => /demo/i.test(faq.question))
-  assert.ok(demoFaq)
-  assert.equal(/play video|get started free/i.test(demoFaq!.answer), false)
-  assert.match(demoFaq!.answer, /email/i)
+  const demo = draft.doors.find((door) => /demo/i.test(door.flowName))
+  assert.ok(demo)
+  assert.match(demo!.answer, /email/i)
+})
+
+test('a CRM homepage scan does not stamp blueprint rooms over nav chrome', () => {
+  const home = pageFromHtml('https://www.hubspot.com/', HUBSPOT_HOME)
+  const draft = draftWebsiteChat({
+    pages: [home],
+    companyName: 'Hubspot',
+    personaName: 'James',
+  })
+  assert.equal(draft.clusterId, 'crm')
+  assert.equal(draft.doors.some((door) => /marketing|sales|service|contacts|tickets|billing|accounts/i.test(door.flowName)), false)
+  assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
+  assert.equal(/did not state this/i.test(draft.doors.map((door) => door.answer).join('\n')), false)
 })
 
 test('a JS pricing URL does not pick product-card prices off a marketing page', () => {
@@ -508,10 +525,9 @@ test('a JS pricing URL does not pick product-card prices off a marketing page', 
     companyName: 'Hubspot',
     personaName: 'James',
   })
-  const plans = draft.doors.find((door) => /plan|pricing/i.test(door.flowName))
-  assert.ok(plans)
-  assert.equal(/\$10|\$150/.test(plans!.answer), false)
-  assert.match(plans!.answer, /did not state|Which plan|Free, Starter, Professional, Enterprise/)
+  assert.equal(/\$10|\$150/.test(JSON.stringify(draft.doors)), false)
+  const plans = draft.doors.find((door) => /plan|pricing/i.test(`${door.flowName} ${door.title}`))
+  if (plans) assert.equal(/\$10|\$150/.test(plans.answer), false)
 })
 
 test('a CRM pricing page becomes plan doors and an email follow-up, not a salon map', async () => {
@@ -534,10 +550,11 @@ test('a CRM pricing page becomes plan doors and an email follow-up, not a salon 
   assert.match(JSON.stringify(demo.graph), /good email address/)
   assert.match(JSON.stringify(demo.graph), /One moment please/)
   assert.match(JSON.stringify(demo.graph), /from test sales/)
-  assert.ok(draft.doors.length >= 12)
-  assert.ok(draft.doors.some((door) => /marketing/i.test(door.title)))
-  assert.ok(draft.doors.some((door) => /sales/i.test(door.title)))
-  assert.ok(draft.doors.some((door) => /contacts/i.test(door.title)))
+  assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
+  assert.ok(draft.doors.length < 12)
+  assert.equal(draft.doors.some((door) => /marketing/i.test(door.title)), false)
+  assert.equal(draft.doors.some((door) => /sales/i.test(door.title)), false)
+  assert.equal(draft.doors.some((door) => /contacts/i.test(door.title)), false)
   const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
   const demoGraph = demo.graph as unknown as FlowGraph
   const asked = await machine.run(session('talk to sales'), demoGraph, 'talk to sales')
@@ -553,6 +570,34 @@ test('a CRM pricing page becomes plan doors and an email follow-up, not a salon 
     const issues = inspectFlowGraph(flow.graph as Parameters<typeof inspectFlowGraph>[0], { flowNames: names })
     assert.deepEqual(issues.filter((issue) => issue.level === 'block' || issue.level === 'repair'), [], flow.name)
   }
+})
+
+test('a telco homepage of investor copy does not stamp a software blueprint', () => {
+  const home = pageFromHtml(
+    'https://www.vodafone.com/',
+    `<html><head><title>Vodafone</title></head><body>
+      <h1>Welcome to Vodafone</h1>
+      <p>As one of the largest telcos in Europe and Africa, Vodafone's mission is to connect everyone.</p>
+      <p>Holders of ordinary shares may also check details of their shareholding, subject to passing an identity check, on Equiniti shareholder website at www.shareview.com.</p>
+      <p>computershare.com/investor Chat anytime by logging into your account via the above link.</p>
+      <p>Link to Code of conduct We seek to support children and their parents to become responsible digital citizens.</p>
+      <p>Possible findings are subject to mitigation plans and heightened monitoring.</p>
+    </body></html>`,
+  )
+  const investors = pageFromHtml(
+    'https://www.vodafone.com/investors',
+    `<html><head><title>Investors</title></head><body>
+      <p>From in-depth reports to features on innovation in action, we aim to share information and outlooks.</p>
+    </body></html>`,
+  )
+  const draft = draftWebsiteChat({ pages: [home, investors], companyName: 'Vodafone', personaName: 'Voda' })
+  assert.equal(draft.greeting, "Hi, I'm Voda at Vodafone.")
+  assert.equal(draft.doors.some((door) => /accounts|payments|safety|onboarding|api|status/i.test(door.flowName)), false)
+  assert.equal(/ordinary shares|computershare|code of conduct|in-depth reports/i.test(draft.doors.map((door) => door.answer).join('\n')), false)
+  assert.ok(draft.doors.some((door) => /connect everyone/i.test(door.answer)))
+  assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
+  assert.equal(/did not state this/i.test(draft.doors.map((door) => door.answer).join('\n')), false)
+  assert.equal(/Software vendor/i.test(draft.flows.map((flow) => flow.name).join(' ')), false)
 })
 
 test('private and local addresses are refused before a request', () => {

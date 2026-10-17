@@ -35,8 +35,9 @@ function session(text: string, name = 'Ada'): Session {
   }
 }
 
-test('the wizard starts with scan, blank, and templates — not clusters first', () => {
-  assert.deepEqual(START_OPTIONS.map((item) => item.id), ['template', 'website', 'sample', 'blank'])
+test('the wizard starts with scan, sample, and blank — templates stay parked', () => {
+  assert.deepEqual(START_OPTIONS.map((item) => item.id), ['website', 'sample', 'blank'])
+  assert.equal(START_OPTIONS.some((item) => item.id === 'template'), false)
   assert.equal(BAKED_TEMPLATES.some((item) => item.id === 'website' || item.id === 'blank'), false)
   assert.equal(templatesInCluster('hair').some((item) => item.id === 'hair-studio'), true)
   assert.equal(templatesInCluster('commerce').some((item) => item.id === 'corporate'), true)
@@ -189,12 +190,11 @@ test('a vendor homepage becomes a software template with brand names off', () =>
   const spec = draftClusteredTemplate({ pages: [page], companyName: 'Northwind' })
   assert.equal(spec.clusterId, 'software')
   assert.equal(/Cevro/i.test(JSON.stringify(spec.topics)), false)
-  assert.ok(spec.topics.some((topic) => topic.flowName === 'Product'))
+  assert.ok(spec.topics.some((topic) => /AI agents|player queries|platform|iGaming/i.test(topic.answer)))
   assert.ok(spec.topics.some((topic) => topic.flowName === 'Talk to a person'))
-  assert.ok(spec.topics.some((topic) => topic.flowName === 'Accounts'))
-  assert.ok(spec.topics.some((topic) => topic.flowName === 'Pricing'))
+  assert.equal(spec.topics.some((topic) => topic.flowName === 'Accounts'), false)
+  assert.equal(spec.topics.some((topic) => /did not state this/i.test(topic.answer)), false)
   assert.equal(spec.topics.find((topic) => topic.flowName === 'Book a demo')?.walk, 'email')
-  assert.ok(spec.topics.length >= 12)
-  assert.match(spec.menu, /accounts/i)
-  assert.match(spec.menu, /pricing/i)
+  assert.ok(spec.topics.length < 8)
+  assert.equal(/accounts/i.test(spec.menu), false)
 })

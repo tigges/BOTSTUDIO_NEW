@@ -102,7 +102,7 @@ function decodeHtml(value: string): string {
 
 const VOID_HTML = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'])
 
-/** Sample charts marked aria-hidden are not the product. Leave them off the scan. */
+/** Sample charts (aria-hidden) and nav chrome are not the product. Leave them off the scan. */
 function dropAriaHidden(html: string): string {
   const tag = /<!--[\s\S]*?-->|<\/?([a-zA-Z][a-zA-Z0-9:-]*)\b[^>]*>/g
   const skip: string[] = []
@@ -124,7 +124,7 @@ function dropAriaHidden(html: string): string {
       else if (skip.length === 0) out += match[0]
       continue
     }
-    const hidden = /\baria-hidden\s*=\s*(?:"true"|'true'|true)/i.test(match[0])
+    const hidden = /\baria-hidden\s*=\s*(?:"true"|'true'|true)/i.test(match[0]) || name === 'nav'
     if (skip.length > 0 || hidden) {
       if (!selfClosing) skip.push(name)
       continue
@@ -386,7 +386,7 @@ function extractBooking(pages: ScannedPage[]): { url: string; label: string } | 
 }
 
 const JUNK_PATH = /\/(?:wp-admin|wp-json|feed|tag|category|author|sample-page|hello-world)(?:\/|$)/i
-const SKIP_PATH = /\/(?:blog|company-news|careers-blog|glossary|case-stud(?:y|ies)|bid)(?:\/|$)/i
+const SKIP_PATH = /\/(?:blog|company-news|careers-blog|glossary|case-stud(?:y|ies)|bid|investors?|shareholders?|governance|annual-report|code-of-conduct)(?:\/|$|-[^/]*)/i
 const ASSET_PATH = /\.(?:png|jpe?g|gif|svg|css|js|pdf|zip|webp|ico|mp4|xml)(?:\?|$)/i
 const PAGE_RANK: Array<[string, number]> = [
   ['pricing', 8], ['price', 6], ['product', 6], ['plan', 5], ['faq', 6], ['question', 6],
@@ -397,6 +397,7 @@ const PAGE_RANK: Array<[string, number]> = [
 ]
 const PAGE_PENALTY: Array<[string, number]> = [
   ['/blog', 8], ['company-news', 8], ['glossary', 6], ['case-stud', 6], ['webinar', 4], ['/resources/', 3],
+  ['investor', 8], ['shareholder', 8], ['computershare', 8], ['governance', 6], ['code of conduct', 6],
 ]
 
 /**
@@ -968,6 +969,7 @@ function draftVendorWebsiteChat(input: {
     companyName: company,
     personaName: persona,
     clusterId: input.clusterId,
+    keepBrand: true,
   })
   const pack = packFromLearned(spec, company, persona)
   const doors: ScanDoor[] = pack.doors.map((door) => {
@@ -1014,17 +1016,18 @@ export function draftWebsiteChat(input: {
   companyName: string
   personaName?: string | null
 }): WebsiteChatDraft {
-  const pages = input.pages.filter((page) => page.text.trim().length > 0)
-  const text = pages.map((page) => page.text).join('\n')
-  const cluster = suggestCluster(`${text} ${pages.map((page) => page.url).join(' ')}`)
+  const incoming = input.pages
+  const pages = incoming.filter((page) => page.text.trim().length > 0)
+  const cluster = suggestCluster(`${incoming.map((page) => page.text).join('\n')} ${incoming.map((page) => page.url).join(' ')}`)
   if (cluster !== 'hair') {
     return draftVendorWebsiteChat({
-      pages,
+      pages: pages.length > 0 ? pages : incoming,
       companyName: input.companyName,
       personaName: input.personaName,
       clusterId: cluster === 'custom' ? 'software' : cluster,
     })
   }
+  const text = pages.map((page) => page.text).join('\n')
   const company = companyLabel(input.companyName)
   const persona = input.personaName?.trim() || 'Bella'
   const address = extractAddress(text)

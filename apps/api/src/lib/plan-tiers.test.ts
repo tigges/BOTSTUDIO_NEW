@@ -33,6 +33,23 @@ Set up marketing email`
   assert.match(tiers[1]?.blurb ?? '', /in-app chat/i)
 })
 
+test('a Free Starter Professional Enterprise grid drops a stray Business product card', () => {
+  const text = `Free
+£0/mo
+Starter
+$10/mo
+Professional
+$100/mo
+Enterprise
+$175/mo
+Business
+$50/mo
+Business plan`
+  const tiers = extractPlanTiers(text)
+  assert.deepEqual(tiers.map((tier) => tier.name), ['Free', 'Starter', 'Professional', 'Enterprise'])
+  assert.equal(tiers.some((tier) => tier.name === 'Business'), false)
+})
+
 test('inline Free £0/mo Starter £7/mo/seat still keeps per seat', () => {
   const tiers = extractPlanTiers('Free £0/mo Starter £7/mo/seat Professional £81/mo/seat Enterprise £155/mo/seat')
   assert.deepEqual(tiers.map((tier) => tier.name), ['Free', 'Starter', 'Professional', 'Enterprise'])

@@ -1,7 +1,7 @@
 /**
- * A public site becomes a starter template: brand names come off,
- * the remaining journey is a cluster (hair studios, software vendors, CRM, email).
- * The start wizard and Optimizations share this shape.
+ * A public site becomes a draft map: brand names come off unless keepBrand is set,
+ * and the remaining journey is a cluster (hair studios, software vendors, CRM, email).
+ * Website import reads pages. Optimizations can still save a parked starter from a site.
  */
 
 import { assistantGreeting, greetingWelcomeGraph } from './greeting-welcome.js'
@@ -84,8 +84,8 @@ export function abstractBrand(text: string): string {
   }
   return out
     .replace(/\bthe the\b/gi, 'the')
-    .replace(/\s+/g, ' ')
-    .replace(/\s+([.,!?])/g, '$1')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/[ \t]+([.,!?])/g, '$1')
     .trim()
 }
 
@@ -305,69 +305,6 @@ function hostOf(url: string): string {
   }
 }
 
-const SEEDS: Record<Exclude<ClusterId, 'custom'>, SiteTopic[]> = {
-  hair: [
-    { flowName: 'Location', choice: 'Where we are', phrases: ['where are you', 'address'], question: 'Where are you?', answer: '', blurb: 'Address' },
-    { flowName: 'Hours', choice: 'Hours', phrases: ['hours', 'open'], question: 'What are your opening hours?', answer: '', blurb: 'When you are open' },
-    { flowName: 'Services', choice: 'Services', phrases: ['services', 'prices', 'how much'], question: 'What do you offer?', answer: '', blurb: 'Cuts, colour, prices' },
-    { flowName: 'Book an appointment', choice: 'Book', phrases: ['book', 'appointment'], question: 'How do I book?', answer: '', blurb: 'A time, then a confirmation' },
-    { flowName: 'Stylist', choice: 'Stylist', phrases: ['stylist', 'who will do my hair'], question: 'Can I choose my stylist?', answer: '', blurb: 'Ask for someone by name' },
-    { flowName: 'Walk-ins', choice: 'Walk-ins', phrases: ['walk-in', 'walk in'], question: 'Do you take walk-ins?', answer: '', blurb: 'When a chair is free' },
-    { flowName: 'Cancellation', choice: 'Cancel', phrases: ['cancel', 'cancellation'], question: 'How do I cancel?', answer: '', blurb: 'Notice, then a confirmation' },
-    { flowName: 'Gift voucher', choice: 'Voucher', phrases: ['gift voucher', 'gift card'], question: 'Do you sell gift vouchers?', answer: '', blurb: 'Amounts and how long they last' },
-  ],
-  commerce: [
-    { flowName: 'Shipping', choice: 'Shipping', phrases: ['shipping', 'delivery'], question: 'How long does shipping take?', answer: '', blurb: 'Delivery times' },
-    { flowName: 'Returns', choice: 'Returns', phrases: ['return', 'refund'], question: 'What is the return policy?', answer: '', blurb: 'How to send something back' },
-    { flowName: 'Orders', choice: 'Orders', phrases: ['order', 'tracking', 'where is my order'], question: 'Where is my order?', answer: '', blurb: 'Tracking and status' },
-    { flowName: 'Payments', choice: 'Payments', phrases: ['payment', 'card', 'invoice'], question: 'How do I pay?', answer: '', blurb: 'Cards and invoices' },
-    { flowName: 'Account', choice: 'Account', phrases: ['account', 'login', 'password'], question: 'How do I sign in?', answer: '', blurb: 'Login and a reset' },
-    { flowName: 'Hours', choice: 'Hours', phrases: ['hours', 'open', 'support hours'], question: 'When is support open?', answer: '', blurb: 'When a person replies' },
-    { flowName: 'Plans', choice: 'Plans', phrases: ['pricing', 'plans'], question: 'What are the plans?', answer: '', blurb: 'Plans and pricing' },
-    { flowName: 'Warranty', choice: 'Warranty', phrases: ['warranty', 'guarantee', 'broken'], question: 'What is the warranty?', answer: '', blurb: 'What is covered' },
-  ],
-  software: [
-    { flowName: 'Product', choice: 'What we do', phrases: ['product', 'platform', 'what do you do', 'features', 'bots answer', 'hybrid agent'], question: 'What does the product do?', answer: '', blurb: 'The product in one line' },
-    { flowName: 'Support', choice: 'Support', phrases: ['support', 'help desk', 'queue'], question: 'How does support work?', answer: '', blurb: 'The usual questions, then a person' },
-    { flowName: 'Accounts', choice: 'Accounts', phrases: ['account', 'login', 'password', 'sign in'], question: 'How do accounts and login work?', answer: '', blurb: 'Login, password, locked out' },
-    { flowName: 'Payments and identity', choice: 'Payments', phrases: ['payment', 'payout', 'kyc', 'verification', 'identity'], question: 'How do payments and identity checks work?', answer: '', blurb: 'Payouts and checks' },
-    { flowName: 'Safety', choice: 'Safety', phrases: ['compliance', 'safety', 'responsible', 'guardrail'], question: 'How do you handle safety?', answer: '', blurb: 'Checks on every reply' },
-    { flowName: 'Onboarding', choice: 'Get started', phrases: ['onboarding', 'get started', 'setup', 'go live', 'start free', 'live today'], question: 'How do we get started?', answer: '', blurb: 'Setup, then a first live week' },
-    { flowName: 'Integrations', choice: 'Integrations', phrases: ['integration', 'connect', 'api', 'crm', 'whatsapp', 'channels'], question: 'What does it connect to?', answer: '', blurb: 'Helpdesks, CRMs, payments' },
-    { flowName: 'Pricing', choice: 'Pricing', phrases: ['pricing', 'how much', 'cost', 'plan', 'free plan'], question: 'What does it cost?', answer: '', blurb: 'Volume, then a quote' },
-    { flowName: 'Status', choice: 'Status', phrases: ['status', 'outage', 'incident', 'downtime'], question: 'Is there an outage?', answer: '', blurb: 'Incidents and downtime' },
-    { flowName: 'API', choice: 'API', phrases: ['api', 'developer', 'docs', 'webhook'], question: 'Is there an API?', answer: '', blurb: 'Docs, webhooks, events' },
-    { flowName: 'Book a demo', choice: 'A demo', phrases: ['demo', 'book a demo', 'schedule'], question: 'How do I book a demo?', answer: '', blurb: 'A day, then the team' },
-  ],
-  crm: [
-    { flowName: 'Marketing', choice: 'Marketing', phrases: ['marketing', 'leads', 'campaign', 'forms'], question: 'How does marketing work?', answer: '', blurb: 'Leads, campaigns, forms' },
-    { flowName: 'Sales', choice: 'Sales', phrases: ['sales', 'pipeline', 'deals'], question: 'How does sales work?', answer: '', blurb: 'Pipeline and deals' },
-    { flowName: 'Service', choice: 'Service', phrases: ['service', 'support', 'retention'], question: 'How does service work?', answer: '', blurb: 'Support and retention' },
-    { flowName: 'Contacts', choice: 'Contacts', phrases: ['contact', 'contacts', 'company record'], question: 'Where do contacts live?', answer: '', blurb: 'People, companies, one record' },
-    { flowName: 'Meetings', choice: 'Meetings', phrases: ['meeting', 'calendar', 'book a meeting'], question: 'How do meetings work?', answer: '', blurb: 'Availability, then a booking' },
-    { flowName: 'Tickets', choice: 'Tickets', phrases: ['ticket', 'tickets', 'case'], question: 'How do tickets work?', answer: '', blurb: 'Open, find, and follow a case' },
-    { flowName: 'Reporting', choice: 'Reporting', phrases: ['report', 'dashboard', 'analytics'], question: 'What can I see in reports?', answer: '', blurb: 'Pipeline, campaigns, tickets' },
-    { flowName: 'Integrations', choice: 'Integrations', phrases: ['integration', 'connect', 'gmail', 'outlook'], question: 'What does it connect to?', answer: '', blurb: 'Mail, calendar, ads, chat' },
-    { flowName: 'Plans and pricing', choice: 'Plans', phrases: ['pricing', 'plans', 'free', 'starter', 'professional', 'enterprise'], question: 'Which plan are you asking about?', answer: '', blurb: 'Free, Starter, Professional, Enterprise' },
-    { flowName: 'Billing', choice: 'Billing', phrases: ['billing', 'invoice', 'subscription'], question: 'How does billing work?', answer: '', blurb: 'Invoices and the workspace plan' },
-    { flowName: 'Login', choice: 'Login', phrases: ['login', 'sign in', 'password', 'sso'], question: 'How do I sign in?', answer: '', blurb: 'Password, SSO, two-factor' },
-    { flowName: 'Book a demo', choice: 'A demo', phrases: ['demo', 'book a demo', 'get a demo', 'talk to sales'], question: 'How do I book a demo?', answer: '', blurb: 'Email, then sales' },
-  ],
-  email: [
-    { flowName: 'Inbox', choice: 'Inbox', phrases: ['inbox', 'mail', 'messages', 'unread'], question: 'How does the inbox work?', answer: '', blurb: 'Unread, catch up, summaries' },
-    { flowName: 'Compose', choice: 'Compose', phrases: ['compose', 'write', 'reply', 'draft', 'undo send'], question: 'How do I write a message?', answer: '', blurb: 'Write, reply, undo send' },
-    { flowName: 'Search', choice: 'Search', phrases: ['search', 'find', 'look up'], question: 'How do I find a message?', answer: '', blurb: 'Person, subject, or a detail' },
-    { flowName: 'Labels', choice: 'Labels', phrases: ['label', 'folder', 'star'], question: 'How do labels work?', answer: '', blurb: 'File a thread without losing it' },
-    { flowName: 'Filters', choice: 'Filters', phrases: ['filter', 'rules', 'auto file'], question: 'Can I file mail automatically?', answer: '', blurb: 'Rules as mail arrives' },
-    { flowName: 'Attachments', choice: 'Attachments', phrases: ['attachment', 'file', 'pdf'], question: 'How do attachments work?', answer: '', blurb: 'Files and linked docs' },
-    { flowName: 'Security', choice: 'Security', phrases: ['security', 'spam', 'phishing', 'privacy'], question: 'How is mail kept safe?', answer: '', blurb: 'Spam, phishing, privacy' },
-    { flowName: 'Chat and calls', choice: 'Chat', phrases: ['chat', 'meet', 'call', 'video'], question: 'Can I chat or call from here?', answer: '', blurb: 'Chat, calls, and docs' },
-    { flowName: 'Storage', choice: 'Storage', phrases: ['storage', 'quota', 'mailbox full'], question: 'How much space do I have?', answer: '', blurb: 'Quota and a full mailbox' },
-    { flowName: 'Mobile', choice: 'Mobile', phrases: ['mobile', 'phone', 'app', 'offline'], question: 'Does it work on a phone?', answer: '', blurb: 'Phone app and offline' },
-    { flowName: 'Privacy', choice: 'Privacy', phrases: ['privacy', 'ads', 'who can read'], question: 'Who can read my mail?', answer: '', blurb: 'Mail is not used to sell ads' },
-  ],
-}
-
 function talkTopic(company: string): SiteTopic {
   return {
     flowName: 'Talk to a person',
@@ -377,10 +314,6 @@ function talkTopic(company: string): SiteTopic {
     answer: `I am passing this chat to the ${company} team. Someone will continue here.`,
     blurb: 'A person takes over',
   }
-}
-
-function escapeRe(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 /** Nav chrome, a11y suffixes, and campaign stats are not an answer. */
@@ -417,59 +350,8 @@ function splitCopy(text: string): string[] {
     .filter(Boolean)
 }
 
-function pageTopicScore(page: ScannedPage, phrases: string[]): number {
-  let path = ''
-  try { path = new URL(page.url).pathname.toLowerCase() } catch { path = page.url.toLowerCase() }
-  const title = page.title.toLowerCase()
-  let score = 0
-  if (path === '/' || path === '') score -= 6
-  if (/\/products?(?:\/|$)/.test(path)) score += 8
-  if (/\/pricing|\/plans?(?:\/|$)/.test(path)) score += 10
-  if (/\/(?:blog|company-news|glossary|case-stud|careers-blog)(?:\/|$)/.test(path)) score -= 10
-  if (/\/company\//.test(path)) score -= 4
-  if (/\/(?:company\/)?contact(?:-us)?(?:\/|$)/.test(path) && phrases.some((phrase) => /contact/.test(phrase))) score -= 8
-  if (/\/(?:crm|contacts)(?:\/|$)/.test(path) && phrases.some((phrase) => /contact|record/.test(phrase))) score += 10
-  for (const phrase of phrases) {
-    const token = phrase.toLowerCase()
-    if (token.length < 4) continue
-    const slug = token.replace(/\s+/g, '-')
-    if (path.includes(slug) || path.includes(token.replace(/\s+/g, ''))) score += 12
-    if (title.includes(token)) score += 6
-  }
-  return score
-}
-
-function hasPhrase(text: string, phrase: string): boolean {
-  return new RegExp(`\\b${escapeRe(phrase)}s?\\b`, 'i').test(text)
-}
-
-function sentenceFor(pages: ScannedPage[], phrases: string[]): string | null {
-  let best: { text: string; score: number } | null = null
-  for (const page of pages) {
-    const pageScore = pageTopicScore(page, phrases)
-    for (const part of splitCopy(page.text)) {
-      if (part.length < 24 || part.length > 320 || isNavChrome(part)) continue
-      const lower = part.toLowerCase()
-      let hits = 0
-      let phraseScore = 0
-      for (const phrase of phrases) {
-        if (!hasPhrase(part, phrase)) continue
-        hits += 1
-        const at = lower.indexOf(phrase.toLowerCase())
-        let add = Math.min(phrase.length, 12)
-        if (at >= 0 && at < 24) add += 8
-        else if (at >= 0 && at < 56) add += 3
-        if (add > phraseScore) phraseScore = add
-      }
-      if (hits === 0) continue
-      const score = pageScore + phraseScore + Math.min(hits, 2)
-      if (!best || score > best.score || (score === best.score && part.length < best.text.length)) {
-        best = { text: part, score }
-      }
-    }
-  }
-  if (!best || best.score < 4) return null
-  return clip(best.text)
+function pricingPage(page: ScannedPage): boolean {
+  return /pric|\/plans?\b/i.test(`${page.url} ${page.title}`)
 }
 
 function titleCaseHost(host: string): string {
@@ -477,15 +359,89 @@ function titleCaseHost(host: string): string {
   return stem.charAt(0).toUpperCase() + stem.slice(1)
 }
 
+const JUNK_SITE_PATH = /\/(?:investor|investors|shareholder|shareholders|governance|annual-report|code-of-conduct|conduct|computershare|equiniti|sustainability)(?:\/|$)/i
+
+function pathOf(page: ScannedPage): string {
+  try {
+    return new URL(page.url).pathname.toLowerCase()
+  } catch {
+    return page.url.toLowerCase()
+  }
+}
+
+function isHomePage(page: ScannedPage): boolean {
+  const path = pathOf(page)
+  return path === '/' || path === ''
+}
+
+function isJunkSitePage(page: ScannedPage): boolean {
+  if (JUNK_SITE_PATH.test(pathOf(page))) return true
+  if (isHomePage(page)) return false
+  const head = `${page.title} ${page.text.slice(0, 280)}`
+  return /computershare|shareview|ordinary shares|adr holding|investor relations/i.test(head)
+}
+
+function isJunkAnswer(text: string): boolean {
+  if (isNavChrome(text)) return true
+  return /computershare|shareview|ordinary shares|code of conduct|adr holding|equiniti|holders of ordinary|possible findings are subject|mitigation plans/i.test(text)
+}
+
+function titleFromPage(page: ScannedPage): string {
+  if (isHomePage(page)) return 'What we do'
+  if (pricingPage(page)) return 'Plans'
+  const stem = (pathOf(page).split('/').filter(Boolean).pop() ?? '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\.html?$/, '')
+  const fromTitle = page.title.replace(/\s*[|–—•].*$/, '').replace(/\s*-\s*[^-]+$/, '').trim()
+  if (fromTitle && fromTitle.length >= 3 && fromTitle.length <= 42 && !/^home$/i.test(fromTitle)) return fromTitle
+  if (stem) return stem.replace(/\b[a-z]/g, (ch) => ch.toUpperCase())
+  return 'About'
+}
+
+function leadFromPage(page: ScannedPage): string | null {
+  let best: { text: string; score: number } | null = null
+  for (const part of splitCopy(page.text)) {
+    if (part.length < 32 || part.length > 280) continue
+    if (isJunkAnswer(part)) continue
+    let score = 8
+    if (/[.!?]$/.test(part)) score += 3
+    if (part.length >= 48 && part.length <= 160) score += 2
+    if (part.length > 180) score -= 2
+    if (/^["“]|we are pleased|join hands/i.test(part)) score -= 10
+    if (/^don't |^do not /i.test(part)) score -= 8
+    if (!best || score > best.score) best = { text: part, score }
+  }
+  if (!best || best.score < 4) return null
+  return clip(best.text)
+}
+
+function siteMentionsDemo(pages: ScannedPage[]): boolean {
+  return pages.some((page) => /book a demo|get a demo|request a demo|schedule a demo|talk to sales/i.test(`${page.title} ${page.text}`))
+}
+
+function phrasesForDoor(name: string): string[] {
+  const clean = name.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const words = clean.split(' ').filter((word) => word.length > 3)
+  return [...new Set([clean, ...words.slice(0, 3)].filter(Boolean))]
+}
+
+function uniqueFlowName(name: string, used: Set<string>): string | null {
+  const base = name.trim() || 'About'
+  if (!used.has(base)) return base
+  return null
+}
+
 /**
- * Read public pages, drop brand names, and draft a cluster template.
- * Missing facts stay as a line you edit — they do not invent a price or a policy.
+ * Read public pages and draft a map from those pages — not from a cluster seed list.
+ * One useful page becomes one chapter. Investor/legal copy stays off. Book a demo and a
+ * plan walk land only when the site actually has them.
  */
 export function draftClusteredTemplate(input: {
   pages: ScannedPage[]
   companyName: string
   personaName?: string | null
   clusterId?: ClusterId
+  keepBrand?: boolean
 }): LearnedTemplateSpec {
   const pages = input.pages.filter((page) => page.text.trim().length > 0)
   const branded = pages.map((page) => ({
@@ -493,8 +449,10 @@ export function draftClusteredTemplate(input: {
     title: abstractBrand(page.title),
     text: abstractBrand(page.text),
   }))
-  const text = branded.map((page) => page.text).join('\n')
-  const clusterId = input.clusterId && input.clusterId !== 'custom' ? input.clusterId : suggestCluster(`${text} ${pages.map((page) => page.url).join(' ')}`)
+  const working = input.keepBrand ? pages : branded
+  const clusterId = input.clusterId && input.clusterId !== 'custom'
+    ? input.clusterId
+    : suggestCluster(`${input.pages.map((page) => `${page.text} ${page.url}`).join('\n')}`)
   const company = companyLabel(input.companyName)
   const persona = input.personaName?.trim()
   const greeting = persona
@@ -502,68 +460,66 @@ export function draftClusteredTemplate(input: {
       ? `Hi, I'm ${persona} at ${company}. What's your name?`
       : `Hi, I'm ${persona} at ${company}.`
     : assistantGreeting(company)
-  const seeds = clusterId === 'custom' ? SEEDS.software : SEEDS[clusterId]
-  const hadPricingUrl = input.pages.some((page) => /pric|\/plans?\b/i.test(`${page.url} ${page.title}`))
-  const pricingPages = branded.filter((page) => /pric|\/plans?\b/i.test(`${page.url} ${page.title}`))
-  const tierText = (hadPricingUrl ? pricingPages : branded).map((page) => page.text).join('\n')
-  const tiers = clusterId === 'hair' || clusterId === 'email' ? [] : extractPlanTiers(tierText)
+  const pricingPages = working.filter((page) => pricingPage(page))
+  const tiers = clusterId === 'hair' || clusterId === 'email' ? [] : extractPlanTiers(pricingPages.map((page) => page.text).join('\n'))
   const topics: SiteTopic[] = []
-  for (const seed of seeds) {
-    const found = sentenceFor(branded, seed.phrases)
-    const answer = found ?? `The pages did not state this for ${seed.choice.toLowerCase()}. Edit the line to match ${company}.`
+  const used = new Set<string>()
+  for (const page of working) {
+    if (isJunkSitePage(page)) continue
+    if (pricingPage(page) && tiers.length >= 2) continue
+    const found = leadFromPage(page)
+    if (!found) continue
+    const name = uniqueFlowName(titleFromPage(page), used)
+    if (!name) continue
+    used.add(name)
     topics.push({
-      ...seed,
-      answer,
-      blurb: found ? clip(found, 80) : seed.blurb,
+      flowName: name,
+      choice: name,
+      phrases: phrasesForDoor(name),
+      question: `What about ${name.toLowerCase()}?`,
+      answer: found,
+      blurb: clip(found, 80),
     })
+    if (topics.length >= 8) break
   }
   if (tiers.length >= 2) {
-    const plan = topics.find((topic) => /plan|pricing/i.test(topic.flowName))
-    if (plan) {
-      plan.answer = planSummary(tiers)
-      plan.blurb = tiers.map((tier) => (tier.price ? `${tier.name} ${tier.price}` : tier.name)).join(', ')
-      plan.walk = 'plans'
-      plan.choices = planChoices(tiers)
-      plan.question = 'Which plan are you asking about?'
-    }
-  } else if (hadPricingUrl) {
-    const plan = topics.find((topic) => /plan|pricing/i.test(topic.flowName))
-    if (plan) {
-      const fromPricing = sentenceFor(pricingPages, plan.phrases)
-      plan.answer = fromPricing ?? `The pages did not state this for ${plan.choice.toLowerCase()}. Edit the line to match ${company}.`
-      plan.blurb = fromPricing ? clip(fromPricing, 80) : plan.blurb
-    }
+    topics.push({
+      flowName: 'Plans and pricing',
+      choice: 'Plans',
+      phrases: ['pricing', 'plans', 'how much', 'cost', 'plan'],
+      question: 'Which plan are you asking about?',
+      answer: planSummary(tiers),
+      blurb: tiers.map((tier) => (tier.price ? `${tier.name} ${tier.price}` : tier.name)).join(', '),
+      walk: 'plans',
+      choices: planChoices(tiers),
+    })
   }
-  const demo = topics.find((topic) => /demo/i.test(topic.flowName))
-  if (demo && clusterId !== 'hair' && clusterId !== 'email') {
-    demo.walk = 'email'
-    if (/did not state this/i.test(demo.answer) || isNavChrome(demo.answer) || /get started free|play video|get a demo|free trial|start \d+-day/i.test(demo.answer)) {
-      demo.answer = `I'll take one email, then someone from ${company} sales continues here.`
-      demo.blurb = 'Email, then sales'
-    }
+  if (clusterId !== 'hair' && clusterId !== 'email' && siteMentionsDemo(working)) {
+    topics.push({
+      flowName: 'Book a demo',
+      choice: 'A demo',
+      phrases: ['demo', 'book a demo', 'get a demo', 'talk to sales'],
+      question: 'How do I book a demo?',
+      answer: `I'll take one email, then someone from ${company} sales continues here.`,
+      blurb: 'Email, then sales',
+      walk: 'email',
+    })
   }
   topics.push(talkTopic(company))
-  const host = hostOf(pages[0]?.url ?? '')
-  const clusterTitle: Record<ClusterId, string> = {
-    hair: 'Hair and Spa Salon',
-    commerce: 'Commerce support',
-    software: 'Software vendor',
-    crm: 'CRM platform',
-    email: 'Inbox assistant',
-    custom: titleCaseHost(host) || 'From a website',
-  }
-  const title = clusterTitle[clusterId]
+  const sourceUrl = pages[0]?.url ?? input.pages[0]?.url ?? ''
+  const host = hostOf(sourceUrl)
+  const title = titleCaseHost(host) || company
   return {
     clusterId: clusterId === 'custom' ? 'software' : clusterId,
     title,
-    body: `From ${host || 'a public site'}. Brand names are left off. Edit the lines to match ${company}.`,
-    welcomeName: `${title} welcome`,
+    body: `From ${host || 'a public site'}. Chapters follow the pages that were read.`,
+    welcomeName: `${company} welcome`,
     packTag: clusterId === 'custom' ? 'software' : clusterId,
     greeting,
     followUp: `Hi {{contact.name}}. What do you need help with?`,
     menu: `I can help with ${topics.filter((topic) => topic.flowName !== 'Talk to a person').map((topic) => topic.choice.toLowerCase()).join(', ')}, or a person on the team.`,
     topics,
-    sourceUrl: pages[0]?.url ?? '',
+    sourceUrl,
     sourceHost: host,
   }
 }

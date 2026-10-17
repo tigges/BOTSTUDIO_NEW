@@ -111,7 +111,14 @@ export function extractPlanTiers(text: string): PlanTier[] {
       phrases: [mark.name.toLowerCase(), `${mark.name.toLowerCase()} plan`],
     })
   }
-  return tiers.length >= 2 ? tiers : extractInlineTiers(text)
+  return preferCanonicalGrid(tiers.length >= 2 ? tiers : extractInlineTiers(text))
+}
+
+/** HubSpot-style grids are Free / Starter / Professional / Enterprise. Product-card Business $50 stays off. */
+function preferCanonicalGrid(tiers: PlanTier[]): PlanTier[] {
+  const canon = new Set(['Free', 'Starter', 'Professional', 'Enterprise'])
+  const core = tiers.filter((tier) => canon.has(tier.name))
+  return core.length >= 4 ? core : tiers
 }
 
 function extractInlineTiers(text: string): PlanTier[] {
@@ -130,5 +137,5 @@ function extractInlineTiers(text: string): PlanTier[] {
       phrases: [name.toLowerCase(), `${name.toLowerCase()} plan`],
     })
   }
-  return tiers.length >= 2 ? tiers : []
+  return preferCanonicalGrid(tiers.length >= 2 ? tiers : [])
 }
