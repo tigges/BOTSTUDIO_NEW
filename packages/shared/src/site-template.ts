@@ -424,7 +424,8 @@ function pageTopicScore(page: ScannedPage, phrases: string[]): number {
   let score = 0
   if (path === '/' || path === '') score -= 6
   if (/\/products?(?:\/|$)/.test(path)) score += 8
-  if (/\/pricing|\/plans?(?:\/|$)/.test(path)) score += 10
+  // Pricing URLs are for the plan door, not every cluster seed.
+  if (/\/pricing|\/plans?(?:\/|$)/.test(path) && phrases.some((phrase) => /pric|plans?|how much|cost/.test(phrase))) score += 10
   if (/\/(?:blog|company-news|glossary|case-stud|careers-blog)(?:\/|$)/.test(path)) score -= 10
   if (/\/company\//.test(path)) score -= 4
   if (/\/(?:company\/)?contact(?:-us)?(?:\/|$)/.test(path) && phrases.some((phrase) => /contact/.test(phrase))) score -= 8
@@ -443,9 +444,24 @@ function hasPhrase(text: string, phrase: string): boolean {
   return new RegExp(`\\b${escapeRe(phrase)}s?\\b`, 'i').test(text)
 }
 
-function sentenceFor(pages: ScannedPage[], phrases: string[]): string | null {
+function isPlanTopic(topic: { flowName: string; phrases?: string[] }): boolean {
+  return /plan|pricing/i.test(topic.flowName) || Boolean(topic.phrases?.some((phrase) => /pric|plans?|how much|cost/.test(phrase)))
+}
+
+function isDemoTopic(topic: { flowName: string }): boolean {
+  return /demo/i.test(topic.flowName)
+}
+
+function pricingPage(page: ScannedPage): boolean {
+  return /pric|\/plans?\b/i.test(`${page.url} ${page.title}`)
+}
+
+function sentenceFor(pages: ScannedPage[], phrases: string[], opts?: { fromPricing?: boolean }): string | null {
+  // A pricing page is the plan door. Do not mint Marketing/Accounts rooms from its copy.
+  const search = opts?.fromPricing ? pages : pages.filter((page) => !pricingPage(page))
+  if (!opts?.fromPricing && search.length === 0) return null
   let best: { text: string; score: number } | null = null
-  for (const page of pages) {
+  for (const page of search) {
     const pageScore = pageTopicScore(page, phrases)
     for (const part of splitCopy(page.text)) {
       if (part.length < 24 || part.length > 320 || isNavChrome(part)) continue
@@ -478,8 +494,10 @@ function titleCaseHost(host: string): string {
 }
 
 /**
- * Read public pages, drop brand names, and draft a cluster template.
- * Missing facts stay as a line you edit — they do not invent a price or a policy.
+ * Read public pages, drop brand names, and draft a cluster template from what the site states.
+ * Empty blueprint rooms stay off. Book a demo (email walk) and a plan door when the site
+ * has pricing still land, so software/CRM scans keep a next step. The start-wizard
+ * blueprints remain the path when there is no website.
  */
 export function draftClusteredTemplate(input: {
   pages: ScannedPage[]
@@ -493,8 +511,9 @@ export function draftClusteredTemplate(input: {
     title: abstractBrand(page.title),
     text: abstractBrand(page.text),
   }))
-  const text = branded.map((page) => page.text).join('\n')
-  const clusterId = input.clusterId && input.clusterId !== 'custom' ? input.clusterId : suggestCluster(`${text} ${pages.map((page) => page.url).join(' ')}`)
+  const clusterId = input.clusterId && input.clusterId !== 'custom'
+    ? input.clusterId
+    : suggestCluster(`${input.pages.map((page) => `${page.text} ${page.url}`).join('\n')}`)
   const company = companyLabel(input.companyName)
   const persona = input.personaName?.trim()
   const greeting = persona
@@ -509,7 +528,10 @@ export function draftClusteredTemplate(input: {
   const tiers = clusterId === 'hair' || clusterId === 'email' ? [] : extractPlanTiers(tierText)
   const topics: SiteTopic[] = []
   for (const seed of seeds) {
-    const found = sentenceFor(branded, seed.phrases)
+    const found = sentenceFor(branded, seed.phrases, { fromPricing: isPlanTopic(seed) })
+    const keepDemo = isDemoTopic(seed) && clusterId !== 'hair' && clusterId !== 'email'
+    const keepPlan = isPlanTopic(seed) && (hadPricingUrl || tiers.length >= 2)
+    if (!found && !keepDemo && !keepPlan) continue
     const answer = found ?? `The pages did not state this for ${seed.choice.toLowerCase()}. Edit the line to match ${company}.`
     topics.push({
       ...seed,
@@ -529,7 +551,7 @@ export function draftClusteredTemplate(input: {
   } else if (hadPricingUrl) {
     const plan = topics.find((topic) => /plan|pricing/i.test(topic.flowName))
     if (plan) {
-      const fromPricing = sentenceFor(pricingPages, plan.phrases)
+      const fromPricing = sentenceFor(pricingPages, plan.phrases, { fromPricing: true })
       plan.answer = fromPricing ?? `The pages did not state this for ${plan.choice.toLowerCase()}. Edit the line to match ${company}.`
       plan.blurb = fromPricing ? clip(fromPricing, 80) : plan.blurb
     }
@@ -543,7 +565,8 @@ export function draftClusteredTemplate(input: {
     }
   }
   topics.push(talkTopic(company))
-  const host = hostOf(pages[0]?.url ?? '')
+  const sourceUrl = pages[0]?.url ?? input.pages[0]?.url ?? ''
+  const host = hostOf(sourceUrl)
   const clusterTitle: Record<ClusterId, string> = {
     hair: 'Hair and Spa Salon',
     commerce: 'Commerce support',
@@ -563,7 +586,7 @@ export function draftClusteredTemplate(input: {
     followUp: `Hi {{contact.name}}. What do you need help with?`,
     menu: `I can help with ${topics.filter((topic) => topic.flowName !== 'Talk to a person').map((topic) => topic.choice.toLowerCase()).join(', ')}, or a person on the team.`,
     topics,
-    sourceUrl: pages[0]?.url ?? '',
+    sourceUrl,
     sourceHost: host,
   }
 }

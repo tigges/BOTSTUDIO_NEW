@@ -481,12 +481,11 @@ test('a CRM homepage does not turn nav chrome into answers, and reads product pa
   assert.ok(tickets)
   assert.match(tickets!.answer, /assign the case|follow it/)
   assert.equal(/129%/.test(tickets!.answer), false)
-  const integrations = draft.doors.find((door) => /integrations/i.test(door.flowName))
-  assert.ok(integrations)
-  assert.equal(/a11y/i.test(integrations!.answer), false)
-  const billing = draft.doors.find((door) => /billing/i.test(door.flowName))
-  assert.ok(billing)
-  assert.equal(/data software billing/i.test(billing!.answer), false)
+  const spoken = draft.doors.map((door) => door.answer).join('\n')
+  assert.equal(/a11y/i.test(spoken), false)
+  assert.equal(/data software billing/i.test(spoken), false)
+  assert.equal(draft.doors.some((door) => /integrations/i.test(door.flowName)), false)
+  assert.equal(draft.doors.some((door) => /billing/i.test(door.flowName)), false)
   const marketingDoor = draft.doors.find((door) => /marketing/i.test(door.flowName))
   assert.ok(marketingDoor)
   assert.match(marketingDoor!.answer, /campaign/)
@@ -498,6 +497,20 @@ test('a CRM homepage does not turn nav chrome into answers, and reads product pa
   assert.ok(demoFaq)
   assert.equal(/play video|get started free/i.test(demoFaq!.answer), false)
   assert.match(demoFaq!.answer, /email/i)
+})
+
+test('a CRM homepage scan does not stamp blueprint rooms over nav chrome', () => {
+  const home = pageFromHtml('https://www.hubspot.com/', HUBSPOT_HOME)
+  const draft = draftWebsiteChat({
+    pages: [home],
+    companyName: 'Hubspot',
+    personaName: 'James',
+  })
+  assert.equal(draft.clusterId, 'crm')
+  assert.equal(draft.doors.some((door) => /marketing|sales|service|contacts|tickets|billing/i.test(door.flowName)), false)
+  assert.ok(draft.doors.some((door) => /demo/i.test(door.flowName)))
+  assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
+  assert.equal(/did not state this/i.test(draft.doors.filter((door) => !/demo|plan|pricing/i.test(door.flowName)).map((door) => door.answer).join('\n')), false)
 })
 
 test('a JS pricing URL does not pick product-card prices off a marketing page', () => {
@@ -534,10 +547,11 @@ test('a CRM pricing page becomes plan doors and an email follow-up, not a salon 
   assert.match(JSON.stringify(demo.graph), /good email address/)
   assert.match(JSON.stringify(demo.graph), /One moment please/)
   assert.match(JSON.stringify(demo.graph), /from test sales/)
-  assert.ok(draft.doors.length >= 12)
-  assert.ok(draft.doors.some((door) => /marketing/i.test(door.title)))
-  assert.ok(draft.doors.some((door) => /sales/i.test(door.title)))
-  assert.ok(draft.doors.some((door) => /contacts/i.test(door.title)))
+  assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
+  assert.ok(draft.doors.length < 12)
+  assert.equal(draft.doors.some((door) => /marketing/i.test(door.title)), false)
+  assert.equal(draft.doors.some((door) => /sales/i.test(door.title)), false)
+  assert.equal(draft.doors.some((door) => /contacts/i.test(door.title)), false)
   const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
   const demoGraph = demo.graph as unknown as FlowGraph
   const asked = await machine.run(session('talk to sales'), demoGraph, 'talk to sales')

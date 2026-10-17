@@ -102,7 +102,7 @@ function decodeHtml(value: string): string {
 
 const VOID_HTML = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'])
 
-/** Sample charts marked aria-hidden are not the product. Leave them off the scan. */
+/** Sample charts (aria-hidden) and nav chrome are not the product. Leave them off the scan. */
 function dropAriaHidden(html: string): string {
   const tag = /<!--[\s\S]*?-->|<\/?([a-zA-Z][a-zA-Z0-9:-]*)\b[^>]*>/g
   const skip: string[] = []
@@ -124,7 +124,7 @@ function dropAriaHidden(html: string): string {
       else if (skip.length === 0) out += match[0]
       continue
     }
-    const hidden = /\baria-hidden\s*=\s*(?:"true"|'true'|true)/i.test(match[0])
+    const hidden = /\baria-hidden\s*=\s*(?:"true"|'true'|true)/i.test(match[0]) || name === 'nav'
     if (skip.length > 0 || hidden) {
       if (!selfClosing) skip.push(name)
       continue
@@ -1014,17 +1014,18 @@ export function draftWebsiteChat(input: {
   companyName: string
   personaName?: string | null
 }): WebsiteChatDraft {
-  const pages = input.pages.filter((page) => page.text.trim().length > 0)
-  const text = pages.map((page) => page.text).join('\n')
-  const cluster = suggestCluster(`${text} ${pages.map((page) => page.url).join(' ')}`)
+  const incoming = input.pages
+  const pages = incoming.filter((page) => page.text.trim().length > 0)
+  const cluster = suggestCluster(`${incoming.map((page) => page.text).join('\n')} ${incoming.map((page) => page.url).join(' ')}`)
   if (cluster !== 'hair') {
     return draftVendorWebsiteChat({
-      pages,
+      pages: pages.length > 0 ? pages : incoming,
       companyName: input.companyName,
       personaName: input.personaName,
       clusterId: cluster === 'custom' ? 'software' : cluster,
     })
   }
+  const text = pages.map((page) => page.text).join('\n')
   const company = companyLabel(input.companyName)
   const persona = input.personaName?.trim() || 'Bella'
   const address = extractAddress(text)
