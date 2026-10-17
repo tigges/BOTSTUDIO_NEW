@@ -385,6 +385,17 @@ function hasPlanTopic(topics: SiteTopic[]): boolean {
   return topics.some((topic) => topic.walk === 'plans' || /^plans?/i.test(topic.choice) || /^plans?/i.test(topic.flowName))
 }
 
+function planPageScore(page: ScannedPage): number {
+  const blob = `${page.url} ${page.title} ${page.text.slice(0, 1200)}`
+  let score = 0
+  if (/[£$€]\s*\d+/.test(blob)) score += 6
+  if (PLAN_COPY.test(blob)) score += 4
+  if (/\bunlimited\b|\ba month\b/i.test(blob)) score += 2
+  if (/best-sim-only|pay-monthly|\/plans?(?:\/|$)/i.test(page.url)) score += 3
+  if (/\/sim-only\/?$/i.test(pathOf(page))) score -= 2
+  return score
+}
+
 function titleCaseHost(host: string): string {
   const stem = host.split('.')[0] ?? 'the product'
   return stem.charAt(0).toUpperCase() + stem.slice(1)
@@ -541,19 +552,22 @@ export function draftClusteredTemplate(input: {
       : `Hi, I'm ${persona} at ${company}.`
     : assistantGreeting(company)
   const pricingPages = working.filter((page) => isPricingPage(page) && !isMissingPage(page))
-  const tiers = clusterId === 'hair' || clusterId === 'email' ? [] : extractPlanTiers(pricingPages.map((page) => page.text).join('\n'))
+  const telcoShop = working.some((page) => PLAN_COPY.test(`${page.url} ${page.title} ${page.text.slice(0, 800)}`))
+  const tiers = clusterId === 'hair' || clusterId === 'email' || telcoShop
+    ? []
+    : extractPlanTiers(pricingPages.map((page) => page.text).join('\n'))
   const topics: SiteTopic[] = []
   const used = new Set<string>()
   const rest = working.filter((page) => !isHomePage(page))
   const ordered = [
     ...working.filter((page) => isHomePage(page)),
-    ...rest.filter((page) => isPricingPage(page)),
+    ...rest.filter((page) => isPricingPage(page)).sort((a, b) => planPageScore(b) - planPageScore(a)),
     ...rest.filter((page) => !isPricingPage(page)),
   ]
   for (const page of ordered) {
     if (isJunkSitePage(page)) continue
     if (isPricingPage(page) && tiers.length >= 2) continue
-    const found = leadFromPage(page)
+    const found = isPricingPage(page) ? (planAnswer(page) ?? leadFromPage(page)) : leadFromPage(page)
     if (!found) continue
     const name = uniqueFlowName(titleFromPage(page), used)
     if (!name) continue

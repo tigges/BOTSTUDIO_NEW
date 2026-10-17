@@ -114,17 +114,27 @@ export function extractPlanTiers(text: string): PlanTier[] {
   return preferCanonicalGrid(tiers.length >= 2 ? tiers : extractInlineTiers(text))
 }
 
+function looksLikeSoftwareGrid(tiers: PlanTier[]): boolean {
+  const names = new Set(tiers.map((tier) => tier.name))
+  if (names.has('Starter') && names.has('Professional')) return true
+  if (['Free', 'Starter', 'Professional', 'Enterprise'].filter((name) => names.has(name)).length >= 3) return true
+  if (tiers.some((tier) => /per seat/i.test(tier.price))) return true
+  return false
+}
+
 /** HubSpot-style grids are Free / Starter / Professional / Enterprise. Product-card Business $50 stays off. */
 function preferCanonicalGrid(tiers: PlanTier[]): PlanTier[] {
   const canon = new Set(['Free', 'Starter', 'Professional', 'Enterprise'])
   const core = tiers.filter((tier) => canon.has(tier.name))
-  return core.length >= 4 ? core : tiers
+  if (core.length >= 4) return core
+  if (!looksLikeSoftwareGrid(tiers)) return []
+  return core.length >= 2 ? core : tiers
 }
 
 function extractInlineTiers(text: string): PlanTier[] {
   const blob = text.replace(/\s+/g, ' ')
   const tiers: PlanTier[] = []
-  const pattern = /\b(Free|Starter|Professional|Enterprise|Plus|Business)\b[^£$€]{0,80}([£$€]\s*\d+(?:\.\d+)?(?:\s*\/\s*(?:mo|month|yr|year|seat|user))*)/gi
+  const pattern = /\b(Free|Starter|Professional|Enterprise)\b[^£$€]{0,80}([£$€]\s*\d+(?:\.\d+)?(?:\s*\/\s*(?:mo|month|yr|year|seat|user))*)/gi
   for (const match of blob.matchAll(pattern)) {
     const name = titleCase(match[1] ?? '')
     if (!name || tiers.some((tier) => tier.name === name)) continue

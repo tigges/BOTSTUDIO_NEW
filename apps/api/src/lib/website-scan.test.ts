@@ -736,16 +736,23 @@ test('a telco 404 is not a chapter, and the shop SIM page answers plans', async 
       <a href="/sim-only/best-sim-only-deals">SIM only</a>
     </body></html>`,
   )
+  const hub = pageFromHtml(
+    'https://www.vodafone.co.uk/sim-only',
+    `<html><head><title>What is a SIM only deal?</title></head><body>
+      <p>Switching to us is easy and we'll help you at every step. A SIM only deal is a contract without a phone.</p>
+    </body></html>`,
+  )
   const sim = pageFromHtml(
     'https://www.vodafone.co.uk/sim-only/best-sim-only-deals',
     `<html><head><title>Best SIM Only Deals</title></head><body>
+      <p>Unlimited Extra Plus £10 Stay Free at £100</p>
       <p>Unlimited data and EU roaming just £26 a month on a SIM only plan.</p>
       <p>All our pay monthly SIM only plans come with 5G as standard across the UK.</p>
     </body></html>`,
   )
   assert.equal(isMissingPage(missing), true)
   const draft = draftWebsiteChat({
-    pages: [home, missing, shop, sim],
+    pages: [home, missing, shop, hub, sim],
     companyName: 'Vodafone',
     personaName: 'Voda',
   })
@@ -753,7 +760,9 @@ test('a telco 404 is not a chapter, and the shop SIM page answers plans', async 
   const plans = draft.doors.find((door) => /^plans?/i.test(door.flowName) || /^plans?/i.test(door.title))
   assert.ok(plans)
   assert.equal(plans!.phrases.includes('plans'), true)
-  assert.match(plans!.answer, /SIM only|£26|pay monthly/i)
+  assert.match(plans!.answer, /£26 a month|SIM only/i)
+  assert.equal(/switching to us is easy/i.test(plans!.answer), false)
+  assert.equal(/Free at £100|Plus at £10/i.test(plans!.answer), false)
   const welcome = JSON.stringify(draft.flows.find((flow) => /welcome/i.test(flow.name))?.graph ?? {})
   assert.match(welcome, /"plans"/)
   const planFlow = draft.flows.find((flow) => flow.name === plans!.flowName)
