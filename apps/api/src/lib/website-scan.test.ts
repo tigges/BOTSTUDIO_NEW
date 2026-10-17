@@ -442,6 +442,7 @@ const HUBSPOT_MARKETING_PAGE = `<!doctype html>
 <html><head><title>Marketing</title></head>
 <body>
 <p>Grow awareness, convert leads into revenue, and run every campaign without adding more tools.</p>
+<p>Provide your marketing team with logins and access to the appropriate tools, and they’ll be running lead generation campaigns that same day.</p>
 <p>Starter is listed on some product cards at $10/mo, which is not the pricing grid.</p>
 <p>Enterprise banner $150.</p>
 </body></html>`
@@ -486,6 +487,8 @@ test('a CRM homepage does not turn nav chrome into answers, and reads product pa
   assert.equal(/data software billing/i.test(spoken), false)
   assert.equal(draft.doors.some((door) => /integrations/i.test(door.flowName)), false)
   assert.equal(draft.doors.some((door) => /billing/i.test(door.flowName)), false)
+  assert.equal(draft.doors.some((door) => /login/i.test(door.flowName)), false)
+  assert.equal(/marketing team with logins/i.test(spoken), false)
   const marketingDoor = draft.doors.find((door) => /marketing/i.test(door.flowName))
   assert.ok(marketingDoor)
   assert.match(marketingDoor!.answer, /campaign/)

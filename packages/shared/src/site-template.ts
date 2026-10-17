@@ -456,12 +456,35 @@ function pricingPage(page: ScannedPage): boolean {
   return /pric|\/plans?\b/i.test(`${page.url} ${page.title}`)
 }
 
+function productLeaf(page: ScannedPage): string | null {
+  try {
+    const path = new URL(page.url).pathname.toLowerCase()
+    return path.match(/\/products?\/([a-z0-9-]+)(?:\/|$)/)?.[1] ?? null
+  } catch {
+    return null
+  }
+}
+
+/** /products/marketing is the Marketing door, not Login or Billing. */
+function seedFitsProductLeaf(leaf: string, phrases: string[]): boolean {
+  const compact = leaf.replace(/-/g, '')
+  for (const phrase of phrases) {
+    const token = phrase.toLowerCase().replace(/[^a-z0-9]+/g, '')
+    if (token.length < 4) continue
+    if (compact.includes(token) || token.includes(compact)) return true
+    if (leaf.includes(phrase.toLowerCase().replace(/\s+/g, '-'))) return true
+  }
+  return leaf === 'crm' && phrases.some((phrase) => /contact|record|meeting|ticket|deal|pipeline|compan/.test(phrase))
+}
+
 function sentenceFor(pages: ScannedPage[], phrases: string[], opts?: { fromPricing?: boolean }): string | null {
   // A pricing page is the plan door. Do not mint Marketing/Accounts rooms from its copy.
   const search = opts?.fromPricing ? pages : pages.filter((page) => !pricingPage(page))
   if (!opts?.fromPricing && search.length === 0) return null
   let best: { text: string; score: number } | null = null
   for (const page of search) {
+    const leaf = productLeaf(page)
+    if (leaf && !seedFitsProductLeaf(leaf, phrases)) continue
     const pageScore = pageTopicScore(page, phrases)
     for (const part of splitCopy(page.text)) {
       if (part.length < 24 || part.length > 320 || isNavChrome(part)) continue
