@@ -41,4 +41,5 @@ test('the traffic module does not write journeys, flows, or workflows', () => {
   assert.equal(/prisma\.flowVersion/.test(source), false)
   assert.equal(/prisma\.automationRule/.test(source), false)
   assert.equal(/installHairStudioPack|publishNamed|ensureWelcomeRouter/.test(source), false)
+  assert.match(source, /pinOwnedInbox/)
 })

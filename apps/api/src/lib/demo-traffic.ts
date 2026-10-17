@@ -261,6 +261,14 @@ async function insertTicket(target: DemoTarget, template: TicketTemplate, slot: 
   return 1
 }
 
+async function pinOwnedInbox(botId: string, prefix: string) {
+  const result = await prisma.conversation.updateMany({
+    where: { botId, id: { startsWith: `${prefix}-convo-` } },
+    data: { updatedAt: new Date() },
+  })
+  return result.count
+}
+
 async function pruneTraffic(botId: string) {
   const rows = await prisma.conversation.findMany({
     where: { botId, id: { startsWith: TRAFFIC_PREFIX } },
@@ -288,7 +296,8 @@ async function fillTarget(target: DemoTarget, at: Date) {
     tickets += await insertTicket(target, target.tickets[i]!, slot, i, conversationIds[i])
   }
   const pruned = await pruneTraffic(target.botId)
-  return { account: target.account, chats, tickets, pruned }
+  const pinned = await pinOwnedInbox(target.botId, target.account === 'bella' ? 'enrich-bella' : 'enrich-acme')
+  return { account: target.account, chats, tickets, pruned, pinned }
 }
 
 /**
