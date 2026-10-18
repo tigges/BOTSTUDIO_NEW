@@ -3,8 +3,11 @@ import { test } from 'node:test'
 import { SessionMachine, type FlowGraph } from '@ybot/runtime'
 import type { ExecutionServices, Session } from '@ybot/runtime'
 import { draftWebsiteChat, inspectFlowGraph, pageFromHtml } from '@ybot/shared'
+import { chooseShopHomes, chooseSitePages } from '@ybot/shared'
 import {
   answerGrounded,
+  chooseShopHomesWithModel,
+  chooseSitePagesWithModel,
   draftSiteSpecWithModel,
   draftWebsiteChatWithModel,
   jobsFromModelPages,
@@ -61,6 +64,16 @@ function simPages() {
   )
   return { home, missing, sim, pages: [home, missing, sim] }
 }
+
+const vodafoneLinks = [
+  { href: 'https://www.vodafone.co.uk/sim-only/best-sim-only-deals', text: 'SIM only' },
+  { href: 'https://www.vodafone.co.uk/mobile/pay-monthly-contracts', text: 'Pay monthly' },
+  { href: 'https://www.vodafone.co.uk/help', text: 'Help' },
+  { href: 'https://www.vodafone.co.uk/about', text: 'About us' },
+  { href: 'https://www.vodafone.co.uk/careers', text: 'Careers' },
+  { href: 'https://www.vodafone.co.uk/contact', text: 'Contact' },
+  { href: 'https://www.vodafone.co.uk/our-impact', text: 'Our impact' },
+]
 
 test('an answer is grounded only when the pages stated it', () => {
   const blob = 'unlimited data and eu roaming just £26 a month on a sim only plan.'
@@ -175,6 +188,75 @@ test('no complete() uses the regex map', async () => {
     complete: null,
   })
   assert.deepEqual(draft.doors.map((door) => door.flowName), regex.doors.map((door) => door.flowName))
+})
+
+test('page picking keeps model urls that were on the site, and drops invented ones', async () => {
+  const picked = await chooseSitePagesWithModel({
+    homeUrl: 'https://www.vodafone.co.uk/',
+    links: vodafoneLinks,
+    limit: 2,
+    complete: async () => JSON.stringify({
+      urls: [
+        'https://www.vodafone.co.uk/contact',
+        'https://evil.example/phishing',
+        'https://www.vodafone.co.uk/help',
+      ],
+    }),
+  })
+  assert.deepEqual(picked, [
+    'https://www.vodafone.co.uk/contact',
+    'https://www.vodafone.co.uk/help',
+  ])
+})
+
+test('page picking falls back to regex order when the model fails', async () => {
+  const ranked = chooseSitePages({
+    homeUrl: 'https://www.vodafone.co.uk/',
+    links: vodafoneLinks,
+    limit: 2,
+  })
+  const thrown = await chooseSitePagesWithModel({
+    homeUrl: 'https://www.vodafone.co.uk/',
+    links: vodafoneLinks,
+    limit: 2,
+    complete: async () => {
+      throw new Error('import model timed out')
+    },
+  })
+  const silent = await chooseSitePagesWithModel({
+    homeUrl: 'https://www.vodafone.co.uk/',
+    links: vodafoneLinks,
+    limit: 2,
+    complete: null,
+  })
+  assert.deepEqual(thrown, ranked)
+  assert.deepEqual(silent, ranked)
+})
+
+test('shop picking keeps a listed country shop and drops a made-up host', async () => {
+  const links = [
+    { href: 'https://www.vodafone.de/', text: 'Deutschland' },
+    { href: 'https://www.vodafone.co.uk/', text: 'United Kingdom' },
+    { href: 'https://www.vodafone.es/', text: 'España' },
+  ]
+  const picked = await chooseShopHomesWithModel({
+    homeUrl: 'https://www.vodafone.com/',
+    links,
+    limit: 1,
+    complete: async () => JSON.stringify({
+      urls: ['https://www.vodafone.de/', 'https://shops.example/'],
+    }),
+  })
+  assert.deepEqual(picked, ['https://www.vodafone.de/'])
+  const regex = chooseShopHomes({ homeUrl: 'https://www.vodafone.com/', links, limit: 1 })
+  const silent = await chooseShopHomesWithModel({
+    homeUrl: 'https://www.vodafone.com/',
+    links,
+    limit: 1,
+    complete: null,
+  })
+  assert.deepEqual(silent, regex)
+  assert.deepEqual(regex, ['https://www.vodafone.co.uk/'])
 })
 
 test('a hair studio keeps the authored salon walk even when a model replies', async () => {
