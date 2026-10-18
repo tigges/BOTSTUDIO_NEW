@@ -61,14 +61,21 @@ function sessionFrom(graph: FlowGraph, message: string, saved?: PreviewSnapshot)
   }
 }
 
-function previewServices(catalog?: StudioCatalog): ExecutionServices {
+function classifyOnlyLlm(llm?: unknown) {
+  const classify = llm && typeof llm === 'object' && typeof (llm as { classify?: unknown }).classify === 'function'
+    ? (llm as { classify: (text: string, params: { categories: string[] }) => Promise<{ category: string; confidence: number }> }).classify.bind(llm)
+    : async () => ({ category: 'other', confidence: 0 })
   return {
-    llm: {
-      classify: async () => ({ category: 'other', confidence: 0 }),
-      embed: async () => ({ embeddings: [[]] }),
-      complete: async () => ({ content: '' }),
-      stream: async () => {},
-    },
+    classify,
+    embed: async () => ({ embeddings: [[]] }),
+    complete: async () => ({ content: '' }),
+    stream: async () => {},
+  }
+}
+
+function previewServices(catalog?: StudioCatalog, llm?: unknown): ExecutionServices {
+  return {
+    llm: classifyOnlyLlm(llm),
     db: {},
     httpFetch: fetch,
     catalog,
@@ -76,17 +83,19 @@ function previewServices(catalog?: StudioCatalog): ExecutionServices {
 }
 
 /**
- * Walk the chart on the canvas. The model is not asked, so it cannot add a list of questions.
+ * Walk the chart on the canvas. complete() is not asked, so the model cannot add a list of questions.
+ * Phrase miss may classify among this chart's handles when llm is passed.
  */
 export async function runCanvasPreview(input: {
   graph: FlowGraph
   message: string
   session?: PreviewSnapshot
   catalog?: StudioCatalog
+  llm?: unknown
 }): Promise<PreviewTurn> {
   const session = sessionFrom(input.graph, input.message, input.session)
   if (!session) return { handled: false, text: '' }
-  const machine = new SessionMachine(previewServices(input.catalog))
+  const machine = new SessionMachine(previewServices(input.catalog, input.llm))
   const result = await machine.run(session, input.graph, input.message)
   const given = spokenFirstName(String(result.session.variables.flow['guest_name'] ?? ''))
   if (given) result.session.variables.contact['name'] = given

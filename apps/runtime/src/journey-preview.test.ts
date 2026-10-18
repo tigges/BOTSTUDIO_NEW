@@ -551,3 +551,45 @@ test('cut then men hears Gents instead of the whole map', async () => {
   assert.equal(/where we are/.test(men.text), false)
   assert.equal(/What would you like/.test(men.text), false)
 })
+
+test('a phrase miss on the test chat can open a chapter the model names', async () => {
+  const speak = (name: string, text: string): { name: string; graph: FlowGraph } => ({
+    name,
+    graph: {
+      nodes: [
+        { id: `${name}-start`, data: { kind: 'trigger_start', label: 'Start', config: {} } },
+        { id: `${name}-say`, data: { kind: 'send_message', label: name, config: { text } } },
+      ],
+      edges: [{ id: `${name}-e`, source: `${name}-start`, target: `${name}-say` }],
+    },
+  })
+  const chapters = [
+    speak('Welcome', 'How can I help?'),
+    speak('Plans', 'SIM only from £26 a month.'),
+    speak('Hours', 'Open 8 to 8.'),
+  ]
+  const open = await runJourneyPreview({
+    chapters,
+    startChapter: 'Welcome',
+    message: '',
+    environmentLabel: 'Sandbox',
+  })
+  const missed = await runJourneyPreview({
+    chapters,
+    startChapter: 'Welcome',
+    message: 'how much for unlimited data roaming',
+    environmentLabel: 'Sandbox',
+    session: open.session,
+  })
+  assert.equal(/SIM only/.test(missed.text), false)
+  const classified = await runJourneyPreview({
+    chapters,
+    startChapter: 'Welcome',
+    message: 'how much for unlimited data roaming',
+    environmentLabel: 'Sandbox',
+    session: open.session,
+    llm: { classify: async () => ({ category: 'Plans', confidence: 0.9 }) },
+  })
+  assert.equal(classified.chapter, 'Plans')
+  assert.match(classified.text, /SIM only/)
+})

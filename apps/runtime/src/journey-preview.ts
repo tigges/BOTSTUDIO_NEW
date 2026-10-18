@@ -2,7 +2,7 @@ import type { StudioCatalog } from '@ybot/shared'
 import { usableContactName } from './contact-speech.js'
 import { SessionMachine, type FlowGraph } from './engine.js'
 import { copyJumpVariables, missingChapterLine } from './handoff.js'
-import { acceptedHoursOffer, hoursChapterName, isSmallTalk, isTopicSwitch, listenForChapter, offerOnMap, questionFrom, sameQuestion, shapeTurn } from './map-listen.js'
+import { acceptedHoursOffer, hearChapter, hoursChapterName, isSmallTalk, isTopicSwitch, offerOnMap, questionFrom, sameQuestion, shapeTurn } from './map-listen.js'
 import type { ExecutionServices, Session, SessionVariables } from './types.js'
 
 export interface JourneyPreviewSnapshot {
@@ -21,14 +21,21 @@ export interface JourneyTurn {
   session?: JourneyPreviewSnapshot
 }
 
-function previewServices(catalog?: StudioCatalog, now?: Date): ExecutionServices {
+function classifyOnlyLlm(llm?: unknown) {
+  const classify = llm && typeof llm === 'object' && typeof (llm as { classify?: unknown }).classify === 'function'
+    ? (llm as { classify: (text: string, params: { categories: string[] }) => Promise<{ category: string; confidence: number }> }).classify.bind(llm)
+    : async () => ({ category: 'other', confidence: 0 })
   return {
-    llm: {
-      classify: async () => ({ category: 'other', confidence: 0 }),
-      embed: async () => ({ embeddings: [[]] }),
-      complete: async () => ({ content: '' }),
-      stream: async () => {},
-    },
+    classify,
+    embed: async () => ({ embeddings: [[]] }),
+    complete: async () => ({ content: '' }),
+    stream: async () => {},
+  }
+}
+
+function previewServices(catalog?: StudioCatalog, now?: Date, llm?: unknown): ExecutionServices {
+  return {
+    llm: classifyOnlyLlm(llm),
     db: {},
     httpFetch: fetch,
     catalog,
@@ -122,6 +129,8 @@ export async function runJourneyPreview(input: {
   session?: JourneyPreviewSnapshot
   catalog?: StudioCatalog
   now?: Date
+  /** Server classify adapter. Phrase match still wins; complete() is not used. */
+  llm?: unknown
 }): Promise<JourneyTurn> {
   const byName = new Map<string, FlowGraph>()
   for (const chapter of input.chapters) {
@@ -138,7 +147,7 @@ export async function runJourneyPreview(input: {
     saved = undefined
   } else if (previous.status === 'completed') {
     const nextName = heard && !isSmallTalk(heard)
-      ? listenForChapter({ chapters: input.chapters, catalog: input.catalog, text: heard, current: previous.chapter })
+      ? await hearChapter({ chapters: input.chapters, catalog: input.catalog, text: heard, current: previous.chapter }, input.llm)
       : undefined
     const nextGraph = nextName ? byName.get(nextName) : undefined
     if (nextName && nextGraph) {
@@ -174,7 +183,7 @@ export async function runJourneyPreview(input: {
     }
   }
 
-  const machine = new SessionMachine(previewServices(input.catalog, input.now))
+  const machine = new SessionMachine(previewServices(input.catalog, input.now, input.llm))
   const lines: string[] = []
   let stopped = false
   const seen = new Set<string>()
@@ -226,12 +235,12 @@ export async function runJourneyPreview(input: {
       && !/^book/i.test(chapterName)
       && (!previous?.waitingFor || isTopicSwitch(heard))
     ) {
-      const nextName = listenForChapter({
+      const nextName = await hearChapter({
         chapters: input.chapters,
         catalog: input.catalog,
         text: heard,
         current: chapterName,
-      })
+      }, input.llm)
       const next = nextName ? byName.get(nextName) : undefined
       if (nextName && next) {
         const jumped = beginChapter(next, nextName, input.message, saved)

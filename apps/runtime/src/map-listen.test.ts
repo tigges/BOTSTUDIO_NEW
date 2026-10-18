@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { draftWebsiteChat, hairStudioPack, pageFromHtml } from '@ybot/shared'
 import type { FlowGraph } from './engine.js'
-import { acceptedHoursOffer, isSmallTalk, isTopicSwitch, listenForChapter, offerOnMap, sameQuestion, shapeTurn, wantsOffer } from './map-listen.js'
+import { acceptedHoursOffer, hearChapter, isSmallTalk, isTopicSwitch, listenForChapter, offerOnMap, sameQuestion, shapeTurn, wantsOffer } from './map-listen.js'
 
 function salonChapters() {
   const pack = hairStudioPack('Yuzu', 'Bella')
@@ -41,6 +41,46 @@ test('a promotion stays quiet unless they ask, and a colour answer is not a deal
   assert.equal(listenForChapter({ chapters, catalog, text: 'colour on Tuesday', current: 'Salon welcome' }), 'Book an appointment')
   assert.equal(listenForChapter({ chapters, catalog, text: 'any discounts?', current: 'Salon welcome' }), 'Offers')
   assert.equal(listenForChapter({ chapters, catalog, text: 'what offers do you have', current: 'Services and prices' }), 'Offers')
+})
+
+test('a phrase miss can classify one of this map\'s chapters', async () => {
+  const chapters = [
+    {
+      name: 'Welcome',
+      graph: { nodes: [{ id: 's', data: { kind: 'trigger_start', label: 'Start', config: {} } }], edges: [] },
+    },
+    {
+      name: 'Plans',
+      graph: { nodes: [{ id: 's', data: { kind: 'trigger_start', label: 'Start', config: {} } }], edges: [] },
+    },
+    {
+      name: 'Hours',
+      graph: { nodes: [{ id: 's', data: { kind: 'trigger_start', label: 'Start', config: {} } }], edges: [] },
+    },
+  ]
+  assert.equal(await hearChapter({ chapters, text: 'plans', current: 'Welcome' }), 'Plans')
+  assert.equal(
+    await hearChapter(
+      { chapters, text: 'how much for unlimited data roaming', current: 'Welcome' },
+      { classify: async () => ({ category: 'Plans', confidence: 0.9 }) },
+    ),
+    'Plans',
+  )
+  let called = false
+  assert.equal(
+    await hearChapter(
+      { chapters, text: 'plans', current: 'Welcome' },
+      {
+        classify: async () => {
+          called = true
+          return { category: 'Hours', confidence: 1 }
+        },
+      },
+    ),
+    'Plans',
+  )
+  assert.equal(called, false)
+  assert.equal(await hearChapter({ chapters, text: 'how much for unlimited data roaming', current: 'Welcome' }), undefined)
 })
 
 test('a finished chapter offers the doors instead of repeating itself', () => {

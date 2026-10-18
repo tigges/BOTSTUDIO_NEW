@@ -61,6 +61,32 @@ test('the booking chart asks once, including a mistyped cut', async () => {
   assert.equal(known.session?.variables.flow['guest_name'], undefined)
 })
 
+test('a phrase miss on the canvas can classify among this chart\'s jobs', async () => {
+  const graph = {
+    nodes: [
+      { id: 'start', data: { kind: 'trigger_start', label: 'Start', config: {} } },
+      { id: 'route', data: { kind: 'route_topic', label: 'Route', config: { routes: [{ handle: 'plans', phrases: ['plans'] }, { handle: 'hours', phrases: ['hours'] }] } } },
+      { id: 'plans', data: { kind: 'send_message', label: 'Plans', config: { text: 'SIM only from £26.' } } },
+      { id: 'hours', data: { kind: 'send_message', label: 'Hours', config: { text: 'Open 8 to 8.' } } },
+      { id: 'other', data: { kind: 'send_message', label: 'Other', config: { text: 'What can I help with?' } } },
+    ],
+    edges: [
+      { id: 'e1', source: 'start', target: 'route' },
+      { id: 'e2', source: 'route', target: 'plans', sourceHandle: 'plans' },
+      { id: 'e3', source: 'route', target: 'hours', sourceHandle: 'hours' },
+      { id: 'e4', source: 'route', target: 'other', sourceHandle: 'other' },
+    ],
+  } as FlowGraph
+  const stub = await runCanvasPreview({ graph, message: 'how much for unlimited data roaming' })
+  assert.match(stub.text, /What can I help/)
+  const classified = await runCanvasPreview({
+    graph,
+    message: 'how much for unlimited data roaming',
+    llm: { classify: async () => ({ category: 'plans', confidence: 0.9 }) },
+  })
+  assert.match(classified.text, /SIM only/)
+})
+
 test('Test Bot on the location chart looks up the address', async () => {
   const pack = hairStudioPack('Yuzu')
   const graph = pack.flows.find((flow) => flow.name === 'Location')!.graph as unknown as FlowGraph
