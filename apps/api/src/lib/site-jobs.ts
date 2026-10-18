@@ -11,6 +11,7 @@ import {
   chooseSitePages,
   draftClusteredTemplate,
   draftWebsiteChat,
+  isJunkAnswer,
   isMissingPage,
   learnedSpecFromJobs,
   suggestCluster,
@@ -144,6 +145,7 @@ export async function jobsFromModelPages(
   for (const row of parseJobsPayload(raw)) {
     const topic = asTopic(row)
     if (!topic) continue
+    if (isJunkAnswer(topic.answer) || isJunkAnswer(topic.flowName)) continue
     if (!answerGrounded(topic.answer, blob)) continue
     topics.push(topic)
     if (topics.length >= MAX_JOBS) break

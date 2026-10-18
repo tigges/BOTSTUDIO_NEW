@@ -449,7 +449,7 @@ function isJunkSitePage(page: ScannedPage): boolean {
   return /computershare|shareview|ordinary shares|adr holding|investor relations/i.test(head)
 }
 
-function isStoryCopy(text: string): boolean {
+export function isStoryCopy(text: string): boolean {
   const t = text.replace(/\s+/g, ' ')
   if (/\bnot responsible for the content of external sites\b/i.test(t)) return true
   if (/\brefer to our privacy notice\b/i.test(t)) return true
@@ -462,7 +462,7 @@ function isStoryCopy(text: string): boolean {
   return false
 }
 
-function isJunkAnswer(text: string): boolean {
+export function isJunkAnswer(text: string): boolean {
   if (isNavChrome(text)) return true
   if (isStoryCopy(text)) return true
   if (/\bswitching to (?:us|them) is easy\b/i.test(text)) return true
@@ -702,6 +702,7 @@ export function learnedSpecFromJobs(input: {
     if (!name) continue
     const answer = (input.keepBrand ? clipKept(incoming.answer) : clip(incoming.answer)).trim()
     if (answer.length < 24) continue
+    if (isJunkAnswer(answer)) continue
     used.add(name)
     const phrases = [...new Set((incoming.phrases ?? []).map((item) => item.toLowerCase().replace(/\s+/g, ' ').trim()).filter((item) => item.length >= 2))].slice(0, 8)
     topics.push({
