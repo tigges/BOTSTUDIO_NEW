@@ -6,7 +6,8 @@
 
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
-import { chooseShopHomes, chooseSitePages, isMissingPage, isPricingPage, pageFromHtml, type ScannedPage } from '@ybot/shared'
+import { chooseShopHomes, chooseSitePages, isMissingPage, isPricingPage, pageFromHtml, suggestCluster, type ScannedPage } from '@ybot/shared'
+import { chooseShopHomesWithModel, chooseSitePagesWithModel } from './site-jobs.js'
 
 export class PublicSiteError extends Error {
   constructor(message: string, readonly code: 'INVALID_URL' | 'BLOCKED' | 'UNREADABLE') {
@@ -220,12 +221,18 @@ export async function readPublicSite(input: string): Promise<ScannedPage[]> {
   if (home.text.length < 40) {
     throw new PublicSiteError('Could not read that site. Check the address and try again.', 'UNREADABLE')
   }
-  const shops = chooseShopHomes({ homeUrl: home.url, links: home.links, limit: 1 })
+  const hair = suggestCluster(`${home.text} ${home.url}`) === 'hair'
+  const shops = hair
+    ? chooseShopHomes({ homeUrl: home.url, links: home.links, limit: 1 })
+    : await chooseShopHomesWithModel({ homeUrl: home.url, links: home.links, limit: 1 })
   const reserve = shops.length > 0 ? 4 : 0
   const sitemap = await readSitemap(new URL(home.url).origin).catch(() => [])
   const pages = [home]
   const sameOriginLimit = Math.max(1, MAX_PAGES - 1 - reserve)
-  for (const href of chooseSitePages({ homeUrl: home.url, links: home.links, sitemap, limit: sameOriginLimit })) {
+  const linked = hair
+    ? chooseSitePages({ homeUrl: home.url, links: home.links, sitemap, limit: sameOriginLimit })
+    : await chooseSitePagesWithModel({ homeUrl: home.url, links: home.links, sitemap, limit: sameOriginLimit })
+  for (const href of linked) {
     try {
       const next = await fetchHtml(new URL(href))
       const page = pageFromHtml(next.url, next.html)
@@ -244,7 +251,10 @@ export async function readPublicSite(input: string): Promise<ScannedPage[]> {
         pages.push(shopHome)
         const shopSitemap = await readSitemap(new URL(shopHome.url).origin).catch(() => [])
         const remaining = MAX_PAGES - pages.length
-        for (const href of chooseSitePages({ homeUrl: shopHome.url, links: shopHome.links, sitemap: shopSitemap, limit: remaining })) {
+        const shopLinked = hair
+          ? chooseSitePages({ homeUrl: shopHome.url, links: shopHome.links, sitemap: shopSitemap, limit: remaining })
+          : await chooseSitePagesWithModel({ homeUrl: shopHome.url, links: shopHome.links, sitemap: shopSitemap, limit: remaining })
+        for (const href of shopLinked) {
           try {
             const next = await fetchHtml(new URL(href))
             const page = pageFromHtml(next.url, next.html)
