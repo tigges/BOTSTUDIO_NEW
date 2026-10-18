@@ -1,6 +1,6 @@
 import type { StudioCatalog } from '@ybot/shared'
 import type { FlowGraph, GraphEdge, GraphNode } from './engine.js'
-import { matchTopic, type TopicRoute } from './topic-route.js'
+import { matchTopic, pickTopic, type TopicRoute } from './topic-route.js'
 
 const SMALL_TALK = /^(hi|hello|hey|hiya|yo|thanks|thank you|cheers|ok|okay|good morning|good afternoon|good evening)[!?.\s]*$/i
 
@@ -288,6 +288,23 @@ export function listenForChapter(input: {
   if (routes.length === 0) return undefined
   const handle = matchTopic(heard, routes)
   return handle === 'other' ? undefined : handle
+}
+
+/**
+ * Phrase match first. On a miss, ask the model to pick one of this map's chapters.
+ * Empty llm stays unset, same as a phrase miss.
+ */
+export async function hearChapter(
+  input: Parameters<typeof listenForChapter>[0],
+  llm?: unknown,
+): Promise<string | undefined> {
+  const hit = listenForChapter(input)
+  if (hit) return hit
+  if (isSmallTalk(input.text)) return undefined
+  const routes = chapterRoutes(input)
+  if (routes.length === 0) return undefined
+  const picked = await pickTopic(input.text, routes, llm)
+  return picked === 'other' ? undefined : picked
 }
 
 export function sameQuestion(left?: string | null, right?: string | null): boolean {

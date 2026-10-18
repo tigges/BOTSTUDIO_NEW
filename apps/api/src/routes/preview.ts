@@ -15,10 +15,10 @@
 import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
-import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
-import { shapeTurn, type FlowGraph } from '@ybot/runtime'
+import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter, hasCloudLlm } from '@ybot/llm'
+import { runJourneyPreview, shapeTurn, type FlowGraph, type JourneyPreviewSnapshot } from '@ybot/runtime'
 import { z } from 'zod'
-import { CATALOG_ENTITY, catalogFromValues } from '@ybot/shared'
+import { CATALOG_ENTITY, catalogFromValues, type StudioCatalog } from '@ybot/shared'
 import { runCanvasPreview, type PreviewSnapshot } from '../lib/preview-flow.js'
 
 
@@ -27,6 +27,46 @@ const llm = createLlmAdapter()
 const embedAdapter = createEmbeddingAdapter()
 
 type JWT = { sub: string; tenantId: string; role: string }
+
+function previewClassifyLlm() {
+  return hasCloudLlm() ? createLlmAdapter() : undefined
+}
+
+const graphSchema = z.object({
+  nodes: z.array(z.object({
+    id: z.string(),
+    data: z.object({
+      kind: z.string(),
+      label: z.string().optional(),
+      config: z.record(z.unknown()).optional(),
+    }).passthrough(),
+  }).passthrough()),
+  edges: z.array(z.object({
+    id: z.string(),
+    source: z.string(),
+    target: z.string(),
+    sourceHandle: z.string().optional(),
+  }).passthrough()),
+})
+
+const journeySessionSchema = z.object({
+  chapter: z.string(),
+  currentNodeId: z.string(),
+  status: z.enum(['running', 'waiting_input', 'completed', 'failed', 'handed_over']),
+  waitingFor: z.object({
+    nodeId: z.string(),
+    variable: z.string(),
+    type: z.string(),
+    choices: z.array(z.string()).optional(),
+    question: z.string().optional(),
+  }).optional(),
+  variables: z.object({
+    flow: z.record(z.unknown()),
+    global: z.record(z.unknown()),
+    contact: z.record(z.unknown()),
+  }),
+  lastQuestion: z.string().optional(),
+})
 
 async function searchKnowledge(query: string, tenantId: string, botId: string, topK = 5): Promise<string[]> {
   try {
@@ -120,6 +160,7 @@ export async function previewRoutes(app: FastifyInstance) {
           message,
           session: session as PreviewSnapshot | undefined,
           catalog: catalogFromValues(catalogRow?.values),
+          llm: previewClassifyLlm(),
         })
         if (turn.handled) {
           reply.raw.writeHead(200, {
@@ -229,5 +270,61 @@ export async function previewRoutes(app: FastifyInstance) {
 
     const row = result[0] ?? { chunk_count: '0', source_count: '0' }
     return { data: { chunkCount: parseInt(row.chunk_count, 10), sourceCount: parseInt(row.source_count, 10) } }
+  })
+}
+
+/**
+ * POST /api/v1/preview/journey
+ * Walks the working-copy chapters with the server LLM keys.
+ * Phrase match still wins. complete() is not asked, so the model cannot add a list of questions.
+ */
+export async function journeyPreviewRoutes(app: FastifyInstance) {
+  app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN'))
+
+  app.post('/preview/journey', async (request, reply) => {
+    const body = z.object({
+      chapters: z.array(z.object({
+        name: z.string().min(1).max(120),
+        graph: graphSchema,
+      })).min(1).max(40),
+      startChapter: z.string().min(1).max(120),
+      message: z.string().max(4000).default(''),
+      environmentLabel: z.string().min(1).max(40).default('Sandbox'),
+      session: journeySessionSchema.optional(),
+      catalog: z.object({
+        facts: z.array(z.object({
+          id: z.string(),
+          kind: z.string(),
+          title: z.string(),
+          phrases: z.array(z.string()),
+          fact: z.string(),
+          source: z.string().optional(),
+        })),
+      }).optional(),
+    }).safeParse(request.body)
+
+    if (!body.success) {
+      return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
+    }
+
+    try {
+      const turn = await runJourneyPreview({
+        chapters: body.data.chapters.map((chapter) => ({
+          name: chapter.name,
+          graph: chapter.graph as FlowGraph,
+        })),
+        startChapter: body.data.startChapter,
+        message: body.data.message,
+        environmentLabel: body.data.environmentLabel,
+        session: body.data.session as JourneyPreviewSnapshot | undefined,
+        catalog: body.data.catalog as StudioCatalog | undefined,
+        llm: previewClassifyLlm(),
+      })
+      return { data: turn }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'This journey could not be walked just now.'
+      return reply.status(500).send({ error: { code: 'JOURNEY', message: msg } })
+    }
   })
 }

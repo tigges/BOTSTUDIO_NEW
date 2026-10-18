@@ -8,7 +8,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { SessionMachine, copyJumpVariables, missingChapterLine, listenForChapter, chapterRoutes, pickTopic, offerOnMap, isSmallTalk, isTopicSwitch, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn } from '@ybot/runtime'
+import { SessionMachine, copyJumpVariables, missingChapterLine, hearChapter, offerOnMap, isSmallTalk, isTopicSwitch, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn } from '@ybot/runtime'
 import type { Session, SessionVariables, FlowGraph } from '@ybot/runtime'
 import { prisma } from '@ybot/db'
 import { CATALOG_ENTITY, catalogFromValues } from '@ybot/shared'
@@ -49,21 +49,6 @@ function asRecord(value: unknown): Record<string, unknown> {
 function savedQuestion(waiting: unknown): string | undefined {
   const question = asRecord(waiting)['question']
   return typeof question === 'string' ? question : undefined
-}
-
-async function hearChapter(
-  chapters: Array<{ name: string; graph: FlowGraph }>,
-  catalog: Parameters<typeof listenForChapter>[0]['catalog'],
-  text: string,
-  current: string | undefined,
-  llm: unknown,
-): Promise<string | undefined> {
-  const hit = listenForChapter({ chapters, catalog, text, current })
-  if (hit) return hit
-  if (isSmallTalk(text)) return undefined
-  const routes = chapterRoutes({ chapters, catalog, text, current })
-  const picked = await pickTopic(text, routes, llm)
-  return picked === 'other' ? undefined : picked
 }
 
 /** When the chart is silent, stay on the map instead of handing the turn to RAG. */
@@ -129,7 +114,7 @@ export async function runFlowIfPublished(opts: {
     if (fsRecord && (fsRecord.status === 'completed' || fsRecord.status === 'handed_over')) {
       const map = await loadChapters()
       const nextName = !isSmallTalk(userText)
-        ? await hearChapter(map, catalog, userText, active.flow.name, llmAdapter)
+        ? await hearChapter({ chapters: map, catalog, text: userText, current: active.flow.name }, llmAdapter)
         : undefined
       const target = nextName
         ? await prisma.flowVersion.findFirst({
@@ -246,7 +231,7 @@ export async function runFlowIfPublished(opts: {
     && (!fsRecord?.waitingFor || isTopicSwitch(userText))
   ) {
     const map = await loadChapters()
-    const nextName = await hearChapter(map, catalog, userText, version.flow.name, llmAdapter)
+    const nextName = await hearChapter({ chapters: map, catalog, text: userText, current: version.flow.name }, llmAdapter)
     const target = nextName
       ? await prisma.flowVersion.findFirst({
           where: { flow: { botId, name: nextName } },
