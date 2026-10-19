@@ -22,8 +22,9 @@ import { JourneyMap, type ChapterHealth, type JourneyLens } from './JourneyMap'
 import { JourneyTest, type JourneyTestLine, type StepVote } from './JourneyTest'
 import { reviewFlow } from './PublishCheck'
 import { useCreateFlow, useEntities, useFlows, useJourneyTraffic, usePublishFlow, useSaveCanvas, useWorkflows } from '../../lib/hooks'
-import type { Flow, FlowGraph } from '../../lib/api'
+import type { ChapterOutcome, Flow, FlowGraph } from '../../lib/api'
 import { useAppStore } from '../../store/app'
+import { journeySummary, outcomeLine } from '../../lib/journey-health'
 
 const NO_ENVIRONMENTS: Array<{ id: string; kind: string; name: string }> = []
 const LENSES: Array<{ id: JourneyLens; label: string }> = [
@@ -54,13 +55,18 @@ function LensTabs({ lens, onChange }: { lens: JourneyLens; onChange: (lens: Jour
   )
 }
 
-function healthForChapter(graph: FlowGraph | undefined, names: string[]): ChapterHealth {
-  if (!graph) return { label: 'No chart on this environment', detail: '' }
+function chartCheck(graph: FlowGraph | undefined, names: string[]): string {
+  if (!graph) return 'No chart on this environment'
   const review = reviewFlow(graph, { flowNames: names })
   const open = review.blocks.length + review.repairs.length
   const first = review.blocks[0]?.message ?? review.repairs[0]?.message ?? ''
-  if (open === 0) return { label: 'Clear', detail: '' }
-  return { label: open === 1 ? '1 to check' : `${open} to check`, detail: first }
+  if (open === 0) return ''
+  return `${open === 1 ? '1 to check' : `${open} to check`}: ${first}`
+}
+
+function healthForChapter(outcome: ChapterOutcome | undefined, graph: FlowGraph | undefined, names: string[]): ChapterHealth {
+  const line = outcomeLine(outcome)
+  return { label: line.label, detail: [line.detail, chartCheck(graph, names)].filter(Boolean).join(' · ') }
 }
 
 export function JourneyPage() {
@@ -82,7 +88,6 @@ export function JourneyPage() {
   const [applyingId, setApplyingId] = useState('')
   const [applyError, setApplyError] = useState('')
   const { data: flows = [], isLoading, isError, error, refetch } = useFlows()
-  const traffic = useJourneyTraffic(lens === 'traffic' || lens === 'health')
   const entities = useEntities()
   const { data: workflows = [] } = useWorkflows()
   const createFlow = useCreateFlow()
@@ -94,6 +99,7 @@ export function JourneyPage() {
   const selectedEnv = useAppStore((s) => s.selectedEnv)
   const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((env) => env.kind === s.selectedEnv)?.id ?? '')
   const sandboxId = environments.find((env) => env.kind === 'sandbox')?.id ?? ''
+  const traffic = useJourneyTraffic(lens === 'traffic' || lens === 'health', environmentId || undefined)
 
   const shown = (flow: Flow) => versionForEnvironment(flow.versions, environmentId, selectedEnv)
   const named = useMemo(() => flows.flatMap((flow) => {
@@ -276,8 +282,17 @@ export function JourneyPage() {
       />
       <div className="flex min-h-0 flex-1">
       <div className="flex-1 overflow-auto p-6">
-        {lens === 'traffic' && traffic.isError && (
-          <p className="mb-4 text-sm text-[var(--text-secondary)]">Traffic counts are unavailable right now. The chapters are still here.</p>
+        {lens !== 'design' && traffic.isError && (
+          <p className="mb-4 text-sm text-[var(--text-secondary)]">
+            Chat counts are unavailable right now. The chapters are still here.{' '}
+            <button type="button" className="font-medium text-[var(--accent)]" onClick={() => { void traffic.refetch() }}>Try again</button>
+          </p>
+        )}
+        {lens !== 'design' && traffic.isLoading && <Skeleton className="mb-4 h-5 w-96 rounded" />}
+        {lens !== 'design' && traffic.data && (
+          <p className="mb-4 text-sm text-[var(--text-secondary)]" data-testid="journey-summary">
+            {journeySummary(traffic.data.total, environmentLabel, traffic.data.days)}
+          </p>
         )}
         {connectError && <p className="mb-4 text-sm text-[var(--danger)]">{connectError}</p>}
         {applyError && <p className="mb-4 text-sm text-[var(--danger)]">{applyError}</p>}
@@ -342,7 +357,7 @@ export function JourneyPage() {
             layout={layout}
             lens={lens}
             chats={traffic.data?.chats ?? {}}
-            healthFor={(id) => (lens === 'health' ? healthForChapter(graphs.get(id), names) : undefined)}
+            healthFor={(id) => (lens === 'health' ? healthForChapter(traffic.data?.outcomes?.[id], graphs.get(id), names) : undefined)}
             automationsFor={automationsFor}
             connectingId={connectingId}
             activeId={lens === 'design' && testing ? guestChapterId : undefined}
