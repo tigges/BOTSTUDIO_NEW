@@ -7,7 +7,7 @@ import {
   handoverSummary,
   inspectFlowGraph,
 } from '@ybot/shared'
-import { isHeld, returnChange, ticketPriority } from './handover.js'
+import { isHeld, returnChange, ticketPriority, withHeldChats } from './handover.js'
 import { streamDoneEvent } from './widget-rating.js'
 
 test('a full handover step becomes the contract', () => {
@@ -102,6 +102,13 @@ test('a chat is held while escalated or assigned and open, never once closed', (
   assert.equal(isHeld({ status: 'active', assignedTo: null }), false)
   assert.equal(isHeld({ status: 'resolved', assignedTo: 'u1' }), false)
   assert.equal(isHeld(null), false)
+})
+
+test('a chat a person holds stays in the Inbox list after newer bot chats push it off the first page', () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 9, 19, 12, minute))
+  const recent = [{ id: 'bot-2', updatedAt: at(30) }, { id: 'bot-1', updatedAt: at(20) }]
+  const held = [{ id: 'bot-1', updatedAt: at(20) }, { id: 'emma', updatedAt: at(5) }, { id: 'ana', updatedAt: at(25) }]
+  assert.deepEqual(withHeldChats(recent, held).map((chat) => chat.id), ['bot-2', 'ana', 'bot-1', 'emma'])
 })
 
 test('every hand-back keeps the escalation on record', () => {
