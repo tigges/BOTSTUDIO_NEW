@@ -8,7 +8,7 @@ import { attachSlaLabels, onOutboundReply } from '../lib/sla.js'
 import { presentConversation, presentMessages } from '../lib/present-chat.js'
 import { outcomeAfterStatus } from '../lib/chat-outcome.js'
 import { costByConversation } from '../lib/llm-ledger.js'
-import { deliverAgentReply, returnChat } from '../lib/handover.js'
+import { deliverAgentReply, HELD_WHERE, returnChat, withHeldChats } from '../lib/handover.js'
 import { RETURN_OUTCOMES } from '@ybot/shared'
 
 type JWT = { sub: string; tenantId: string; role: string }
@@ -79,26 +79,33 @@ export async function conversationsRoutes(app: FastifyInstance) {
   app.get('/', async (request) => {
     const { tenantId } = request.user as JWT
     const q = request.query as Record<string, string>
-    const conversations = await prisma.conversation.findMany({
-      where: {
-        tenantId,
-        ...(q['botId'] ? { botId: q['botId'] } : {}),
-        ...(q['status'] ? { status: q['status'] } : {}),
-        ...(q['assignedTo'] ? { assignedTo: q['assignedTo'] } : {}),
-        ...(q['channelId'] ? { channelId: q['channelId'] } : {}),
-        ...(q['contactId'] ? { contactId: q['contactId'] } : {}),
-      },
-      include: {
-        contact: true,
-        channel: { select: { id: true, name: true, kind: true } },
-        messages: { orderBy: { createdAt: 'desc' }, take: 1 },
-        labels: { include: { label: true } },
-        _count: { select: { messages: true } },
-      },
+    const where = {
+      tenantId,
+      ...(q['botId'] ? { botId: q['botId'] } : {}),
+      ...(q['status'] ? { status: q['status'] } : {}),
+      ...(q['assignedTo'] ? { assignedTo: q['assignedTo'] } : {}),
+      ...(q['channelId'] ? { channelId: q['channelId'] } : {}),
+      ...(q['contactId'] ? { contactId: q['contactId'] } : {}),
+    }
+    const include = {
+      contact: true,
+      channel: { select: { id: true, name: true, kind: true } },
+      messages: { orderBy: { createdAt: 'desc' as const }, take: 1 },
+      labels: { include: { label: true } },
+      _count: { select: { messages: true } },
+    }
+    const skip = parseInt(q['offset'] ?? '0')
+    const recent = await prisma.conversation.findMany({
+      where,
+      include,
       orderBy: { updatedAt: 'desc' },
       take: parseInt(q['limit'] ?? '50'),
-      skip: parseInt(q['offset'] ?? '0'),
+      skip,
     })
+    const held = q['status'] || skip
+      ? []
+      : await prisma.conversation.findMany({ where: { ...where, ...HELD_WHERE }, include, orderBy: { updatedAt: 'desc' }, take: 200 })
+    const conversations = withHeldChats(recent, held)
     const data = await attachSlaLabels(conversations).catch(() => conversations.map((c) => ({ ...c, sla: null as string | null })))
     const costs = await costByConversation(data.map((c) => c.id)).catch(() => new Map())
     return { data: data.map((conversation) => ({ ...presentConversation(conversation), llm: costs.get(conversation.id) ?? null })) }

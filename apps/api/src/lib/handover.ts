@@ -44,6 +44,21 @@ export function isHeld(chat: { status: string; assignedTo: string | null } | nul
   return chat.status === 'escalated' || (chat.status === 'active' && Boolean(chat.assignedTo))
 }
 
+/** The same rule as `isHeld`, as a Prisma filter. */
+export const HELD_WHERE = {
+  OR: [{ status: 'escalated' }, { status: 'active', assignedTo: { not: null } }],
+}
+
+/**
+ * The Inbox list: the newest chats plus every chat a person holds, newest first.
+ * Without this a held chat drops off the list once enough bot chats arrive after it.
+ */
+export function withHeldChats<T extends { id: string; updatedAt: Date }>(recent: T[], held: T[]): T[] {
+  const seen = new Set(recent.map((chat) => chat.id))
+  return [...recent, ...held.filter((chat) => !seen.has(chat.id))]
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+}
+
 export async function chatIsHeld(conversationId: string): Promise<boolean> {
   const chat = await prisma.conversation.findUnique({
     where: { id: conversationId },
