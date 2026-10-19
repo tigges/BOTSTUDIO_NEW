@@ -26,10 +26,10 @@ async function reply(machine: SessionMachine, previous: { session: Session }, gr
   return machine.run(previous.session, graph, text)
 }
 
-test('a hi after the greeting asks one question', async () => {
+test('a hi after the greeting asks the first question, never the name', async () => {
   const graph = greetingWelcomeGraph({
     greeting: assistantGreeting('BotStudio'),
-    followUp: 'Hi {{contact.name}}. What would you like to know?',
+    followUp: 'What would you like to know?',
     routes: [
       { handle: 'plan', phrases: ['pricing', 'price'], answer: 'The free plan needs no credit card.' },
     ],
@@ -38,18 +38,16 @@ test('a hi after the greeting asks one question', async () => {
   }) as unknown as FlowGraph
   const issues = inspectFlowGraph(graph, { flowNames: [] }).filter((issue) => issue.level === 'block' || issue.level === 'repair')
   assert.deepEqual(issues, [])
+  assert.equal(/What's your name/.test(JSON.stringify(graph)), false)
   const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
 
   const hello = await machine.run(session('hi'), graph, 'hi')
   assert.equal(hello.session.status, 'waiting_input')
   assert.equal(hello.newMessages.map((message) => message.content.text).join('\n'), "Hi, I'm the assistant at BotStudio.")
-  const name = await reply(machine, hello, graph, 'hi')
-  assert.equal(name.newMessages.map((message) => message.content.text).join('\n'), "What's your name?")
-
-  const known = await machine.run(session('hi', 'Ada'), graph, 'hi')
-  assert.equal(known.newMessages.map((message) => message.content.text).join('\n'), 'Hi Ada.')
-  const follow = await reply(machine, known, graph, 'hi')
-  assert.equal(follow.newMessages.map((message) => message.content.text).join('\n'), 'Hi Ada. What would you like to know?')
+  const follow = await reply(machine, hello, graph, 'hi')
+  assert.equal(follow.newMessages.map((message) => message.content.text).join('\n'), 'What would you like to know?')
+  const plan = await reply(machine, follow, graph, 'pricing')
+  assert.match(plan.newMessages.map((message) => message.content.text).join('\n'), /free plan/)
 
   const price = await machine.run(session('What is the pricing?'), graph, 'What is the pricing?')
   assert.match(price.newMessages.map((message) => message.content.text).join('\n'), /Hi, I'm the assistant at BotStudio/)
@@ -60,6 +58,6 @@ test('a hi after the greeting asks one question', async () => {
   const shopGraph = shop.graph as unknown as FlowGraph
   const shopHello = await machine.run(session('hello'), shopGraph, 'hello')
   assert.equal(shopHello.newMessages.map((message) => message.content.text).join('\n'), "Hi, I'm the assistant at Acme Corp.")
-  const shopName = await reply(machine, shopHello, shopGraph, 'hi')
-  assert.equal(shopName.newMessages.map((message) => message.content.text).join('\n'), "What's your name?")
+  const shopNext = await reply(machine, shopHello, shopGraph, 'hi')
+  assert.equal(shopNext.newMessages.map((message) => message.content.text).join('\n'), 'What do you need help with?')
 })

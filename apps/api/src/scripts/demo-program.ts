@@ -50,7 +50,7 @@ function node(id: string, x: number, y: number, kind: string, label: string, con
 function supportWelcomeGraph(companyName: string) {
   return greetingWelcomeGraph({
     greeting: assistantGreeting(companyName),
-    followUp: 'Hi {{contact.name}}. What do you need help with?',
+    followUp: 'What do you need help with?',
     routes: SUPPORT_ROUTES.map((route) => ({ ...route, flowName: route.flowName })),
     menu: 'I can help with orders, returns, and billing. Tell me which one you need.',
     choices: ['Order status', 'Returns', 'Billing'],
@@ -79,7 +79,7 @@ function billingGraph() {
 function productWelcomeGraph() {
   return greetingWelcomeGraph({
     greeting: assistantGreeting('BotStudio'),
-    followUp: 'Hi {{contact.name}}. What would you like to know?',
+    followUp: 'What would you like to know?',
     routes: [
       { handle: 'features', phrases: ['feature', 'benefit'], answer: 'BotStudio answers from your own flows and content. Your team steps in from the inbox when a person should take over.' },
       { handle: 'inbox', phrases: ['inbox', 'dashboard', 'flowchart', 'flow chart'], answer: 'A message on this widget is saved as a chat. In the console, open Inbox to see it, then open the flow that answered. The overview counts the same chats.' },

@@ -11,7 +11,7 @@ test('a stored welcome with no name reads as there', () => {
   assert.equal(presentChatText(stored, '{{contact.name}}').includes('{{'), false)
 })
 
-test('an unknown visitor is greeted, then asked once', () => {
+test('an unknown visitor is not asked for a name the bot does not use', () => {
   const first = planNameTurn({ id: 'c', displayName: 'hi' }, 'hi')
   assert.equal(first.spoken, 'there')
   assert.equal(first.thanks, undefined)
@@ -22,10 +22,8 @@ test('an unknown visitor is greeted, then asked once', () => {
     first.spoken,
     { conversationId: 'chat-1' },
   )
-  assert.deepEqual(asked.lines, ['Hi there! Welcome to Bella Hair Studio.', "What's your name?"])
-  const askedChat = asked.metadata?.['chatName'] as { nameAsked?: boolean; awaitingName?: boolean }
-  assert.equal(askedChat.nameAsked, true)
-  assert.equal(askedChat.awaitingName, true)
+  assert.deepEqual(asked.lines, ['Hi there! Welcome to Bella Hair Studio.'])
+  assert.equal(asked.metadata, undefined)
 
   const again = finishBotLines(
     ['We are open Monday to Saturday.'],
@@ -129,7 +127,8 @@ test('a new chat does not reuse a name remembered from an earlier chat', () => {
     'there',
     { conversationId: 'chat-2' },
   )
-  assert.deepEqual(asked.lines, ['Cuts start from £35.', "What's your name?"])
+  assert.deepEqual(asked.lines, ['Cuts start from £35.'])
+  assert.equal(asked.metadata, undefined)
 })
 
 test('a waiting chart keeps going after the name', () => {

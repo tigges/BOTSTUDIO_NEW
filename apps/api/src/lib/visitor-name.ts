@@ -93,9 +93,8 @@ export function nameThanksEndsTurn(thanks: string | undefined, flowStatus: strin
 }
 
 /**
- * Drop leftover name tokens. Ask once when we still do not know who this is.
- * A flow that is waiting gets to ask on its own next turn, so the name is not
- * glued onto the line the visitor is already reading.
+ * Drop leftover name tokens. The name is asked only by a flow that uses it
+ * (the salon booking); when a line asks, the next reply is kept for this chat.
  */
 export function finishBotLines(
   lines: string[],
@@ -108,20 +107,9 @@ export function finishBotLines(
   const state = chatName(meta, options?.conversationId ?? '')
   const known = spokenFirstName(spoken) ?? spokenFirstName(state.spoken)
   if (known || state.nameAsked || !contact?.id) return { lines: cleaned }
-  if (!cleaned.some((line) => line.trim().length > 0)) return { lines: cleaned }
-  if (cleaned.some((line) => line.includes(NAME_QUESTION))) {
-    return {
-      lines: cleaned,
-      metadata: rememberChat(meta, {
-        conversationId: options?.conversationId ?? '',
-        nameAsked: true,
-        awaitingName: true,
-      }),
-    }
-  }
-  if (options?.waiting) return { lines: cleaned }
+  if (!cleaned.some((line) => line.includes(NAME_QUESTION))) return { lines: cleaned }
   return {
-    lines: [...cleaned, NAME_QUESTION],
+    lines: cleaned,
     metadata: rememberChat(meta, {
       conversationId: options?.conversationId ?? '',
       nameAsked: true,

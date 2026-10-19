@@ -644,7 +644,7 @@ test('a CRM homepage does not turn nav chrome into answers, and reads product pa
   assert.equal(draft.greeting, "Hi, I'm James at Hubspot.")
   assert.equal(/What's your name/.test(draft.greeting), false)
   const welcome = JSON.stringify(draft.flows.find((flow) => /welcome/i.test(flow.name))?.graph ?? {})
-  assert.match(welcome, /What's your name/)
+  assert.equal(/What's your name/.test(welcome), false)
   const spoken = draft.doors.map((door) => door.answer).join('\n')
   assert.equal(/a11y/i.test(spoken), false)
   assert.equal(/data software billing/i.test(spoken), false)

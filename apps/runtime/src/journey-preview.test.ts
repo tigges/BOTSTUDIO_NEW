@@ -594,6 +594,33 @@ test('a phrase miss on the test chat can open a chapter the model names', async 
   assert.match(classified.text, /SIM only/)
 })
 
+test('a website bot greets, then asks what they need, without asking a name it never uses', async () => {
+  const pages = [pageFromHtml('https://www.hubspot.com/', '<html><head><title>HubSpot</title></head><body><p>CRM software for growing teams.</p></body></html>')]
+  const job = (name: string, phrases: string[], answer: string) => ({
+    flowName: name, choice: name, phrases, question: `What about ${name.toLowerCase()}?`, answer, blurb: answer.slice(0, 80),
+  })
+  const spec = learnedSpecFromJobs({
+    pages,
+    companyName: 'hubspot',
+    personaName: 'James',
+    keepBrand: true,
+    topics: [job('View pricing', ['pricing', 'price'], 'HubSpot offers free tools and premium plans from $7 a month.')],
+  })
+  const pack = packFromLearned(spec, 'hubspot', 'James')
+  const chapters = pack.flows.map((flow) => ({ name: flow.name, graph: flow.graph as unknown as FlowGraph }))
+  const turn = (message: string, session?: Parameters<typeof runJourneyPreview>[0]['session']) =>
+    runJourneyPreview({ chapters, startChapter: pack.welcomeName, message, environmentLabel: 'Sandbox', session })
+
+  const open = await turn('')
+  assert.equal(open.text, "Hi, I'm James at hubspot.")
+  const hi = await turn('hi', open.session)
+  assert.equal(hi.text.includes("What's your name"), false)
+  assert.match(hi.text, /^What do you need help with\?/)
+  const pricing = await turn('pricing', hi.session)
+  assert.equal(pricing.chapter, 'View pricing')
+  assert.match(pricing.text, /\$7 a month/)
+})
+
 test('a model-drafted answer offers the other topics, follows one, and closes on no thanks', async () => {
   const pages = [pageFromHtml('https://www.vodafone.co.uk/', '<html><head><title>Vodafone</title></head><body><p>Phones, SIM only and broadband from Vodafone.</p></body></html>')]
   const job = (name: string, phrases: string[], answer: string) => ({

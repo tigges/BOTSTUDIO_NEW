@@ -76,14 +76,10 @@ test('the pack answers ordinary questions from the flow itself', async () => {
   const hello = await machine.run(session('hello'), graph, 'hello')
   assert.equal(hello.jumpToFlow, undefined)
   assert.equal(hello.session.status, 'waiting_input')
-  assert.equal(hello.newMessages.map((message) => message.content.text).join('\n'), 'Hi Ada.')
+  assert.equal(hello.newMessages.map((message) => message.content.text).join('\n'), "Hi, I'm the assistant at Acme Corp.")
   const again = await reply(machine, hello, graph, 'hi')
-  assert.equal(again.newMessages.map((message) => message.content.text).join('\n'), 'Hi Ada. What do you need help with?')
-
-  const stranger = await machine.run(session('hello', 'there'), graph, 'hello')
-  assert.equal(stranger.newMessages.map((message) => message.content.text).join('\n'), "Hi, I'm the assistant at Acme Corp.")
-  const askName = await reply(machine, stranger, graph, 'hi')
-  assert.equal(askName.newMessages.map((message) => message.content.text).join('\n'), "What's your name?")
+  assert.equal(again.newMessages.map((message) => message.content.text).join('\n'), 'What do you need help with?')
+  assert.equal(/What's your name/.test(JSON.stringify(graph)), false)
 
   const chosen = await reply(machine, again, graph, 'Opening hours')
   assert.equal(chosen.jumpToFlow, 'Opening hours')

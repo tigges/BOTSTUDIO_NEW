@@ -544,7 +544,7 @@ export function bakedPack(
       companyName: company,
       personaName: voice,
       greeting,
-      followUp: 'Hi {{contact.name}}. What do you need help with?',
+      followUp: 'What do you need help with?',
       menu: 'I can help with what we do, support, accounts, payments, safety, onboarding, integrations, pricing, status, the API, a demo, or a person on the team.',
       topics,
     })
@@ -558,7 +558,7 @@ export function bakedPack(
       companyName: company,
       personaName: voice,
       greeting,
-      followUp: 'Hi {{contact.name}}. What do you need help with?',
+      followUp: 'What do you need help with?',
       menu: 'I can help with marketing, sales, service, contacts, meetings, tickets, reporting, integrations, plans, billing, login, a demo, or a person on the team.',
       topics,
     })
@@ -572,7 +572,7 @@ export function bakedPack(
       companyName: company,
       personaName: voice,
       greeting,
-      followUp: 'Hi {{contact.name}}. What do you need help with?',
+      followUp: 'What do you need help with?',
       menu: 'I can help with the inbox, compose, search, labels, filters, attachments, security, chat, storage, mobile, privacy, or a person on the team.',
       topics,
     })
