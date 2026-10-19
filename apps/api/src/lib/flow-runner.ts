@@ -20,6 +20,7 @@ import { runFlowTurn } from './flow-turn.js'
 import { finishBotLines, nameThanksEndsTurn, saveContactName, takeNameTurn, type NamePlan, type VisitorName } from './visitor-name.js'
 import { reopenForBot, resolveByBot } from './chat-outcome.js'
 import { toolRunnerFor } from './tools-store.js'
+import { chapterRow as releaseRow, releaseForChat, type LiveRelease } from './releases.js'
 
 const defaultLlm = createLlmAdapter()
 
@@ -523,9 +524,11 @@ async function runVersion(store: JourneyStore, opts: {
   }
 }
 
-/** Live chats: flow_sessions, step_logs and tickets in Postgres. */
+/** Live chats: flow_sessions, step_logs and tickets in Postgres. Production plays its live release. */
 export function postgresJourneyStore(opts: { conversationId: string; botId: string; tenantId: string }): JourneyStore {
   const { conversationId, botId, tenantId } = opts
+  let release: Promise<LiveRelease | null> | undefined
+  const live = () => (release ??= releaseForChat(conversationId).catch(() => null))
   return {
     async chat() {
       const convo = await prisma.conversation.findFirst({
@@ -557,14 +560,41 @@ export function postgresJourneyStore(opts: { conversationId: string; botId: stri
     async clearSession() {
       await prisma.flowSession.delete({ where: { conversationId } }).catch(() => {})
     },
-    entry: () => entryVersion(botId),
-    version: (id) => prisma.flowVersion.findUnique({ where: { id }, include: { flow: true } }),
-    chapter: (name) => prisma.flowVersion.findFirst({
-      where: { flow: { botId, name } },
-      include: { flow: true },
-      orderBy: { version: 'desc' },
-    }),
-    chapters: () => chaptersForBot(botId),
+    async entry() {
+      const snapshot = await live()
+      if (!snapshot) return entryVersion(botId)
+      const entry = snapshot.chapters.find((chapter) => chapter.name === snapshot.entry) ?? snapshot.chapters[0]
+      return entry ? releaseRow(entry) : undefined
+    },
+    async version(id) {
+      const snapshot = await live()
+      if (snapshot) {
+        const chapter = snapshot.chapters.find((item) => item.flowVersionId === id)
+        if (chapter) return releaseRow(chapter)
+        // A chat that started before this release resumes on the same chapter as released now.
+        const saved = await prisma.flowVersion.findUnique({ where: { id }, select: { flowId: true } })
+        const same = saved ? snapshot.chapters.find((item) => item.flowId === saved.flowId) : undefined
+        return same ? releaseRow(same) : null
+      }
+      return prisma.flowVersion.findUnique({ where: { id }, include: { flow: true } })
+    },
+    async chapter(name) {
+      const snapshot = await live()
+      if (snapshot) {
+        const chapter = snapshot.chapters.find((item) => item.name === name)
+        return chapter ? releaseRow(chapter) : null
+      }
+      return prisma.flowVersion.findFirst({
+        where: { flow: { botId, name } },
+        include: { flow: true },
+        orderBy: { version: 'desc' },
+      })
+    },
+    async chapters() {
+      const snapshot = await live()
+      if (!snapshot) return chaptersForBot(botId)
+      return snapshot.chapters.map((chapter) => ({ name: chapter.name, graph: chapter.graph as FlowGraph }))
+    },
     llm: () => botLlm(botId),
     catalog: () => botCatalog(botId, tenantId),
     db: () => prisma,
