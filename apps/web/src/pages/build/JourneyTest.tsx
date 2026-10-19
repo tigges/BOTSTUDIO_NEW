@@ -3,6 +3,7 @@ import { Loader2, RotateCcw, Send, ThumbsDown, ThumbsUp, X } from 'lucide-react'
 import { Avatar, Button, cn } from '@ybot/ui'
 import { runJourneyPreview, type FlowGraph, type JourneyPreviewSnapshot } from '@ybot/runtime'
 import type { StudioCatalog } from '@ybot/shared'
+import { preview } from '../../lib/api'
 import { ChatText } from '../../components/ChatText'
 
 export interface JourneyTestChapter {
@@ -77,6 +78,34 @@ export function JourneyTest({
     onChapter(name)
   }
 
+  async function walk(text: string, session?: JourneyPreviewSnapshot) {
+    try {
+      const result = await preview.journey({
+        chapters: chaptersRef.current,
+        startChapter,
+        message: text,
+        environmentLabel,
+        session,
+        catalog: catalogRef.current,
+      })
+      return {
+        chapter: result.data.chapter,
+        text: result.data.text,
+        session: result.data.session as JourneyPreviewSnapshot | undefined,
+      }
+    } catch {
+      const result = await runJourneyPreview({
+        chapters: chaptersRef.current,
+        startChapter,
+        message: text,
+        environmentLabel,
+        session,
+        catalog: catalogRef.current,
+      })
+      return { chapter: result.chapter, text: result.text, session: result.session }
+    }
+  }
+
   async function turn(text: string, opening: boolean) {
     if ((!text && !opening) || busyRef.current) return
     busyRef.current = true
@@ -86,14 +115,7 @@ export function JourneyTest({
       ? [...prev, { id: assistantId, role: 'assistant', content: '' }]
       : [...prev, { id: `u_${Date.now()}`, role: 'user', content: text }, { id: assistantId, role: 'assistant', content: '' }])
     try {
-      const result = await runJourneyPreview({
-        chapters: chaptersRef.current,
-        startChapter,
-        message: text,
-        environmentLabel,
-        session: sessionRef.current,
-        catalog: catalogRef.current,
-      })
+      const result = await walk(text, sessionRef.current)
       if (result.session) sessionRef.current = result.session
       setChapter(result.chapter || startChapter)
       const reply = result.text || 'I don’t have a next line for that.'
@@ -120,13 +142,7 @@ export function JourneyTest({
       busyRef.current = true
       setLoading(true)
       try {
-        const result = await runJourneyPreview({
-          chapters: chaptersRef.current,
-          startChapter,
-          message: '',
-          environmentLabel,
-          catalog: catalogRef.current,
-        })
+        const result = await walk('', undefined)
         if (cancel) return
         if (result.session) sessionRef.current = result.session
         setChapter(result.chapter || startChapter)

@@ -409,6 +409,18 @@ export const optimizations = {
 export const preview = {
   knowledgeStats: (botId: string) =>
     apiFetch<{ data: { chunkCount: number; sourceCount: number } }>(`/bots/${botId}/preview/knowledge-stats`),
+  journey: (body: {
+    chapters: Array<{ name: string; graph: unknown }>
+    startChapter: string
+    message: string
+    environmentLabel: string
+    session?: unknown
+    catalog?: unknown
+  }) =>
+    apiFetch<{ data: { handled: boolean; text: string; chapter: string; session?: unknown } }>('/preview/journey', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   /** Returns the raw fetch Response so the caller can consume the SSE stream. */
   chatStream: (botId: string, body: {
     message: string

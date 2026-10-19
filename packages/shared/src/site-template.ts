@@ -449,8 +449,24 @@ function isJunkSitePage(page: ScannedPage): boolean {
   return /computershare|shareview|ordinary shares|adr holding|investor relations/i.test(head)
 }
 
-function isJunkAnswer(text: string): boolean {
+export function isStoryCopy(text: string): boolean {
+  const t = text.replace(/\s+/g, ' ')
+  if (/\bnot responsible for the content of external sites\b/i.test(t)) return true
+  if (/\brefer to our privacy notice\b/i.test(t)) return true
+  if (/\bwe use cookies\b/i.test(t)) return true
+  if (/\bfollow live\b.{0,80}\b(?:scores|fixtures|results)\b/i.test(t)) return true
+  if (/\b(?:first|second|third|sixth)-round (?:stoppage|knockout)\b/i.test(t)) return true
+  if (/\b(?:champion|heavyweight)\b.{0,80}\b(?:stoppage|knockout|title fight)\b/i.test(t)) return true
+  if (/\b(?:disorder broke out|violent clashes|buildings ablaze|were arrested overnight)\b/i.test(t)) return true
+  if (/\b(?:protests?|clashes|looting)\b/i.test(t) && /\b(?:overnight|across the country|more than)\b/i.test(t)) return true
+  return false
+}
+
+export function isJunkAnswer(text: string): boolean {
   if (isNavChrome(text)) return true
+  if (isStoryCopy(text)) return true
+  if (/\bswitching to (?:us|them) is easy\b/i.test(text)) return true
+  if (/\bwe(?:'| wi)ll help you at every step\b/i.test(text)) return true
   return /computershare|shareview|ordinary shares|code of conduct|adr holding|equiniti|holders of ordinary|possible findings are subject|mitigation plans/i.test(text)
 }
 
@@ -686,6 +702,7 @@ export function learnedSpecFromJobs(input: {
     if (!name) continue
     const answer = (input.keepBrand ? clipKept(incoming.answer) : clip(incoming.answer)).trim()
     if (answer.length < 24) continue
+    if (isJunkAnswer(answer)) continue
     used.add(name)
     const phrases = [...new Set((incoming.phrases ?? []).map((item) => item.toLowerCase().replace(/\s+/g, ' ').trim()).filter((item) => item.length >= 2))].slice(0, 8)
     topics.push({

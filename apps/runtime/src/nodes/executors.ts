@@ -1,5 +1,5 @@
 import type { NodeContext, NodeResult } from '../types.js'
-import { matchCatalog } from '../catalog-lookup.js'
+import { pickCatalog } from '../catalog-lookup.js'
 import { matchTopic, pickTopic, type TopicRoute } from '../topic-route.js'
 import { evaluateCondition, interpolate } from '../utils.js'
 
@@ -117,8 +117,8 @@ export async function executeLookupCatalog(ctx: NodeContext): Promise<NodeResult
   const pinned = id ? services.catalog?.facts.find((fact) => fact.id === id) : undefined
   const heard = heardText(session)
   const hit = pinned
-    ?? matchCatalog(services.catalog, heard.latest, kind)
-    ?? matchCatalog(services.catalog, heard.withTopic, kind)
+    ?? await pickCatalog(services.catalog, heard.latest, kind, services.llm)
+    ?? await pickCatalog(services.catalog, heard.withTopic, kind, services.llm)
   if (!hit) return { output: { fact: '', catalog_title: '' }, nextNodeId: 'other' }
   return {
     output: { fact: hit.fact, catalog_title: hit.title, catalog_id: hit.id },

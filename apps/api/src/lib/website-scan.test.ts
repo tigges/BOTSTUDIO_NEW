@@ -460,6 +460,54 @@ test('a news homepage does not mint boxing, golf, or article-id rooms', () => {
   assert.equal(draft.greeting, "Hi, I'm Beeb at BBC.")
 })
 
+test('a sport hub of fight copy and a homepage of disclaimers do not become rooms', () => {
+  const home = pageFromHtml(
+    'https://www.bbc.co.uk/',
+    `<html><head><title>BBC - Home</title></head><body>
+      <p>The BBC is not responsible for the content of external sites.</p>
+      <p>Disorder broke out in cities across the country on a day in which more than half a million joined cost of living protests.</p>
+      <p>The BBC is the world's leading public service broadcaster. We inform, educate and entertain.</p>
+    </body></html>`,
+  )
+  const sport = pageFromHtml(
+    'https://www.bbc.co.uk/sport',
+    `<html><head><title>Sport</title></head><body>
+      <p>WBO champion Daniel Dubois underlines his status as Britain's leading heavyweight with a devastating second-round stoppage of Fabio Wardley.</p>
+      <p>Follow live boxing scores, fixtures, results and the latest fight news from around the world.</p>
+    </body></html>`,
+  )
+  const access = pageFromHtml(
+    'https://www.bbc.co.uk/accessibility',
+    `<html><head><title>Accessibility</title></head><body>
+      <p>The BBC is not responsible for the content of external sites.</p>
+    </body></html>`,
+  )
+  const complaints = pageFromHtml(
+    'https://www.bbc.co.uk/contact/complaints',
+    `<html><head><title>Complaints</title></head><body>
+      <p>If you would like to understand how we collect and use personal data, please refer to our privacy notice.</p>
+    </body></html>`,
+  )
+  const contact = pageFromHtml(
+    'https://www.bbc.co.uk/contact',
+    `<html><head><title>Contact Home</title></head><body>
+      <p>Choose from these areas for information or help about our programmes and services.</p>
+    </body></html>`,
+  )
+  const draft = draftWebsiteChat({
+    pages: [home, sport, access, complaints, contact],
+    companyName: 'BBC',
+    personaName: 'Bella',
+  })
+  const spoken = draft.doors.map((door) => `${door.flowName} ${door.title} ${door.answer}`).join('\n')
+  assert.equal(/Daniel Dubois|second-round stoppage|disorder broke out|not responsible for the content of external sites|privacy notice/i.test(spoken), false)
+  assert.equal(draft.doors.some((door) => /^sport$/i.test(door.flowName) || /^sport$/i.test(door.title)), false)
+  assert.equal(draft.doors.some((door) => /^accessibility$/i.test(door.flowName)), false)
+  assert.ok(draft.doors.some((door) => /contact/i.test(door.flowName)))
+  assert.ok(draft.doors.some((door) => /inform, educate and entertain|public service broadcaster/i.test(door.answer)))
+  assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
+})
+
 test('chooseShopHomes follows the English country shop off a group homepage', () => {
   const shops = chooseShopHomes({
     homeUrl: 'https://www.vodafone.com/',
@@ -786,4 +834,31 @@ test('private and local addresses are refused before a request', () => {
     assert.throws(() => normalizeScanUrl(input), (err: unknown) => err instanceof PublicSiteError, input)
   }
   assert.equal(normalizeScanUrl('yuzu.hair').href, 'https://yuzu.hair/')
+})
+
+test('a UK shop homepage of switching copy is not a job, and SIM still answers plans', () => {
+  const home = pageFromHtml(
+    'https://www.vodafone.co.uk/',
+    `<html><head><title>Vodafone on The Nation's Network</title></head><body>
+      <p>Switching to us is easy and we'll help you at every step.</p>
+      <p>Phones, SIM only and broadband on the UK network.</p>
+    </body></html>`,
+  )
+  const sim = pageFromHtml(
+    'https://www.vodafone.co.uk/sim-only/best-sim-only-deals',
+    `<html><head><title>Best SIM Only Deals</title></head><body>
+      <p>Unlimited data and EU roaming just £26 a month on a SIM only plan.</p>
+    </body></html>`,
+  )
+  const draft = draftWebsiteChat({
+    pages: [home, sim],
+    companyName: 'Vodafone',
+    personaName: 'Voda',
+  })
+  const spoken = draft.doors.map((door) => `${door.flowName} ${door.answer}`).join('\n')
+  assert.equal(/switching to us is easy|help you at every step/i.test(spoken), false)
+  const plans = draft.doors.find((door) => /^plans?/i.test(door.flowName) || /^plans?/i.test(door.title))
+  assert.ok(plans)
+  assert.match(plans!.answer, /£26 a month/)
+  assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
 })
