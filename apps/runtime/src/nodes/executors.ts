@@ -1,7 +1,7 @@
 import type { NodeContext, NodeResult } from '../types.js'
 import { pickCatalog } from '../catalog-lookup.js'
-import { matchTopic, pickTopic, type TopicRoute } from '../topic-route.js'
-import { handoverFromConfig } from '@ybot/shared'
+import { pickRoute } from '../topic-route.js'
+import { aiStepContract, handoverFromConfig, parseAiTurn, routerRoutes, stepMode, type AiStepContract } from '@ybot/shared'
 import { evaluateCondition, interpolate } from '../utils.js'
 
 // ── trigger_start ────────────────────────────────────────────────────────────
@@ -25,6 +25,12 @@ export async function executeSendMessage(ctx: NodeContext): Promise<NodeResult> 
 
 // ── ask_question ─────────────────────────────────────────────────────────────
 export async function executeAskQuestion(ctx: NodeContext): Promise<NodeResult> {
+  const ai = aiContract(ctx)
+  if (ai) return executeAiStep(ctx, ai)
+  return askVerbatim(ctx)
+}
+
+function askVerbatim(ctx: NodeContext): NodeResult {
   const { config, session } = ctx
   const question = interpolate(String(config['question'] ?? ''), {
     ...session.variables.flow,
@@ -94,14 +100,9 @@ function heardText(session: NodeContext['session']): { latest: string; withTopic
 
 export async function executeRouteTopic(ctx: NodeContext): Promise<NodeResult> {
   const { config, session, services } = ctx
-  const routes = (config['routes'] as TopicRoute[] | undefined) ?? []
-  const heard = heardText(session)
-  const fromLatest = matchTopic(heard.latest, routes)
-  if (fromLatest !== 'other') return { output: { route: fromLatest }, nextNodeId: fromLatest }
-  const fromTopic = matchTopic(heard.withTopic, routes)
-  if (fromTopic !== 'other') return { output: { route: fromTopic }, nextNodeId: fromTopic }
-  const handle = await pickTopic(heard.latest || heard.withTopic, routes, services.llm)
-  return { output: { route: handle }, nextNodeId: handle }
+  const vars = { ...session.variables.flow, ...session.variables.global, contact: session.variables.contact }
+  const { handle, decidedBy } = await pickRoute(heardText(session), routerRoutes(config), vars, services.llm)
+  return { output: { route: handle, _route_by: decidedBy }, nextNodeId: handle }
 }
 
 // ── execute_flow ──────────────────────────────────────────────────────────────
@@ -208,8 +209,102 @@ export async function executeSearchKnowledge(ctx: NodeContext): Promise<NodeResu
   }
 }
 
+// ── AI steps ──────────────────────────────────────────────────────────────────
+interface AiState {
+  turns: number
+  history: Array<{ role: 'user' | 'assistant'; content: string }>
+}
+
+const AI_STATE = '_ai'
+const AI_HISTORY = 20
+
+/** The goal, exit condition and turn limit, when this step runs as an AI step. Steps saved before the contract run as they always did. */
+function aiContract(ctx: NodeContext): AiStepContract | undefined {
+  if (stepMode(ctx.nodeKind, ctx.config) !== 'ai') return undefined
+  const { contract, missing } = aiStepContract(ctx.config)
+  return missing.length ? undefined : contract
+}
+
+function aiPrompt(contract: AiStepContract, turnsLeft: number, extra: { question?: string; variable?: string; instructions?: string }): string {
+  return [
+    'You lead one step of a chat for a business. Stay on this step.',
+    `Goal: ${contract.goal}`,
+    `The step is finished when: ${contract.exitWhen}`,
+    extra.variable ? `When it is finished, put the guest's answer in "value". It is saved as ${extra.variable}.` : '',
+    extra.question ? `If you still need the answer, this is the question to ask: ${extra.question}` : '',
+    extra.instructions ? `Instructions: ${extra.instructions}` : '',
+    'Ask one question at a time. Keep replies short and warm. Do not invent facts, prices or times. Do not offer promotions unless the guest asks.',
+    `You have ${turnsLeft} ${turnsLeft === 1 ? 'reply' : 'replies'} left on this step.`,
+    'Answer only with JSON: {"reply": "<what you say to the guest>", "done": <true once the step is finished>, "value": "<the answer, once finished>"}',
+  ].filter(Boolean).join('\n')
+}
+
+/**
+ * One turn of an AI step. The model talks toward the goal; the step waits for the guest
+ * until the model says the exit condition is met or the turn limit is reached.
+ * Done follows the step's line. The limit follows a "max_turns" line when there is one.
+ */
+export async function executeAiStep(ctx: NodeContext, contract: AiStepContract): Promise<NodeResult> {
+  const { config, session, services, nodeId, nodeKind } = ctx
+  const vars = { ...session.variables.flow, ...session.variables.global, contact: session.variables.contact }
+  const saved = (session.variables.flow[AI_STATE] as Record<string, AiState> | undefined) ?? {}
+  const state = saved[nodeId] ?? { turns: 0, history: [] }
+  const rest = { ...saved }
+  delete rest[nodeId]
+  const asks = nodeKind === 'ask_question'
+  const variable = asks ? String(config['variable'] ?? 'answer') : undefined
+  const question = asks ? interpolate(String(config['question'] ?? ''), vars) : undefined
+  const instructions = asks ? undefined : interpolate(String(config['prompt'] ?? config['systemPrompt'] ?? ''), vars).trim() || undefined
+
+  const heard = (ctx.reply ?? (state.turns === 0 ? String(session.variables.flow['_last_user_message'] ?? '') : '')).trim()
+  const history = heard ? [...state.history, { role: 'user' as const, content: heard }] : state.history
+  const turns = state.turns + 1
+
+  let content: string
+  try {
+    const result = await services.llm.complete({
+      systemPrompt: aiPrompt(contract, contract.maxTurns - state.turns, { question, variable, instructions }),
+      messages: history.length ? history : [{ role: 'user', content: '(The guest has not written yet.)' }],
+      temperature: 0.3,
+      maxTokens: 400,
+    })
+    content = result.content
+  } catch {
+    if (asks && state.turns === 0) return { ...askVerbatim(ctx), output: { [AI_STATE]: rest } }
+    const text = "I'm having trouble right now. Let me get a human agent."
+    return { output: { [AI_STATE]: rest, _ai_exit: 'error' }, newMessages: [{ direction: 'outbound', content: { text } }], nextNodeId: 'max_turns' }
+  }
+
+  const turn = parseAiTurn(content)
+  const reply = turn.reply || (turn.done ? '' : question || 'Could you tell me a little more?')
+  const say = (text: string) => (text ? [{ direction: 'outbound' as const, content: { text } }] : [])
+
+  if (turn.done) {
+    const output: Record<string, unknown> = { [AI_STATE]: rest, _ai_exit: 'done' }
+    if (variable && turn.value) output[variable] = turn.value
+    if (!asks) output['generated'] = reply
+    return { output, newMessages: say(reply), nextNodeId: 'out' }
+  }
+  if (turns >= contract.maxTurns) {
+    const closing = reply.trim().endsWith('?') ? '' : reply
+    return {
+      output: { [AI_STATE]: rest, _ai_exit: 'max_turns', ...(asks ? {} : { generated: closing }) },
+      newMessages: say(closing),
+      nextNodeId: 'max_turns',
+    }
+  }
+  const next: AiState = { turns, history: [...history, { role: 'assistant' as const, content: reply }].slice(-AI_HISTORY) }
+  return {
+    output: { [AI_STATE]: { ...rest, [nodeId]: next } },
+    newMessages: say(reply),
+    waitForInput: { variable: '_ai_reply', type: 'ai', question: reply },
+  }
+}
+
 // ── llm_generate ──────────────────────────────────────────────────────────────
 export async function executeLlmGenerate(ctx: NodeContext): Promise<NodeResult> {
+  const ai = aiContract(ctx)
+  if (ai) return executeAiStep(ctx, ai)
   const { config, session, services, streamChunk } = ctx
   const systemPrompt = String(config['systemPrompt'] ?? 'You are a helpful assistant.')
   const prompt = interpolate(String(config['prompt'] ?? '{{flow.last_user_message}}'), {

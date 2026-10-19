@@ -1,3 +1,5 @@
+import { FALLBACK_ROUTE, guardPasses, type RouterRoute } from '@ybot/shared'
+
 export interface TopicRoute {
   handle: string
   phrases: string[]
@@ -177,7 +179,7 @@ export function matchTopic(text: string, routes: TopicRoute[]): string {
 
 const CLASSIFY_MS = 6_000
 
-type ClassifyFn = (text: string, params: { categories: string[] }) => Promise<{ category: string }>
+type ClassifyFn = (text: string, params: { categories: string[]; descriptions?: Record<string, string> }) => Promise<{ category: string }>
 
 function classifyFn(llm: unknown): ClassifyFn | null {
   if (!llm || typeof llm !== 'object') return null
@@ -189,7 +191,12 @@ function classifyFn(llm: unknown): ClassifyFn | null {
  * Phrase match first. On a miss, ask the model to pick one of THIS node's handles.
  * Empty llm (tests, canvas walk) stays on "other".
  */
-export async function pickTopic(text: string, routes: TopicRoute[], llm?: unknown): Promise<string> {
+export async function pickTopic(
+  text: string,
+  routes: TopicRoute[],
+  llm?: unknown,
+  descriptions?: Record<string, string>,
+): Promise<string> {
   const phrase = matchTopic(text, routes)
   if (phrase !== 'other') return phrase
   const classify = classifyFn(llm)
@@ -197,7 +204,7 @@ export async function pickTopic(text: string, routes: TopicRoute[], llm?: unknow
   if (!classify || handles.length === 0 || !text.trim()) return 'other'
   try {
     const result = await Promise.race([
-      classify(text, { categories: [...handles, 'other'] }),
+      classify(text, { categories: [...handles, 'other'], ...(descriptions ? { descriptions } : {}) }),
       new Promise<{ category: string }>((resolve) => {
         setTimeout(() => resolve({ category: 'other' }), CLASSIFY_MS)
       }),
@@ -206,4 +213,39 @@ export async function pickTopic(text: string, routes: TopicRoute[], llm?: unknow
   } catch {
     return 'other'
   }
+}
+
+export type RouteDecidedBy = 'rule' | 'words' | 'model' | 'fallback'
+
+/** A route decided by its rule alone: it has a guard and nothing for words or the model. */
+function ruleOnly(route: RouterRoute): boolean {
+  return Boolean(route.guard) && route.phrases.length === 0 && !route.intent
+}
+
+/**
+ * The Router, in the author's order. Rules decide first: a rule-only route whose rule passes,
+ * then the words of every route whose rule passes. The model picks only when no rule did,
+ * reading each open route's intent. Anything left goes to the fallback.
+ */
+export async function pickRoute(
+  heard: { latest: string; withTopic: string },
+  routes: RouterRoute[],
+  vars: Record<string, unknown>,
+  llm?: unknown,
+): Promise<{ handle: string; decidedBy: RouteDecidedBy }> {
+  const open = routes.filter((route) => guardPasses(route.guard, vars))
+  const byRule = open.find(ruleOnly)
+  if (byRule) return { handle: byRule.handle, decidedBy: 'rule' }
+
+  const spoken = open.filter((route) => !ruleOnly(route))
+  for (const text of [heard.latest, heard.withTopic]) {
+    const handle = matchTopic(text, spoken)
+    if (handle !== FALLBACK_ROUTE) return { handle, decidedBy: 'words' }
+  }
+
+  const descriptions = Object.fromEntries(
+    spoken.filter((route) => route.intent || route.label !== route.handle).map((route) => [route.handle, route.intent || route.label]),
+  )
+  const handle = await pickTopic(heard.latest || heard.withTopic, spoken, llm, Object.keys(descriptions).length ? descriptions : undefined)
+  return handle === FALLBACK_ROUTE ? { handle, decidedBy: 'fallback' } : { handle, decidedBy: 'model' }
 }
