@@ -73,14 +73,7 @@ done
 info "Applying database schema ..."
 docker compose ${COMPOSE_FILES} --env-file "${ENV_FILE}" \
   run --rm api \
-  sh -c '
-    cd /app
-    SCHEMA="packages/db/prisma/schema.prisma"
-    # Try migration-based deploy first (works when migrations/ folder exists),
-    # fall back to db push for initial / migration-less setup.
-    node_modules/.bin/prisma migrate deploy --schema "$SCHEMA" 2>/dev/null \
-      || node_modules/.bin/prisma db push --schema "$SCHEMA"
-  '
+  sh -c 'cd /app && sh ./migrate.sh'
 
 # ── (Optional) seed demo data on first run ──────────────────────────────────
 if $FIRST_RUN; then

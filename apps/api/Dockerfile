@@ -56,7 +56,8 @@ COPY --from=builder /app/packages/db/dist      packages/db/dist/
 COPY --from=builder /app/apps/runtime/dist     apps/runtime/dist/
 COPY --from=builder /app/apps/api/dist         apps/api/dist/
 COPY apps/api/docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x docker-entrypoint.sh
+COPY apps/api/migrate.sh ./migrate.sh
+RUN chmod +x docker-entrypoint.sh migrate.sh
 
 EXPOSE 3001
 CMD ["sh", "docker-entrypoint.sh"]
