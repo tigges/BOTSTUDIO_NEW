@@ -16,6 +16,7 @@ import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
 import { newestByFlow, pickWorkingCopy } from './entry-flow.js'
 import { runFlowTurn } from './flow-turn.js'
 import { finishBotLines, nameThanksEndsTurn, saveContactName, takeNameTurn } from './visitor-name.js'
+import { keepWithBot, liveAgentsFor, reopenForBot, resolveByBot } from './chat-outcome.js'
 
 const defaultLlm = createLlmAdapter()
 
@@ -92,6 +93,7 @@ export async function runFlowIfPublished(opts: {
   })
   const envId = convo?.environmentId
   if (!envId) return { handled: false, messages: [] }
+  await reopenForBot(conversationId)
   const environmentLabel = convo?.environment?.kind === 'production' ? 'Production' : 'Sandbox'
 
   let fsRecord = await prisma.flowSession.findUnique({ where: { conversationId } })
@@ -343,8 +345,13 @@ export async function runFlowIfPublished(opts: {
     },
   })
 
+  if (outcome.handover && !(await liveAgentsFor(botId))) {
+    outcome = { ...outcome, handover: undefined, messages: keepWithBot(outcome.messages) }
+  }
   if (outcome.handover) {
     await prisma.conversation.update({ where: { id: conversationId }, data: { status: 'escalated' } }).catch(() => {})
+  } else if (outcome.session.status === 'completed') {
+    await resolveByBot(conversationId)
   }
   if (outcome.ticket) {
     await prisma.ticket.create({
