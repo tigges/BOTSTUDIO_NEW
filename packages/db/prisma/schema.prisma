@@ -34,6 +34,7 @@ model Tenant {
   dataTables         DataTable[]
   integrations       IntegrationConnection[]
   startTemplates     StartTemplate[]
+  authProfiles       AuthProfile[]
 
   @@map("tenants")
 }
@@ -165,6 +166,7 @@ model Bot {
   conversationTemplates ConversationTemplate[]
   templateOptimizations TemplateOptimization[]
   automationRules AutomationRule[]
+  tools        Tool[]
 
   @@map("bots")
 }
@@ -890,4 +892,77 @@ model FlowSession {
 
   @@index([tenantId])
   @@map("flow_sessions")
+}
+
+/// Credentials for tools. The secret is stored encrypted and never returned by the API.
+model AuthProfile {
+  id         String   @id @default(cuid())
+  tenantId   String
+  name       String
+  /** api_key | bearer | basic | custom_header */
+  kind       String
+  /** Non-secret settings: header name, query parameter name, username. */
+  settings   Json     @default("{}")
+  secretEnc  String?
+  secretHint String?
+  createdBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tools  Tool[]
+
+  @@unique([tenantId, name])
+  @@map("auth_profiles")
+}
+
+/// One registry for every tool the bot or a person in the Inbox can run.
+model Tool {
+  id            String   @id @default(cuid())
+  tenantId      String
+  botId         String
+  name          String
+  /** http | function | mcp | knowledge | workflow */
+  kind          String
+  description   String
+  parameters    Json     @default("[]")
+  returns       Json     @default("{}")
+  /** read | write | side_effect */
+  effect        String   @default("read")
+  config        Json     @default("{}")
+  authProfileId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  bot         Bot          @relation(fields: [botId], references: [id], onDelete: Cascade)
+  authProfile AuthProfile? @relation(fields: [authProfileId], references: [id], onDelete: SetNull)
+  runs        ToolRun[]
+
+  @@unique([botId, name])
+  @@index([tenantId])
+  @@map("tools")
+}
+
+model ToolRun {
+  id             String   @id @default(cuid())
+  tenantId       String
+  toolId         String
+  conversationId String?
+  /** bot | inbox | test */
+  source         String
+  actorId        String?
+  ok             Boolean
+  status         Int?
+  durationMs     Int      @default(0)
+  attempts       Int      @default(1)
+  input          Json     @default("{}")
+  output         Json?
+  error          String?
+  createdAt      DateTime @default(now())
+
+  tool Tool @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@index([toolId, createdAt])
+  @@index([conversationId])
+  @@map("tool_runs")
 }

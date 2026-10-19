@@ -1,6 +1,6 @@
 export { SessionMachine } from './engine.js'
 export type { FlowGraph, GraphNode, GraphEdge } from './engine.js'
-export type { Session, SessionVariables, NodeContext, NodeResult, ExecutionServices, RuntimeDb } from './types.js'
+export type { Session, SessionVariables, NodeContext, NodeResult, ExecutionServices, RuntimeDb, ToolCallResult } from './types.js'
 export { interpolate, evaluateCondition } from './utils.js'
 export { copyJumpVariables, missingChapterLine } from './handoff.js'
 export { matchCatalog, pickCatalog } from './catalog-lookup.js'

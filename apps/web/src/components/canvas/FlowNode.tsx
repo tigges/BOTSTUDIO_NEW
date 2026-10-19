@@ -4,7 +4,7 @@ import { cn } from '@ybot/ui'
 import {
   Play, MessageSquare, HelpCircle, GitBranch, Variable,
   Globe, Workflow, Headphones, CheckCircle, Clock, Mail,
-  Sparkles, Search, Layout, Layers, Zap, FileText,
+  Sparkles, Search, Layout, Layers, Zap, FileText, Wrench,
 } from 'lucide-react'
 import { routerRoutes, stepMode, type JourneyMark, type NodeKind } from '@ybot/shared'
 
@@ -35,6 +35,7 @@ const ICON_MAP: Record<NodeKind, React.ElementType> = {
   create_ticket: FileText,
   route_topic: GitBranch,
   lookup_catalog: Search,
+  run_tool: Wrench,
 }
 
 const COLOR_MAP: Record<NodeKind, string> = {
@@ -64,6 +65,7 @@ const COLOR_MAP: Record<NodeKind, string> = {
   create_ticket: '#3b82f6',
   route_topic: '#f59e0b',
   lookup_catalog: '#06b6d4',
+  run_tool: '#0ea5e9',
 }
 
 function previewValue(value: unknown): string {
@@ -94,10 +96,10 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
   const hasTarget = !['start', 'trigger_start'].includes(nodeData.kind)
   const routePorts = nodeData.kind === 'route_topic' ? routePortIds(nodeData.config) : []
   const hasSingleSource =
-    !['condition', 'http_request', 'knowledge_search', 'search_knowledge', 'lookup_catalog', 'start', 'trigger_start', 'route_topic'].includes(nodeData.kind) &&
+    !['condition', 'http_request', 'run_tool', 'knowledge_search', 'search_knowledge', 'lookup_catalog', 'start', 'trigger_start', 'route_topic'].includes(nodeData.kind) &&
     !['resolve', 'end_flow'].includes(nodeData.kind)
   const hasConditionSources = nodeData.kind === 'condition'
-  const hasHttpSources = nodeData.kind === 'http_request'
+  const hasHttpSources = nodeData.kind === 'http_request' || nodeData.kind === 'run_tool'
   const hasKBSources = ['knowledge_search', 'search_knowledge'].includes(nodeData.kind)
   const hasLookupSources = nodeData.kind === 'lookup_catalog'
   const hasStartSource = ['start', 'trigger_start'].includes(nodeData.kind)
@@ -151,6 +153,10 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
         {nodeData.kind === 'route_topic' ? (
           <p className="text-[11px]" style={{ color: 'var(--text-secondary, #cbd5e1)' }}>
             {routeCount} {routeCount === 1 ? 'route' : 'routes'} + fallback
+          </p>
+        ) : nodeData.kind === 'run_tool' ? (
+          <p className="text-[11px] truncate max-w-[160px]" style={{ color: 'var(--text-secondary, #cbd5e1)' }}>
+            {String(nodeData.config?.['toolName'] || '') || 'Choose a tool'}
           </p>
         ) : nodeData.config && Object.keys(nodeData.config).length > 0 ? (
           <div className="space-y-[3px]">

@@ -9,6 +9,7 @@ import {
 import type { Node } from '@xyflow/react'
 import type { FlowNodeData } from './FlowNode'
 import { RouterEditor } from './RouterEditor'
+import { RunToolEditor } from './RunToolEditor'
 
 interface NodeConfigPanelProps {
   node: Node | null
@@ -308,9 +309,13 @@ export function NodeConfigPanel({ node, issues = [], onUpdate, onDelete, onClose
           <RouterEditor config={data.config} onChange={(routes) => onUpdate(node.id, { config: { ...(data.config ?? {}), routes } })} />
         )}
 
+        {data.kind === 'run_tool' && (
+          <RunToolEditor config={data.config} onChange={(config) => onUpdate(node.id, { config })} />
+        )}
+
         {mode === 'ai' && AI_FIELDS.map(renderField)}
 
-        {fields.length === 0 && data.kind !== 'route_topic' ? (
+        {fields.length === 0 && data.kind !== 'route_topic' && data.kind !== 'run_tool' ? (
           <p className="text-xs text-[var(--text-muted)] italic">No configuration for this node.</p>
         ) : (
           fields.map(renderField)

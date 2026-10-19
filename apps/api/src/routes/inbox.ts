@@ -9,7 +9,8 @@ import { presentConversation, presentMessages } from '../lib/present-chat.js'
 import { outcomeAfterStatus } from '../lib/chat-outcome.js'
 import { costByConversation } from '../lib/llm-ledger.js'
 import { deliverAgentReply, HELD_WHERE, returnChat, withHeldChats } from '../lib/handover.js'
-import { RETURN_OUTCOMES } from '@ybot/shared'
+import { RETURN_OUTCOMES, toolChangesData } from '@ybot/shared'
+import { findTool, presentTool, runAndRecord } from '../lib/tools-store.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -181,6 +182,48 @@ export async function conversationsRoutes(app: FastifyInstance) {
     if (!exists) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
     const messages = await prisma.message.findMany({ where: { conversationId: id, tenantId }, orderBy: { createdAt: 'asc' } })
     return { data: presentMessages(messages, exists.contact?.displayName) }
+  })
+
+  // GET /conversations/:id/tools — the bot's tools, for a person in the Inbox
+  app.get('/:id/tools', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { id } = request.params as { id: string }
+    const convo = await prisma.conversation.findFirst({ where: { id, tenantId }, select: { botId: true } })
+    if (!convo) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Conversation not found.' } })
+    const tools = await prisma.tool.findMany({
+      where: { tenantId, botId: convo.botId },
+      include: { authProfile: { select: { id: true, name: true } } },
+      orderBy: { name: 'asc' },
+    })
+    return { data: tools.map((tool) => { const shown = presentTool(tool); return { id: shown.id, name: shown.name, kind: shown.kind, description: shown.description, parameters: shown.parameters, effect: shown.effect } }) }
+  })
+
+  // POST /conversations/:id/tools/:toolId/run — same registry and runner the bot uses
+  app.post('/:id/tools/:toolId/run', async (request, reply) => {
+    const { tenantId, sub: userId } = request.user as JWT
+    const { id, toolId } = request.params as { id: string; toolId: string }
+    const body = z.object({ args: z.record(z.unknown()).default({}), confirmed: z.boolean().default(false) }).safeParse(request.body ?? {})
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Arguments must be a JSON object.' } })
+    const convo = await prisma.conversation.findFirst({ where: { id, tenantId }, select: { botId: true } })
+    if (!convo) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Conversation not found.' } })
+    const tool = await findTool(tenantId, convo.botId, toolId)
+    if (!tool) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'This tool is no longer in the Tools list.' } })
+    if (toolChangesData(tool.effect) && !body.data.confirmed) {
+      return reply.status(409).send({ error: { code: 'CONFIRM', message: `${tool.name} changes data. Confirm to run it.` } })
+    }
+    const result = await runAndRecord(tool, body.data.args, { source: 'inbox', conversationId: id, actorId: userId })
+    const summary = result.ok ? `Ran ${tool.name} (${result.durationMs} ms).` : `${tool.name} failed: ${result.error ?? 'unknown error'}`
+    const note = await prisma.message.create({
+      data: {
+        tenantId,
+        conversationId: id,
+        direction: 'outbound',
+        authorId: userId,
+        authorKind: 'agent',
+        content: { text: summary, internal: true, tool: { id: tool.id, name: tool.name, runId: result.runId, ok: result.ok, args: body.data.args, output: result.output ?? null, error: result.error ?? null } } as object,
+      },
+    })
+    return { data: { ...result, noteId: note.id } }
   })
 
   // POST /conversations/:id/messages  (agent reply or inbound user message)

@@ -11,13 +11,15 @@
 
 import { prisma } from '@ybot/db'
 import { handoverSummary, type HandoverContract, type StudioCatalog } from '@ybot/shared'
-import type { FlowGraph } from '@ybot/runtime'
+import type { FlowGraph, ToolCallResult } from '@ybot/runtime'
 import { handoverRulesFor, type HandoverRules } from './handover.js'
 import { botCatalog, botLlm, runJourney, type JourneyLlm, type JourneyStore, type SavedSession, type VersionRow } from './flow-runner.js'
 import { withLlmScope } from './llm-ledger.js'
 import { answerFromKnowledge, runTurnWith, type AnswerRequest, type TurnPorts, type TurnResult } from './turn-pipeline.js'
 import { planNameTurn, type VisitorName } from './visitor-name.js'
 import type { ChatOutcome } from './chat-outcome.js'
+import { findTool } from './tools-store.js'
+import { runTool } from './tool-runner.js'
 
 export const TEST_CHAT_ID = 'test-chat'
 const TEST_GUEST_ID = 'test-guest'
@@ -64,6 +66,16 @@ export interface TestTurn {
   ended: boolean
   chapter: string
   state: TestChatState
+  /** Tools the journey ran this turn. Tools that change data are skipped, not run. */
+  tools: TestToolCall[]
+}
+
+export interface TestToolCall {
+  toolId: string
+  name: string
+  ok: boolean
+  skipped: boolean
+  error?: string
 }
 
 /** Swappable for tests. Defaults are what live chats use. */
@@ -74,6 +86,14 @@ export interface TestChatDeps {
   catalog: (botId: string, tenantId: string) => Promise<StudioCatalog | undefined>
   db: unknown
   now: () => Date
+  runTool: (tenantId: string, botId: string, toolId: string, args: Record<string, unknown>) => Promise<ToolCallResult & { name: string }>
+}
+
+async function runTestTool(tenantId: string, botId: string, toolId: string, args: Record<string, unknown>): Promise<ToolCallResult & { name: string }> {
+  const tool = await findTool(tenantId, botId, toolId)
+  if (!tool) return { name: 'unknown tool', ok: false, output: null, error: 'This tool is no longer in the Tools list.' }
+  const result = await runTool(tool, args, { source: 'test_chat' })
+  return { name: tool.name, ok: result.ok, output: result.output, error: result.error, skipped: result.skipped }
 }
 
 const liveDeps: TestChatDeps = {
@@ -83,6 +103,14 @@ const liveDeps: TestChatDeps = {
   catalog: botCatalog,
   db: prisma,
   now: () => new Date(),
+  runTool: runTestTool,
+}
+
+const calls = new WeakMap<TestChatDeps, TestToolCall[]>()
+function toolLog(deps: TestChatDeps): TestToolCall[] {
+  let log = calls.get(deps)
+  if (!log) { log = []; calls.set(deps, log) }
+  return log
 }
 
 export function newTestState(): TestChatState {
@@ -184,6 +212,11 @@ export function testJourneyStore(input: TestTurnInput, state: TestChatState, dep
       state.subject = subject
     },
     async logStep() {},
+    async runTool(toolId, args) {
+      const result = await deps.runTool(input.tenantId, input.botId, toolId, args)
+      toolLog(deps).push({ toolId, name: result.name, ok: result.ok, skipped: result.skipped === true, ...(result.error ? { error: result.error } : {}) })
+      return result
+    },
     async createTicket(ticket) {
       state.ticket = ticket
     },
@@ -241,6 +274,8 @@ function chapterOf(state: TestChatState, fallback: string): string {
 /** One test turn. The state comes back with the reply; send it with the next message. */
 export async function runTestTurn(input: TestTurnInput, overrides: Partial<TestChatDeps> = {}): Promise<TestTurn> {
   const deps = { ...liveDeps, ...overrides }
+  const tools: TestToolCall[] = []
+  calls.set(deps, tools)
   const state: TestChatState = structuredClone(input.state ?? newTestState())
   const ports = testPorts(input, state, deps)
   const message = input.message.trim()
@@ -259,5 +294,6 @@ export async function runTestTurn(input: TestTurnInput, overrides: Partial<TestC
     ended: result.ended,
     chapter: chapterOf(state, input.startChapter),
     state,
+    tools,
   }
 }

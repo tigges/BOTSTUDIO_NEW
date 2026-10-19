@@ -87,6 +87,9 @@ services:
       DATABASE_URL:   postgresql://${POSTGRES_USER:-ybot}:${POSTGRES_PASSWORD:-ybotSecret123}@postgres:5432/${POSTGRES_DB:-ybot}
       REDIS_URL:      redis://:${REDIS_PASSWORD:-valkey123}@valkey:6379
       JWT_SECRET:     ${JWT_SECRET:-change-me-in-production}
+      # Seals Auth Profile secrets. Changing it means re-entering every secret.
+      SECRETS_KEY:    ${SECRETS_KEY:-}
+      TOOLS_ALLOW_PRIVATE_NETWORK: ${TOOLS_ALLOW_PRIVATE_NETWORK:-false}
       FRONTEND_URL:   ${FRONTEND_URL:-http://localhost}
       # LLM (provide at least one). Tried in order: Gemini, Claude, OpenAI, Groq, then Ollama.
       # LLM_PROVIDER (gemini | claude | ollama | openai | groq) moves one to the front.

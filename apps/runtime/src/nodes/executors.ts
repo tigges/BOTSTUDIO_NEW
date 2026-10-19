@@ -2,7 +2,7 @@ import type { NodeContext, NodeResult } from '../types.js'
 import { pickCatalog } from '../catalog-lookup.js'
 import { pickRoute } from '../topic-route.js'
 import { aiStepContract, handoverFromConfig, parseAiTurn, routerRoutes, stepMode, type AiStepContract } from '@ybot/shared'
-import { evaluateCondition, interpolate } from '../utils.js'
+import { evaluateCondition, interpolate, lookup } from '../utils.js'
 
 // ── trigger_start ────────────────────────────────────────────────────────────
 export async function executeTriggerStart(_ctx: NodeContext): Promise<NodeResult> {
@@ -86,6 +86,36 @@ export async function executeHttpRequest(ctx: NodeContext): Promise<NodeResult> 
     return { output: { status: res.status, data, ok: res.ok }, nextNodeId: res.ok ? 'success' : 'error' }
   } catch (err) {
     return { output: { status: 0, ok: false }, error: String(err), nextNodeId: 'error' }
+  }
+}
+
+// ── run_tool ──────────────────────────────────────────────────────────────────
+/** A value that is exactly one {{variable}} keeps its type; anything else is filled as text. */
+function toolArg(template: string, vars: Record<string, unknown>): unknown {
+  const single = /^\s*\{\{\s*([^}]+?)\s*\}\}\s*$/.exec(template)
+  if (single) return lookup(vars, single[1]!) ?? ''
+  return interpolate(template, vars).replace(/\{\{[^}]+\}\}/g, '')
+}
+
+export async function executeRunTool(ctx: NodeContext): Promise<NodeResult> {
+  const { config, session, services } = ctx
+  const toolId = String(config['toolId'] ?? '').trim()
+  const saveAs = String(config['saveAs'] ?? '').trim() || 'tool_result'
+  const vars = { ...session.variables.flow, ...session.variables.global, contact: session.variables.contact }
+  const templates = (config['args'] && typeof config['args'] === 'object' ? config['args'] : {}) as Record<string, unknown>
+  const args: Record<string, unknown> = {}
+  for (const [name, template] of Object.entries(templates)) {
+    const value = toolArg(String(template ?? ''), vars)
+    if (value !== '' && value !== undefined && value !== null) args[name] = value
+  }
+  if (!toolId || !services.runTool) {
+    return { output: { [saveAs]: null, tool_ok: false, tool_error: toolId ? 'Tools cannot run here.' : 'No tool chosen.' }, nextNodeId: 'error' }
+  }
+  const result = await services.runTool(toolId, args)
+  return {
+    output: { [saveAs]: result.output ?? null, tool_ok: result.ok, tool_error: result.error ?? '', tool_skipped: result.skipped === true },
+    nextNodeId: result.ok ? 'success' : 'error',
+    ...(result.ok ? {} : { error: result.error }),
   }
 }
 

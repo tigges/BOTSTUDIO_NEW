@@ -11,8 +11,8 @@ import { Send, Loader2, Sparkles, Database, X, RotateCcw, ChevronDown, ChevronUp
 import { Button, Avatar } from '@ybot/ui'
 import { cn } from '@ybot/ui'
 import { ChatText } from './ChatText'
-import { preview, type TestChatPath, type TestChatState } from '../lib/api'
-import { testChatNote } from '../lib/test-chat-format'
+import { preview, type TestChatPath, type TestChatState, type TestToolCall } from '../lib/api'
+import { joinNotes, testChatNote, testToolNote } from '../lib/test-chat-format'
 import { useAppStore } from '../store/app'
 
 const isDemoMode = () => import.meta.env.VITE_DEMO_MODE === 'true'
@@ -180,10 +180,10 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, onClose, classNa
           if (line.startsWith('event: ')) continue
           if (!line.startsWith('data: ')) continue
           try {
-            const data = JSON.parse(line.slice(6)) as { text?: string; fullText?: string; ragChunks?: number; message?: string; state?: TestChatState; path?: TestChatPath }
+            const data = JSON.parse(line.slice(6)) as { text?: string; fullText?: string; ragChunks?: number; message?: string; state?: TestChatState; path?: TestChatPath; tools?: TestToolCall[] }
             if (data.state && data.path) {
               stateRef.current = data.state
-              note = testChatNote(before, data.state, data.path)
+              note = joinNotes(testToolNote(data.tools), testChatNote(before, data.state, data.path))
             }
             if (data.text !== undefined) {
               fullText += data.text

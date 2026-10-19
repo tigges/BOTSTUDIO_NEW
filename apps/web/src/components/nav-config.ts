@@ -19,6 +19,7 @@ import {
   Repeat2,
   Server,
   Sparkles,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -52,6 +53,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: 'journey', label: 'Journey', icon: Route, path: '/build/journey' },
       { id: 'flows', label: 'Flows', icon: Workflow, path: '/build/flows' },
       { id: 'workflows', label: 'Workflows', icon: Repeat2, path: '/build/workflows' },
+      { id: 'tools', label: 'Tools', icon: Wrench, path: '/build/tools' },
       {
         id: 'knowledge',
         label: 'Knowledge',

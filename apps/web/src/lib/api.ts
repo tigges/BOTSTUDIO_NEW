@@ -1,4 +1,4 @@
-import type { HandoverContract, ReturnOutcome } from '@ybot/shared'
+import type { AuthProfileKind, HandoverContract, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns } from '@ybot/shared'
 import { messageForStatus } from './api-error'
 
 const BASE = import.meta.env.VITE_API_URL ?? '/api/v1'
@@ -471,12 +471,21 @@ export interface TestChatState {
 
 export type TestChatPath = 'journey' | 'name' | 'answer' | 'none' | 'held' | 'handover'
 
+export interface TestToolCall {
+  toolId: string
+  name: string
+  ok: boolean
+  skipped: boolean
+  error?: string
+}
+
 export interface TestChatTurn {
   text: string
   path: TestChatPath
   ended: boolean
   chapter: string
   state: TestChatState
+  tools?: TestToolCall[]
 }
 
 /** Build the WebSocket URL for the tenant real-time channel. */
@@ -505,6 +514,126 @@ export const workflows = {
     apiFetch<{ data: { status: string } }>(`/bots/${botId}/workflows/${id}/toggle`, { method: 'POST' }),
   delete: (botId: string, id: string) =>
     apiFetch<void>(`/bots/${botId}/workflows/${id}`, { method: 'DELETE' }),
+}
+
+// ── Tools and Auth Profiles ─────────────────────────────────────────────────
+export interface ToolSummary {
+  id: string
+  botId: string
+  name: string
+  kind: ToolKind
+  description: string
+  parameters: ToolParameter[]
+  schema: Record<string, unknown>
+  returns: ToolReturns
+  effect: ToolEffect
+  config: Record<string, unknown>
+  authProfileId: string | null
+  authProfileName: string | null
+  createdAt: string
+  updatedAt: string
+  lastRun?: { ok: boolean; at: string; durationMs: number } | null
+}
+
+export interface ToolInput {
+  name: string
+  kind: ToolKind
+  description: string
+  parameters: ToolParameter[]
+  returns: ToolReturns
+  effect: ToolEffect
+  config: Record<string, unknown>
+  authProfileId: string | null
+}
+
+export interface ToolRunResult {
+  ok: boolean
+  output: unknown
+  error?: string
+  status?: number
+  durationMs: number
+  attempts: number
+  skipped?: boolean
+  runId: string
+}
+
+export interface ToolRunRow {
+  id: string
+  source: string
+  ok: boolean
+  status: number | null
+  durationMs: number
+  attempts: number
+  input: Record<string, unknown>
+  output: unknown
+  error: string | null
+  createdAt: string
+}
+
+export interface McpRemoteTool {
+  name: string
+  description: string
+  inputSchema: Record<string, unknown>
+  parameters: ToolParameter[]
+}
+
+export interface AuthProfileSummary {
+  id: string
+  name: string
+  kind: AuthProfileKind
+  settings: { headerName?: string; queryParam?: string; username?: string; prefix?: string }
+  hasSecret: boolean
+  secretHint: string | null
+  toolCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AuthProfileInput {
+  name: string
+  kind: AuthProfileKind
+  settings: { headerName?: string; queryParam?: string; username?: string; prefix?: string }
+  secret?: string
+}
+
+export interface InboxTool {
+  id: string
+  name: string
+  kind: ToolKind
+  description: string
+  parameters: ToolParameter[]
+  effect: ToolEffect
+}
+
+export const tools = {
+  list: (botId: string) => apiFetch<{ data: ToolSummary[] }>(`/bots/${botId}/tools`),
+  create: (botId: string, body: ToolInput) =>
+    apiFetch<{ data: ToolSummary }>(`/bots/${botId}/tools`, { method: 'POST', body: JSON.stringify(body) }),
+  update: (botId: string, id: string, body: Partial<ToolInput>) =>
+    apiFetch<{ data: ToolSummary }>(`/bots/${botId}/tools/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (botId: string, id: string) => apiFetch<void>(`/bots/${botId}/tools/${id}`, { method: 'DELETE' }),
+  test: (botId: string, id: string, args: Record<string, unknown>) =>
+    apiFetch<{ data: ToolRunResult }>(`/bots/${botId}/tools/${id}/test`, { method: 'POST', body: JSON.stringify({ args }) }),
+  runs: (botId: string, id: string) => apiFetch<{ data: ToolRunRow[] }>(`/bots/${botId}/tools/${id}/runs`),
+  mcpDiscover: (botId: string, body: { serverUrl: string; authProfileId?: string | null }) =>
+    apiFetch<{ data: { fetchedAt: string; tools: McpRemoteTool[] } }>(`/bots/${botId}/tools/mcp/discover`, { method: 'POST', body: JSON.stringify(body) }),
+  mcpImport: (botId: string, body: { serverUrl: string; authProfileId?: string | null; toolNames: string[]; effect: ToolEffect }) =>
+    apiFetch<{ data: { created: ToolSummary[]; skipped: string[] } }>(`/bots/${botId}/tools/mcp/import`, { method: 'POST', body: JSON.stringify(body) }),
+  refresh: (botId: string, id: string) => apiFetch<{ data: ToolSummary }>(`/bots/${botId}/tools/${id}/refresh`, { method: 'POST' }),
+}
+
+export const authProfiles = {
+  list: () => apiFetch<{ data: AuthProfileSummary[] }>('/auth-profiles'),
+  create: (body: AuthProfileInput) => apiFetch<{ data: AuthProfileSummary }>('/auth-profiles', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: string, body: Partial<AuthProfileInput>) =>
+    apiFetch<{ data: AuthProfileSummary }>(`/auth-profiles/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (id: string) => apiFetch<void>(`/auth-profiles/${id}`, { method: 'DELETE' }),
+}
+
+export const inboxTools = {
+  list: (conversationId: string) => apiFetch<{ data: InboxTool[] }>(`/conversations/${conversationId}/tools`),
+  run: (conversationId: string, toolId: string, args: Record<string, unknown>, confirmed = false) =>
+    apiFetch<{ data: ToolRunResult & { noteId: string } }>(`/conversations/${conversationId}/tools/${toolId}/run`, { method: 'POST', body: JSON.stringify({ args, confirmed }) }),
 }
 
 export const dashboards = {
@@ -547,7 +676,8 @@ export interface LlmConfig { model: string; temperature: number; maxTokens: numb
 export interface Conversation { id: string; status: string; assignedTo?: string; contact?: Contact; channel?: { id: string; name: string; kind: string }; messages: Message[]; labels: Array<{ label: Label }>; updatedAt: string; sla?: string | null; outcome?: string | null; llm?: ConversationLlmCost | null; handover?: Partial<HandoverContract> | null }
 /** Model calls made for one chat. costUsd is null when a model had no known price. */
 export interface ConversationLlmCost { costUsd: number | null; calls: number }
-export interface Message { id: string; direction: string; authorKind: string; content: { text: string; internal?: boolean }; createdAt: string }
+export interface ToolNote { id: string; name: string; runId?: string; ok: boolean; args?: Record<string, unknown>; output?: unknown; error?: string | null }
+export interface Message { id: string; direction: string; authorKind: string; content: { text: string; internal?: boolean; tool?: ToolNote }; createdAt: string }
 export interface Ticket { id: string; subject: string; description?: string | null; status: string; priority: string; assignedTo?: string; tags: string[]; createdAt: string; conversation?: { contact?: Contact } }
 export interface Contact { id: string; displayName?: string; email?: string; phone?: string; metadata: Record<string, unknown>; createdAt: string }
 export interface Campaign { id: string; name: string; channel: string; status: string; direction: string; subject?: string; body?: string; scheduledAt?: string; sentAt?: string; sent?: number; delivered?: number }

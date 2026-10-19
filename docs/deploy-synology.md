@@ -106,6 +106,8 @@ Copy `.env.aviori` to `.env.production` and fill in these required values:
 | Variable | Required | Description |
 |---|---|---|
 | `JWT_SECRET` | **yes** | 64-char random string — `openssl rand -hex 32` |
+| `SECRETS_KEY` | recommended | Seals Auth Profile secrets — `openssl rand -hex 32`. Without it a key is derived from `JWT_SECRET`. Changing either later means re-entering every Auth Profile secret. |
+| `TOOLS_ALLOW_PRIVATE_NETWORK` | no | `true` lets HTTP and MCP tools call addresses on your own network. Off by default. |
 | `POSTGRES_PASSWORD` | **yes** | Strong password for Postgres |
 | `REDIS_PASSWORD` | **yes** | Strong password for Valkey |
 | `MINIO_ROOT_PASSWORD` | **yes** | Strong password for MinIO |

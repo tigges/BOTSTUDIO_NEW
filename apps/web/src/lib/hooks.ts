@@ -965,6 +965,126 @@ export function useDeleteWorkflow() {
   })
 }
 
+// ── Tools and Auth Profiles ─────────────────────────────────────────────────
+
+export function useTools() {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['tools', bid],
+    queryFn: () => api.tools.list(bid).then((r) => r.data),
+    enabled: !!bid && bid !== 'demo',
+  })
+}
+
+export function useSaveTool() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: ({ id, body }: { id?: string; body: api.ToolInput }) =>
+      (id ? api.tools.update(bid, id, body) : api.tools.create(bid, body)).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tools', bid] }),
+  })
+}
+
+export function useDeleteTool() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.tools.delete(bid, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tools', bid] }),
+  })
+}
+
+export function useTestTool() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: ({ id, args }: { id: string; args: Record<string, unknown> }) => api.tools.test(bid, id, args).then((r) => r.data),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['tool-runs', bid, vars.id] })
+      qc.invalidateQueries({ queryKey: ['tools', bid] })
+    },
+  })
+}
+
+export function useToolRuns(id: string | undefined) {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['tool-runs', bid, id],
+    queryFn: () => api.tools.runs(bid, id!).then((r) => r.data),
+    enabled: !!bid && bid !== 'demo' && !!id,
+  })
+}
+
+export function useRefreshTool() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.tools.refresh(bid, id).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tools', bid] }),
+  })
+}
+
+export function useMcpDiscover() {
+  const bid = botId()
+  return useMutation({
+    mutationFn: (body: { serverUrl: string; authProfileId?: string | null }) => api.tools.mcpDiscover(bid, body).then((r) => r.data),
+  })
+}
+
+export function useMcpImport() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (body: { serverUrl: string; authProfileId?: string | null; toolNames: string[]; effect: api.ToolInput['effect'] }) =>
+      api.tools.mcpImport(bid, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tools', bid] }),
+  })
+}
+
+export function useAuthProfiles() {
+  return useQuery({
+    queryKey: ['auth-profiles'],
+    queryFn: () => api.authProfiles.list().then((r) => r.data),
+  })
+}
+
+export function useSaveAuthProfile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id?: string; body: api.AuthProfileInput }) =>
+      (id ? api.authProfiles.update(id, body) : api.authProfiles.create(body)).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['auth-profiles'] }),
+  })
+}
+
+export function useDeleteAuthProfile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.authProfiles.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['auth-profiles'] }),
+  })
+}
+
+export function useInboxTools(conversationId: string | undefined) {
+  return useQuery({
+    queryKey: ['inbox-tools', conversationId],
+    queryFn: () => api.inboxTools.list(conversationId!).then((r) => r.data),
+    enabled: !!conversationId,
+  })
+}
+
+export function useRunInboxTool() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ conversationId, toolId, args, confirmed }: { conversationId: string; toolId: string; args: Record<string, unknown>; confirmed: boolean }) =>
+      api.inboxTools.run(conversationId, toolId, args, confirmed).then((r) => r.data),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['conversation', v.conversationId] })
+    },
+  })
+}
+
 // ── Dashboards ────────────────────────────────────────────────────────────────
 
 export function useDashboards() {

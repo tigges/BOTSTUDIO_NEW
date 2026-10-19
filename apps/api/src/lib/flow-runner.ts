@@ -11,7 +11,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { SessionMachine, acceptedHoursOffer, hoursChapterName, copyJumpVariables, missingChapterLine, hearChapter, offerOnMap, isSmallTalk, isTopicSwitch, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn } from '@ybot/runtime'
-import type { Session, SessionVariables, FlowGraph } from '@ybot/runtime'
+import type { Session, SessionVariables, FlowGraph, ToolCallResult } from '@ybot/runtime'
 import { prisma } from '@ybot/db'
 import { CATALOG_ENTITY, catalogFromValues, type HandoverRequest, type StudioCatalog } from '@ybot/shared'
 import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
@@ -19,6 +19,7 @@ import { newestByFlow, pickWorkingCopy } from './entry-flow.js'
 import { runFlowTurn } from './flow-turn.js'
 import { finishBotLines, nameThanksEndsTurn, saveContactName, takeNameTurn, type NamePlan, type VisitorName } from './visitor-name.js'
 import { reopenForBot, resolveByBot } from './chat-outcome.js'
+import { toolRunnerFor } from './tools-store.js'
 
 const defaultLlm = createLlmAdapter()
 
@@ -98,6 +99,8 @@ export interface JourneyStore {
   setSubject(subject: string): Promise<void>
   logStep(row: StepLogWrite): Promise<void>
   createTicket(ticket: { subject: string; description: string }): Promise<void>
+  /** Runs a tool from the bot's Tools list for a Run tool step. */
+  runTool?(toolId: string, args: Record<string, unknown>): Promise<ToolCallResult>
 }
 
 function startNodeId(graph: FlowGraph): string | undefined {
@@ -170,7 +173,14 @@ export async function runJourney(store: JourneyStore, opts: {
 
   const llmAdapter = await store.llm()
   const catalog = await store.catalog()
-  const machine = new SessionMachine({ llm: llmAdapter, db: store.db() as never, httpFetch: fetch, catalog, now: store.now })
+  const machine = new SessionMachine({
+    llm: llmAdapter,
+    db: store.db() as never,
+    httpFetch: fetch,
+    catalog,
+    now: store.now,
+    ...(store.runTool ? { runTool: (toolId: string, args: Record<string, unknown>) => store.runTool!(toolId, args) } : {}),
+  })
   const loadChapters = () => store.chapters()
   const previousAsked = savedQuestion(fsRecord?.waitingFor)
 
@@ -527,6 +537,7 @@ export function postgresJourneyStore(opts: { conversationId: string; botId: stri
     },
     nameTurn: (userText) => takeNameTurn(conversationId, userText),
     saveContactName,
+    runTool: (toolId, args) => toolRunnerFor(tenantId, botId, { source: 'bot', conversationId })(toolId, args),
     loadSession: () => prisma.flowSession.findUnique({ where: { conversationId } }),
     async saveSession(session) {
       const row = {

@@ -276,3 +276,26 @@ export async function triggerRules(trigger: string, ctx: RuleContext): Promise<v
     console.warn('[automation] triggerRules error:', err)
   }
 }
+
+export interface WorkflowRunResult {
+  ran: boolean
+  actions: string[]
+  failed: string[]
+}
+
+/** Runs one workflow's actions now, skipping its trigger. Used by Workflow tools. */
+export async function runWorkflowNow(ruleId: string, ctx: RuleContext): Promise<WorkflowRunResult> {
+  const rule = await prisma.automationRule.findFirst({ where: { id: ruleId, tenantId: ctx.tenantId, botId: ctx.botId } })
+  if (!rule) throw new Error('This workflow no longer exists. Choose another workflow on the tool.')
+  if (rule.status === 'paused') return { ran: false, actions: [], failed: [] }
+  const actions = (rule.actions as unknown as string[]) ?? []
+  const failed: string[] = []
+  for (const action of actions) {
+    await executeAction(action, ctx, rule.id, rule.name).catch(() => { failed.push(action) })
+  }
+  await prisma.automationRule.update({
+    where: { id: rule.id },
+    data: { runCount: { increment: 1 }, lastRunAt: new Date() },
+  }).catch(() => {})
+  return { ran: true, actions, failed }
+}

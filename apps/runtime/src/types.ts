@@ -65,4 +65,13 @@ export interface ExecutionServices {
   httpFetch: typeof fetch
   catalog?: import('@ybot/shared').StudioCatalog
   now?: () => Date
+  /** Runs a tool from the bot's Tools list. Absent where tools cannot run. */
+  runTool?: (toolId: string, args: Record<string, unknown>) => Promise<ToolCallResult>
+}
+
+export interface ToolCallResult {
+  ok: boolean
+  output: unknown
+  error?: string
+  skipped?: boolean
 }
