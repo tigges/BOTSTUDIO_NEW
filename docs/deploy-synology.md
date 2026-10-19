@@ -148,14 +148,24 @@ cd /volume1/docker/ybot/src
 
 ### Automatic updates via GitHub Actions
 
-The workflow in `.github/workflows/docker.yml` builds and pushes new images on every push to `main`. To enable automatic deployment to AVIORI, add these repository secrets in GitHub:
+The workflow in `.github/workflows/docker.yml` builds and pushes new images on every push to `main`. Watchtower on AVIORI checks GHCR every 5 minutes and deploys `:latest`.
 
-| Secret | Value |
-|---|---|
-| `AVIORI_HOST` | IP or hostname of the NAS |
-| `AVIORI_USER` | SSH user (usually `admin`) |
-| `AVIORI_KEY` | Contents of your SSH private key |
-| `AVIORI_PATH` | Path to compose files, e.g. `/volume1/docker/ybot/src` |
+To deploy as soon as the images are pushed, turn on Watchtower's update endpoint. CI calls it through Caddy at `https://app.botstudio.uk/deploy/watchtower`:
+
+1. Pick a long random token, e.g. `openssl rand -hex 32`.
+2. On AVIORI, add to `.env.production`:
+   ```bash
+   WATCHTOWER_HTTP_API_UPDATE=true
+   WATCHTOWER_HTTP_API_TOKEN=<token>
+   ```
+3. Copy the updated `Caddyfile` and `docker-compose.synology.yml` from `main`, then restart both:
+   ```bash
+   sudo docker compose -f docker-compose.yml -f docker-compose.synology.yml \
+     --env-file .env.production up -d watchtower caddy
+   ```
+4. In GitHub, add the repository secret `WATCHTOWER_HTTP_API_TOKEN` with the same token. To call a different URL, set the repository variable `WATCHTOWER_DEPLOY_URL`.
+
+Set both values in step 2 together: Watchtower exits at start if the update endpoint is on and the token is empty. Polling stays on, so a failed call only delays the deploy by up to 5 minutes.
 
 ---
 

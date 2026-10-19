@@ -106,5 +106,12 @@ services:
       WATCHTOWER_SCOPE: "ybot"               # only watch containers with scope=ybot label
       WATCHTOWER_NOTIFICATION_URL: ${DEPLOY_WEBHOOK_URL:-}
       WATCHTOWER_NOTIFICATIONS: "shoutrrr"
+      # Deploy as soon as CI pushes, instead of on the next 5-minute poll.
+      # Off until both are set in .env.production: Watchtower exits at start
+      # when the update API is on and the token is empty. Polling continues
+      # either way, so a missed call only delays the deploy.
+      WATCHTOWER_HTTP_API_UPDATE: ${WATCHTOWER_HTTP_API_UPDATE:-false}
+      WATCHTOWER_HTTP_API_TOKEN: ${WATCHTOWER_HTTP_API_TOKEN:-}
+      WATCHTOWER_HTTP_API_PERIODIC_POLLS: "true"
       TZ: ${TZ:-UTC}
     networks: [ybot-net]
