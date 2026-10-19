@@ -11,6 +11,7 @@ import {
   draftSiteSpecWithModel,
   draftWebsiteChatWithModel,
   jobsFromModelPages,
+  pageTextsWithoutChrome,
 } from './site-jobs.js'
 
 const YUZU = `<!doctype html>
@@ -74,6 +75,22 @@ const vodafoneLinks = [
   { href: 'https://www.vodafone.co.uk/contact', text: 'Contact' },
   { href: 'https://www.vodafone.co.uk/our-impact', text: 'Our impact' },
 ]
+
+test('a menu repeated on every page does not crowd out what each page says', () => {
+  const menu = 'Skip to main content Phones and devices Pay monthly phones Pay as you go phones Refurbished phones iPads and Tablets Smartwatches Laptops Accessories Upgrade Trade in Check coverage'
+  const page = (url: string, body: string) => pageFromHtml(url, `<html><head><title>Vodafone</title></head><body><p>${menu}</p><p>${body}</p></body></html>`)
+  const texts = pageTextsWithoutChrome([
+    page('https://www.vodafone.co.uk/', 'The UK network with 5G in more places than any other.'),
+    page('https://www.vodafone.co.uk/sim-only', 'Unlimited data and EU roaming just £26 a month on a SIM only plan.'),
+    page('https://www.vodafone.co.uk/broadband', 'Full fibre broadband from £24 a month with no upfront fees.'),
+  ])
+  assert.match(texts[0]!, /^The UK network with 5G/)
+  assert.match(texts[0]!, /Smartwatches/)
+  assert.match(texts[1]!, /£26 a month/)
+  assert.match(texts[2]!, /£24 a month/)
+  assert.equal(/Smartwatches|Check coverage/.test(`${texts[1]} ${texts[2]}`), false)
+  assert.deepEqual(pageTextsWithoutChrome([page('https://www.vodafone.co.uk/', 'Only page.')]), [`Vodafone ${menu} Only page.`])
+})
 
 test('an answer is grounded only when the pages stated it', () => {
   const blob = 'unlimited data and eu roaming just £26 a month on a sim only plan.'
