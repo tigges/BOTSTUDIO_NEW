@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { z } from 'zod'
+import { DEFAULT_MODELS, currentModelId } from '@ybot/llm'
 import { enqueueKnowledgeSync } from '../queues.js'
 import { extractTextFromBuffer } from '../lib/extract-text.js'
 import { rereadWebsitePages } from '../lib/reread-website.js'
@@ -210,7 +211,7 @@ export async function knowledgeRoutes(app: FastifyInstance) {
     const cfg = await prisma.botConfig.findUnique({ where: { botId } })
     return {
       data: {
-        model: cfg?.model ?? 'claude-sonnet-4-5',
+        model: currentModelId(cfg?.model ?? DEFAULT_MODELS.anthropic),
         temperature: cfg?.temperature ?? 0.3,
         maxTokens: cfg?.maxTokens ?? 2048,
         systemPrompt: cfg?.systemPrompt ?? `You are a helpful support assistant for ${bot.name}. Be concise, friendly, and professional.`,
@@ -298,7 +299,7 @@ export async function knowledgeRoutes(app: FastifyInstance) {
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION' } })
     const cfg = await prisma.botConfig.upsert({
       where: { botId },
-      create: { tenantId, botId, model: 'claude-sonnet-4-5', temperature: 0.3, maxTokens: 2048, systemPrompt: 'You are a helpful assistant.', inboxConfig: body.data },
+      create: { tenantId, botId, model: DEFAULT_MODELS.anthropic, temperature: 0.3, maxTokens: 2048, systemPrompt: 'You are a helpful assistant.', inboxConfig: body.data },
       update: { inboxConfig: body.data },
     })
     return { data: cfg.inboxConfig }
