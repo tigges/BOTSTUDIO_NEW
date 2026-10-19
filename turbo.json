@@ -10,6 +10,9 @@
       "dependsOn": ["generate"],
       "outputs": ["dist/**"]
     },
+    "@ybot/db#typecheck": {
+      "dependsOn": ["generate"]
+    },
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"],
