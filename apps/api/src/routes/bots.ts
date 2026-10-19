@@ -19,7 +19,7 @@ import { installCorporatePack, installHairStudioPack, installSitePack, removeSta
 import { installDraftWelcome, installStarterFlows } from '../lib/install-starter-flows.js'
 import { installWebsiteScan } from '../lib/install-website-scan.js'
 import { PublicSiteError, readPublicSite } from '../lib/public-site.js'
-import { draftSiteSpecWithModel, draftWebsiteChatWithModel } from '../lib/site-jobs.js'
+import { draftSiteSpecWithModel, draftWebsiteChatWithModel, type ImportReport } from '../lib/site-jobs.js'
 import { ensureOptionalChannels, ensureWebChannels } from '../lib/web-channels.js'
 
 
@@ -47,10 +47,12 @@ export async function botsRoutes(app: FastifyInstance) {
     const body = request.body as { url?: string; personaName?: string; companyName?: string }
     try {
       const pages = await readPublicSite(body.url ?? '')
+      let drafted: ImportReport | undefined
       const draft = await draftWebsiteChatWithModel({
         pages,
         companyName: body.companyName ?? '',
         personaName: body.personaName,
+        report: (report) => { drafted = report },
       })
       return {
         data: {
@@ -60,6 +62,7 @@ export async function botsRoutes(app: FastifyInstance) {
           doors: draft.doors.map(({ title, flowName, blurb, found }) => ({ title, flowName, blurb, found })),
           facts: draft.facts,
           note: draft.note,
+          drafted,
           catalog: draft.catalog,
           chapters: draft.flows.map((flow) => ({ name: flow.name, graph: flow.graph })),
         },

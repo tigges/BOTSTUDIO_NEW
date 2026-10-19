@@ -232,6 +232,9 @@ export function BotNewPage() {
         </div>
       )}
       {scan?.note && path === 'website' && <p className="mt-3 text-[11px] text-[var(--text-muted)]">{scan.note}</p>}
+      {scan?.drafted?.by === 'pages' && path === 'website' && (
+        <p className="mt-1 text-[11px] text-[var(--text-muted)]">Drafted without the AI model. {scan.drafted.why}</p>
+      )}
       {((path === 'website' && scan?.chapters && scan.chapters.length > 0) || walkChapters.length > 0) && (
         <Button type="button" size="sm" variant="secondary" className="mt-3" onClick={() => setTrying(true)}>
           Try this walk

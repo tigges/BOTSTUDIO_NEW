@@ -43,6 +43,29 @@ const SYSTEM = [
   'Return JSON only: { "jobs": [{ "name": "", "phrases": [""], "answer": "" }] }',
 ].join(' ')
 
+/** How the map was drafted, in words the builder can act on. */
+export interface ImportReport {
+  by: 'model' | 'pages'
+  why: string
+}
+
+export function importProviderName(env: Record<string, string | undefined> = process.env): string | null {
+  if (env['GEMINI_API_KEY']) return 'Gemini'
+  if (env['GROQ_API_KEY']) return 'Groq'
+  if (env['OPENAI_API_KEY']) return 'OpenAI'
+  if (env['ANTHROPIC_API_KEY']) return 'Anthropic'
+  return null
+}
+
+function failureWords(err: unknown): string {
+  const message = String((err as Error)?.message ?? err)
+  if (/timed out/i.test(message)) return `took longer than ${IMPORT_TIMEOUT_MS / 1000} seconds`
+  const status = message.match(/\b([45]\d\d)\b/)?.[1]
+  if (status === '429') return 'is rate limited (HTTP 429)'
+  if (status === '401' || status === '403') return `rejected the key (HTTP ${status})`
+  return status ? `did not answer (HTTP ${status})` : 'did not answer'
+}
+
 export function cloudLlmComplete(timeoutMs = IMPORT_TIMEOUT_MS): CompleteFn | null {
   const env = process.env
   const adapter = env['GEMINI_API_KEY']
@@ -170,10 +193,13 @@ function asTopic(row: { name?: string; phrases?: unknown; answer?: string }): Si
 export async function jobsFromModelPages(
   pages: ScannedPage[],
   complete: CompleteFn,
+  onMiss?: (why: string) => void,
 ): Promise<SiteTopic[] | null> {
+  const model = importProviderName() ?? 'The AI model'
   const usable = pages.filter((page) => !isMissingPage(page) && page.text.trim().length > 40)
   if (usable.length === 0) {
     warnImport(pages, 'no readable pages for the model')
+    onMiss?.('No page had enough text for the AI model to read.')
     return null
   }
   const user = `Pages:\n${pagesPrompt(usable)}\n\nJSON:`
@@ -182,6 +208,7 @@ export async function jobsFromModelPages(
     raw = await complete({ system: SYSTEM, user })
   } catch (err) {
     warnImport(pages, `the model call failed (${String((err as Error)?.message ?? err).slice(0, 200)})`)
+    onMiss?.(`${model} ${failureWords(err)}.`)
     return null
   }
   const blob = pageBlob(usable)
@@ -210,6 +237,9 @@ export async function jobsFromModelPages(
   warnImport(pages, rows.length === 0
     ? `the model reply held no jobs (${raw.length} chars)`
     : `the model listed ${rows.length} jobs; ${junk} were empty or junk and ${ungrounded} were not stated on the pages`)
+  onMiss?.(rows.length === 0
+    ? `${model} replied without any topics.`
+    : `${model} listed ${rows.length} topics, but none matched what the pages state.`)
   return null
 }
 
@@ -332,21 +362,27 @@ export async function draftWebsiteChatWithModel(input: {
   companyName: string
   personaName?: string | null
   complete?: CompleteFn | null
+  report?: (report: ImportReport) => void
 }): Promise<WebsiteChatDraft> {
-  const fallback = () => draftWebsiteChat({
-    pages: input.pages,
-    companyName: input.companyName,
-    personaName: input.personaName,
-  })
+  const fallback = (why: string) => {
+    input.report?.({ by: 'pages', why })
+    return draftWebsiteChat({
+      pages: input.pages,
+      companyName: input.companyName,
+      personaName: input.personaName,
+    })
+  }
   const cluster = suggestCluster(`${input.pages.map((page) => `${page.text} ${page.url}`).join('\n')}`)
-  if (cluster === 'hair') return fallback()
+  if (cluster === 'hair') return fallback('Hair studios get the authored salon map.')
   const complete = input.complete === undefined ? importLlmComplete() : input.complete
   if (!complete) {
     if (input.complete === undefined) warnImport(input.pages, 'no Gemini, Groq, OpenAI or Anthropic key is set')
-    return fallback()
+    return fallback('No AI model key is set on the server. Add GEMINI_API_KEY or GROQ_API_KEY to the API.')
   }
-  const jobs = await jobsFromModelPages(input.pages, complete)
-  if (!jobs) return fallback()
+  let miss = 'The AI model gave no usable topics.'
+  const jobs = await jobsFromModelPages(input.pages, complete, (why) => { miss = why })
+  if (!jobs) return fallback(miss)
+  input.report?.({ by: 'model', why: `${importProviderName() ?? 'The AI model'} drafted ${jobs.length} ${jobs.length === 1 ? 'topic' : 'topics'} from the pages.` })
   const spec = learnedSpecFromJobs({
     pages: input.pages,
     companyName: input.companyName,

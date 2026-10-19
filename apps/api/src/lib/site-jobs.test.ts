@@ -195,6 +195,37 @@ test('a thrown complete() uses the regex map', async () => {
   assert.deepEqual(draft.doors.map((door) => door.flowName), regex.doors.map((door) => door.flowName))
 })
 
+test('the draft says whether the model drafted it, and why not', async () => {
+  const { pages } = simPages()
+  const reasons: Array<{ by: string; why: string }> = []
+  const draft = (complete: (() => Promise<string>) | null) => draftWebsiteChatWithModel({
+    pages,
+    companyName: 'Vodafone',
+    personaName: 'Voda',
+    complete,
+    report: (report) => reasons.push(report),
+  })
+  await draft(async () => JSON.stringify({ jobs: [{ name: 'Plans', phrases: ['plans'], answer: 'Unlimited data and EU roaming just £26 a month on a SIM only plan.' }] }))
+  await draft(async () => { throw new Error('Groq error 429: {"error":{"message":"Rate limit reached"}}') })
+  await draft(async () => { throw new Error('import model timed out') })
+  await draft(async () => 'Sorry, I cannot help with that.')
+  await draft(async () => JSON.stringify({ jobs: [{ name: 'Pricing', phrases: ['pricing'], answer: 'Starter Professional and Enterprise seats include a sandbox at £81 a seat.' }] }))
+  const yuzu = await draftWebsiteChatWithModel({
+    pages: [pageFromHtml('https://yuzu.hair/', YUZU)],
+    companyName: 'Yuzu',
+    complete: async () => '{}',
+    report: (report) => reasons.push(report),
+  })
+  assert.equal(yuzu.clusterId, 'hair')
+  assert.deepEqual(reasons.map((reason) => reason.by), ['model', 'pages', 'pages', 'pages', 'pages', 'pages'])
+  assert.match(reasons[0]!.why, /drafted 1 topic from/)
+  assert.match(reasons[1]!.why, /rate limited \(HTTP 429\)/)
+  assert.match(reasons[2]!.why, /longer than 20 seconds/)
+  assert.match(reasons[3]!.why, /without any topics/)
+  assert.match(reasons[4]!.why, /none matched what the pages state/)
+  assert.match(reasons[5]!.why, /salon map/)
+})
+
 test('no complete() uses the regex map', async () => {
   const { pages } = simPages()
   const regex = draftWebsiteChat({ pages, companyName: 'Vodafone', personaName: 'Voda' })
