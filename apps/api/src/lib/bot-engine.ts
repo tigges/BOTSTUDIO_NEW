@@ -1,41 +1,14 @@
 /**
- * Shared bot response engine.
- *
- * Used by channels that cannot use SSE streaming (WhatsApp, SMS, etc.).
- * The web widget uses its own streaming pipeline in widget.ts.
+ * Messaging channels (WhatsApp, Telegram, SMS, email): find or open the chat, then run one turn.
+ * The reply is returned whole because these channels do not stream.
  */
 
 import { prisma } from '@ybot/db'
-import { onInboundCustomerMessage, onOutboundReply } from './sla.js'
-import { finishBotLines, saveContactName, takeNameTurn } from './visitor-name.js'
-import { fillNameTokens } from '@ybot/shared'
-import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
-import type { LlmMessage } from '@ybot/llm'
-import { runFlowIfPublished } from './flow-runner.js'
-import { conversationScope, enterLlmScope, withLlmScope } from './llm-ledger.js'
+import { withLlmScope } from './llm-ledger.js'
+import { runTurn } from './turn-pipeline.js'
 
-const llm = createLlmAdapter()
-const embedAI = createEmbeddingAdapter()
-
-async function ragSearch(query: string, tenantId: string, botId: string, topK = 4): Promise<string[]> {
-  try {
-    const r = await embedAI.embed({ texts: [query] })
-    const vec = r.embeddings[0]
-    if (!vec || vec.length === 0) return []
-    const rows = await (prisma.$queryRawUnsafe as (sql: string, ...p: unknown[]) => Promise<Array<{ content: string }>>)(
-      `SELECT dc.content
-       FROM "document_chunks" dc
-       JOIN "documents" d ON dc."documentId" = d.id
-       WHERE d."botId" = $1 AND d."tenantId" = $2
-       ORDER BY dc.embedding <-> $3::vector
-       LIMIT $4`,
-      botId, tenantId, JSON.stringify(vec), topK,
-    )
-    return rows.map((r) => r.content)
-  } catch {
-    return []
-  }
-}
+/** A message within this many hours of the last one continues the same chat on a channel, unless a person holds it. */
+export const CHANNEL_CHAT_HOURS = 24
 
 export interface BotReplyParams {
   channelId: string
@@ -48,8 +21,6 @@ export interface BotReplyParams {
   displayName?: string
   /** Optional existing conversation ID */
   conversationId?: string | null
-  /** Optional prior message history */
-  history?: Array<{ role: string; content: string }>
 }
 
 export interface BotReplyResult {
@@ -57,24 +28,19 @@ export interface BotReplyResult {
   conversationId: string | null
 }
 
-/**
- * Run the full RAG + LLM pipeline and return the complete bot reply.
- * Creates/upserts Contact and Conversation records as needed.
- */
+/** Creates the contact and chat when needed, then runs the shared turn pipeline. */
 export async function getBotReply(params: BotReplyParams): Promise<BotReplyResult> {
   return withLlmScope({ source: 'runtime', tenantId: params.tenantId, botId: params.botId }, () => replyFor(params))
 }
 
 async function replyFor(params: BotReplyParams): Promise<BotReplyResult> {
-  const { channelId, botId, tenantId, userText, externalId, conversationId: incomingConvoId, history = [] } = params
+  const { channelId, botId, tenantId, userText, externalId, conversationId: incomingConvoId } = params
 
   const channel = await prisma.channel.findFirst({
     where: { id: channelId, isActive: true },
     include: { bot: true },
   })
   if (!channel?.bot) throw new Error('Channel not found or inactive')
-
-  const bot = channel.bot
 
   // ── Conversation resolution ───────────────────────────────────────────────
   let conversationId: string | null = incomingConvoId ?? null
@@ -92,110 +58,26 @@ async function replyFor(params: BotReplyParams): Promise<BotReplyResult> {
           data: { tenantId, externalId, displayName: 'Visitor', channelId },
         })
       }
-      const convo = await prisma.conversation.create({
-        data: { tenantId, botId, environmentId: env.id, channelId, contactId: contact.id, status: 'active' },
+      const recent = await prisma.conversation.findFirst({
+        where: {
+          tenantId,
+          channelId,
+          contactId: contact.id,
+          assignedTo: null,
+          status: { not: 'escalated' },
+          updatedAt: { gte: new Date(Date.now() - CHANNEL_CHAT_HOURS * 60 * 60 * 1000) },
+        },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true },
       })
-      conversationId = convo.id
+      conversationId = recent?.id ?? (await prisma.conversation.create({
+        data: { tenantId, botId, environmentId: env.id, channelId, contactId: contact.id, status: 'active' },
+      })).id
     }
   }
 
-  // ── Save inbound message ──────────────────────────────────────────────────
-  if (conversationId) {
-    enterLlmScope(await conversationScope(conversationId))
-    await prisma.message.create({
-      data: { tenantId, conversationId, direction: 'inbound', authorKind: 'user', content: { text: userText } },
-    }).catch(() => {})
+  if (!conversationId) return { reply: 'This chat is not set up yet. Please try again later.', conversationId: null }
 
-    // Working hours start the SLA clock. The bot still answers.
-    await onInboundCustomerMessage({ conversationId, botId }).catch(() => null)
-  }
-
-  const named = conversationId ? await takeNameTurn(conversationId, userText) : null
-  if (named?.thanks && conversationId) {
-    await prisma.message.create({
-      data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: named.thanks } },
-    }).catch(() => {})
-    await onOutboundReply(conversationId).catch(() => {})
-    return { reply: named.thanks, conversationId }
-  }
-
-  if (conversationId) {
-    try {
-      const flow = await runFlowIfPublished({ conversationId, botId, tenantId, userText })
-      if (flow.handled && flow.messages.some((line) => line.trim())) {
-        const reply = flow.messages.join('\n\n')
-        const finished = named
-          ? finishBotLines([fillNameTokens(reply, named.spoken)], named.contact, named.spoken, {
-            conversationId,
-          }).lines.join('\n\n')
-          : reply
-        await prisma.message.create({
-          data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: finished } },
-        }).catch(() => {})
-        await onOutboundReply(conversationId).catch(() => {})
-        return { reply: finished, conversationId }
-      }
-    } catch (err) {
-      console.error('[bot-engine] flow runner error — falling back to RAG:', err)
-    }
-  }
-
-  // ── LLM config ────────────────────────────────────────────────────────────
-  const cfg = await prisma.botConfig.findUnique({ where: { botId } }).catch(() => null)
-  const systemPromptBase = cfg?.systemPrompt ?? `You are a helpful assistant for ${bot.name}. Answer using the knowledge base context.`
-  const model = cfg?.model ?? undefined
-  const temperature = cfg?.temperature ?? 0.3
-  const maxTokens = cfg?.maxTokens ?? 2048
-
-  // ── RAG ───────────────────────────────────────────────────────────────────
-  const ragChunks = await ragSearch(userText, tenantId, botId)
-  const contextBlock = ragChunks.length > 0
-    ? `\n\n--- KNOWLEDGE BASE ---\n${ragChunks.map((c, i) => `[${i + 1}] ${c}`).join('\n\n')}\n--- END KNOWLEDGE BASE ---\n\nAnswer using only this context. If unknown, say so.`
-    : ''
-
-  // ── History ───────────────────────────────────────────────────────────────
-  const messages: LlmMessage[] = [
-    ...history
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .slice(-10)
-      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-    { role: 'user', content: userText },
-  ]
-
-  // ── Complete (non-streaming) ──────────────────────────────────────────────
-  let reply = ''
-  try {
-    const adapter = model ? createLlmAdapterForModel(model) : llm
-    const result = await adapter.complete({
-      messages,
-      systemPrompt: systemPromptBase + contextBlock,
-      model,
-      temperature,
-      maxTokens,
-    })
-    reply = result.content ?? ''
-  } catch (err) {
-    console.error('[bot-engine] LLM error:', err)
-    reply = "I'm sorry, something went wrong. Please try again."
-  }
-
-  if (named) {
-    const finished = finishBotLines([fillNameTokens(reply, named.spoken)], named.contact, named.spoken, {
-      conversationId: conversationId ?? undefined,
-    })
-    reply = finished.lines.join('\n\n')
-    if (named.contact?.id && finished.metadata) {
-      await saveContactName(named.contact.id, { metadata: finished.metadata }).catch(() => {})
-    }
-  }
-
-  // ── Save bot reply ────────────────────────────────────────────────────────
-  if (conversationId && reply.trim()) {
-    await prisma.message.create({
-      data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: reply } },
-    }).catch(() => {})
-    await onOutboundReply(conversationId).catch(() => {})
-  }
-
-  return { reply, conversationId }
+  const turn = await runTurn({ conversationId, tenantId, botId, text: userText })
+  return { reply: turn.text, conversationId }
 }
