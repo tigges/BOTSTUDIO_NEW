@@ -11,7 +11,6 @@
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "@ybot/db": "workspace:*",
     "@ybot/llm": "workspace:*",
     "@ybot/shared": "workspace:*",
     "ioredis": "^5.3.2",

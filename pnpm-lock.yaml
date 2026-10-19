@@ -114,9 +114,6 @@ importers:
 
   apps/runtime:
     dependencies:
-      '@ybot/db':
-        specifier: workspace:*
-        version: link:../../packages/db
       '@ybot/llm':
         specifier: workspace:*
         version: link:../../packages/llm
