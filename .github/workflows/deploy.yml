@@ -33,21 +33,10 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
-
-      - name: Generate Prisma client
-        run: pnpm --filter @ybot/db generate
-        env:
-          DATABASE_URL: postgresql://dummy:dummy@localhost/dummy
-
-      - name: Build shared package
-        run: pnpm --filter @ybot/shared build
-
-      - name: Build flow runtime
-        run: pnpm --filter @ybot/db build && pnpm --filter @ybot/llm build && pnpm --filter @ybot/runtime build
+        run: pnpm install --frozen-lockfile
 
       - name: Build web app
-        run: pnpm --filter @ybot/web build
+        run: pnpm exec turbo run build --filter=@ybot/web --ui=stream
         env:
           VITE_DEMO_MODE: "true"
           VITE_API_URL: "/api/v1"
