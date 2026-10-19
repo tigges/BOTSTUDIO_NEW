@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Loader2, RotateCcw, Send, ThumbsDown, ThumbsUp, X } from 'lucide-react'
 import { Avatar, Button, cn } from '@ybot/ui'
-import { runJourneyPreview, type FlowGraph, type JourneyPreviewSnapshot } from '@ybot/runtime'
+import type { FlowGraph } from '@ybot/runtime'
 import type { StudioCatalog } from '@ybot/shared'
-import { preview } from '../../lib/api'
+import { preview, type TestChatState } from '../../lib/api'
+import { testChatNote } from '../../lib/test-chat-format'
 import { ChatText } from '../../components/ChatText'
 
 export interface JourneyTestChapter {
@@ -21,12 +22,20 @@ export interface JourneyTestLine {
 
 interface ChatLine extends JourneyTestLine {
   id: string
+  /** What happened beyond the bot's words (a handover, an outcome). Not part of the chat. */
+  note?: boolean
+}
+
+function chatLines(lines: ChatLine[]): JourneyTestLine[] {
+  return lines.filter((line) => !line.note).map((line) => ({ role: line.role, content: line.content, chapter: line.chapter }))
 }
 
 /**
  * The guest starts at the welcome. Header thumbs rate the chapter the guest is in.
+ * Every turn runs on the server through the same stages as a live chat, over this working copy.
  */
 export function JourneyTest({
+  botId,
   botName,
   avatarUrl,
   chapters,
@@ -41,6 +50,8 @@ export function JourneyTest({
   onVote,
   onClose,
 }: {
+  /** Empty while a new bot is still a draft. */
+  botId?: string | null
   botName: string
   avatarUrl?: string | null
   chapters: JourneyTestChapter[]
@@ -59,7 +70,7 @@ export function JourneyTest({
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [currentChapter, setCurrentChapter] = useState(startChapter)
-  const sessionRef = useRef<JourneyPreviewSnapshot | undefined>(undefined)
+  const stateRef = useRef<TestChatState | undefined>(undefined)
   const chaptersRef = useRef(chapters)
   const catalogRef = useRef(catalog)
   const endRef = useRef<HTMLDivElement>(null)
@@ -78,32 +89,24 @@ export function JourneyTest({
     onChapter(name)
   }
 
-  async function walk(text: string, session?: JourneyPreviewSnapshot) {
-    try {
-      const result = await preview.journey({
-        chapters: chaptersRef.current,
-        startChapter,
-        message: text,
-        environmentLabel,
-        session,
-        catalog: catalogRef.current,
-      })
-      return {
-        chapter: result.data.chapter,
-        text: result.data.text,
-        session: result.data.session as JourneyPreviewSnapshot | undefined,
-      }
-    } catch {
-      const result = await runJourneyPreview({
-        chapters: chaptersRef.current,
-        startChapter,
-        message: text,
-        environmentLabel,
-        session,
-        catalog: catalogRef.current,
-      })
-      return { chapter: result.chapter, text: result.text, session: result.session }
-    }
+  async function walk(text: string, state?: TestChatState) {
+    const result = await preview.journey(botId, {
+      chapters: chaptersRef.current,
+      startChapter,
+      message: text,
+      environmentLabel,
+      state,
+      catalog: catalogRef.current,
+    })
+    const turn = result.data
+    stateRef.current = turn.state
+    const note = testChatNote(state, turn.state, turn.path)
+    return { ...turn, note: note ? [{ id: `n_${Date.now()}`, role: 'assistant' as const, content: note, note: true }] : [] }
+  }
+
+  function botLine(path: string, text: string): string {
+    if (text) return text
+    return path === 'held' || path === 'handover' ? '' : 'I don’t have a next line for that.'
   }
 
   async function turn(text: string, opening: boolean) {
@@ -115,13 +118,16 @@ export function JourneyTest({
       ? [...prev, { id: assistantId, role: 'assistant', content: '' }]
       : [...prev, { id: `u_${Date.now()}`, role: 'user', content: text }, { id: assistantId, role: 'assistant', content: '' }])
     try {
-      const result = await walk(text, sessionRef.current)
-      if (result.session) sessionRef.current = result.session
+      const result = await walk(text, stateRef.current)
       setChapter(result.chapter || startChapter)
-      const reply = result.text || 'I don’t have a next line for that.'
-      setMessages((prev) => prev.map((line) => (
-        line.id === assistantId ? { ...line, content: reply, chapter: result.chapter } : line
-      )))
+      const reply = botLine(result.path, result.text)
+      setMessages((prev) => [
+        ...prev.flatMap((line) => {
+          if (line.id !== assistantId) return [line]
+          return reply ? [{ ...line, content: reply, chapter: result.chapter }] : []
+        }),
+        ...result.note,
+      ])
     } catch {
       setMessages((prev) => prev.map((line) => line.id === assistantId ? { ...line, content: 'This journey could not be walked just now.' } : line))
     } finally {
@@ -133,7 +139,7 @@ export function JourneyTest({
 
   useEffect(() => {
     let cancel = false
-    sessionRef.current = undefined
+    stateRef.current = undefined
     busyRef.current = false
     setMessages([])
     setInput('')
@@ -144,10 +150,9 @@ export function JourneyTest({
       try {
         const result = await walk('', undefined)
         if (cancel) return
-        if (result.session) sessionRef.current = result.session
         setChapter(result.chapter || startChapter)
-        const reply = result.text || 'I don’t have a next line for that.'
-        setMessages([{ id: 'open', role: 'assistant', content: reply, chapter: result.chapter }])
+        const reply = botLine(result.path, result.text)
+        setMessages([...(reply ? [{ id: 'open', role: 'assistant' as const, content: reply, chapter: result.chapter }] : []), ...result.note])
       } catch {
         if (!cancel) setMessages([{ id: 'open', role: 'assistant', content: 'This journey could not be walked just now.' }])
       } finally {
@@ -168,7 +173,7 @@ export function JourneyTest({
     replaySeen.current = replayKey
     const lines = replayLines ?? []
     void (async () => {
-      sessionRef.current = undefined
+      stateRef.current = undefined
       busyRef.current = false
       setMessages([])
       setChapter(startChapter)
@@ -186,7 +191,7 @@ export function JourneyTest({
   }
 
   function reset() {
-    sessionRef.current = undefined
+    stateRef.current = undefined
     busyRef.current = false
     setInput('')
     setMessages([])
@@ -221,7 +226,7 @@ export function JourneyTest({
             onClick={() => onVote({
               chapter: currentChapter,
               vote: 'up',
-              lines: messages.map((line) => ({ role: line.role, content: line.content, chapter: line.chapter })),
+              lines: chatLines(messages),
             })}
           >
             <ThumbsUp size={13} />
@@ -238,7 +243,7 @@ export function JourneyTest({
             onClick={() => onVote({
               chapter: currentChapter,
               vote: 'down',
-              lines: messages.map((line) => ({ role: line.role, content: line.content, chapter: line.chapter })),
+              lines: chatLines(messages),
             })}
           >
             <ThumbsDown size={13} />
@@ -271,7 +276,11 @@ export function JourneyTest({
         </div>
       )}
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
-        {messages.map((line) => (
+        {messages.map((line) => line.note ? (
+          <p key={line.id} className="px-2 text-center text-[11px] leading-relaxed text-[var(--text-muted)]" data-testid="journey-test-note">
+            {line.content}
+          </p>
+        ) : (
           <div key={line.id} className={cn('flex gap-2', line.role === 'user' ? 'justify-end' : 'justify-start')}>
             {line.role === 'assistant' && <Avatar name={botName} src={avatarUrl} size="xs" className="mt-1 shrink-0" />}
             <div
@@ -315,7 +324,7 @@ export function JourneyTest({
           </Button>
         </div>
         <p className="mt-1.5 text-center text-[10px] text-[var(--text-muted)]">
-          {onVote ? `Thumbs rate ${currentChapter}. Starts at the welcome and follows each handoff.` : 'Starts at the welcome and follows each handoff.'}
+          {onVote ? `Thumbs rate ${currentChapter}. Runs like a live chat; nothing reaches the Inbox.` : 'Runs like a live chat from the welcome; nothing reaches the Inbox.'}
         </p>
       </div>
     </div>

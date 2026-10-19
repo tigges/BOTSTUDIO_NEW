@@ -14,7 +14,7 @@ import { knowledgeRoutes } from './routes/knowledge.js'
 import { conversationsRoutes, ticketsRoutes, contactsRoutes } from './routes/inbox.js'
 import { campaignsRoutes, templatesRoutes } from './routes/engage.js'
 import { channelsRoutes, webhooksRoutes, teamRoutes, analyticsRoutes, auditRoutes } from './routes/config.js'
-import { journeyPreviewRoutes, previewRoutes } from './routes/preview.js'
+import { draftPreviewRoutes, previewRoutes } from './routes/preview.js'
 import { widgetRoutes } from './routes/widget.js'
 import { channelWebhookRoutes } from './routes/channel-webhooks.js'
 import { optimizationRoutes } from './routes/optimizations.js'
@@ -114,7 +114,7 @@ await app.register(teamRoutes, { prefix: '/api/v1/team' })
 await app.register(analyticsRoutes, { prefix: '/api/v1/analytics' })
 await app.register(auditRoutes, { prefix: '/api/v1/audit' })
 await app.register(previewRoutes, { prefix: '/api/v1/bots' })
-await app.register(journeyPreviewRoutes, { prefix: '/api/v1' })
+await app.register(draftPreviewRoutes, { prefix: '/api/v1' })
 await app.register(widgetRoutes, { prefix: '/api/v1' })
 await app.register(channelWebhookRoutes, { prefix: '/api/v1' })
 await app.register(optimizationRoutes, { prefix: '/api/v1/bots' })

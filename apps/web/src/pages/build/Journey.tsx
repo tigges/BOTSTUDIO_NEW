@@ -369,6 +369,7 @@ export function JourneyPage() {
       </div>
       {lens === 'design' && testing && welcome && (
         <JourneyTest
+          botId={selectedBotId}
           botName={botName}
           avatarUrl={selectedBot?.avatarUrl}
           chapters={guestChapters}

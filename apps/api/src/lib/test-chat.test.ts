@@ -1,8 +1,51 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { chatPlain, draftWebsiteChat, hairStudioPack, learnedSpecFromJobs, packFromLearned, pageFromHtml } from '@ybot/shared'
-import { runJourneyPreview } from './journey-preview.js'
-import type { FlowGraph } from './engine.js'
+import { keepFirstQuestion, type FlowGraph } from '@ybot/runtime'
+import { currentLlmScope } from './llm-ledger.js'
+import { runTestTurn, withWorkingCopy, type TestChatDeps, type TestChatState } from './test-chat.js'
+
+const noTeam = async () => ({ liveAgents: false, alwaysHuman: [] })
+
+/** The model never answers unless a test says so; phrase matching decides. */
+function quietModel(classify?: (text: string, params: { categories: string[] }) => Promise<{ category: string; confidence: number }>) {
+  return {
+    classify: classify ?? (async () => ({ category: 'other', confidence: 0 })),
+    embed: async () => ({ embeddings: [[]] }),
+    complete: async () => ({ content: '' }),
+    stream: async () => {},
+  }
+}
+
+async function testTurn(input: {
+  chapters: Array<{ name: string; graph: FlowGraph }>
+  startChapter: string
+  message: string
+  environmentLabel: string
+  state?: TestChatState
+  catalog?: Parameters<typeof runTestTurn>[0]['catalog']
+  now?: Date
+  llm?: { classify: (text: string, params: { categories: string[] }) => Promise<{ category: string; confidence: number }> }
+}) {
+  const turn = await runTestTurn({
+    tenantId: 'tenant',
+    botId: 'bot',
+    chapters: input.chapters,
+    startChapter: input.startChapter,
+    environmentLabel: input.environmentLabel,
+    message: input.message,
+    catalog: input.catalog ?? { facts: [] },
+    state: input.state,
+  }, {
+    handoverRules: noTeam,
+    answer: async () => {},
+    llm: async () => quietModel(input.llm?.classify) as never,
+    catalog: async () => undefined,
+    db: {},
+    now: () => input.now ?? new Date(),
+  })
+  return { text: turn.text, chapter: turn.chapter, path: turn.path, state: turn.state }
+}
 
 function salonWalk(company = 'Yuzu') {
   const pack = hairStudioPack(company, 'Bella')
@@ -17,7 +60,7 @@ function salonWalk(company = 'Yuzu') {
 
 test('the test chat opens on the greeting and does not burn a fake hi', async () => {
   const { chapters, catalog } = salonWalk()
-  const open = await runJourneyPreview({
+  const open = await testTurn({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
@@ -26,12 +69,12 @@ test('the test chat opens on the greeting and does not burn a fake hi', async ()
   })
   assert.match(open.text, /What's your name\?/)
   assert.equal(open.chapter, 'Salon welcome')
-  assert.equal(open.session?.status, 'waiting_input')
+  assert.equal(open.state.session?.status, 'waiting_input')
 })
 
 test('a request on the welcome continues in that chapter and keeps the name', async () => {
   const { chapters, catalog } = salonWalk()
-  const hello = await runJourneyPreview({
+  const hello = await testTurn({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
@@ -45,32 +88,32 @@ test('a request on the welcome continues in that chapter and keeps the name', as
 
 test('cut opens the price, and services after hours does not dead-end', async () => {
   const { chapters, catalog } = salonWalk()
-  const open = await runJourneyPreview({
+  const open = await testTurn({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
     message: '',
     environmentLabel: 'Sandbox',
   })
-  const cut = await runJourneyPreview({
+  const cut = await testTurn({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
     message: 'cut',
     environmentLabel: 'Sandbox',
-    session: open.session,
+    state: open.state,
   })
   assert.match(cut.text, /£35/)
   assert.equal(cut.chapter, 'Services and prices')
   assert.equal(cut.text.includes("What would you like done"), false)
 
-  const hours = await runJourneyPreview({
+  const hours = await testTurn({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
     message: 'salon hours',
     environmentLabel: 'Sandbox',
-    session: cut.session,
+    state: cut.state,
   })
   assert.match(hours.text, /Monday to Saturday/)
   assert.match(hours.text, /Shall I book/)
@@ -78,13 +121,13 @@ test('cut opens the price, and services after hours does not dead-end', async ()
   assert.equal((hours.text.match(/\?/g) ?? []).length, 1)
   assert.equal(hours.chapter, 'Salon hours')
 
-  const services = await runJourneyPreview({
+  const services = await testTurn({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
     message: 'services',
     environmentLabel: 'Sandbox',
-    session: hours.session,
+    state: hours.state,
   })
   assert.match(services.text, /thinking of|£/)
   assert.equal(services.chapter, 'Services and prices')
@@ -93,28 +136,28 @@ test('cut opens the price, and services after hours does not dead-end', async ()
 
 test('a finished chapter offers the map instead of greeting again', async () => {
   const { chapters, catalog } = salonWalk()
-  const priced = await runJourneyPreview({
+  const priced = await testTurn({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
     message: 'how much is a haircut',
     environmentLabel: 'Sandbox',
   })
-  const booked = await runJourneyPreview({
+  const booked = await testTurn({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
     message: 'no',
     environmentLabel: 'Sandbox',
-    session: priced.session,
+    state: priced.state,
   })
-  const again = await runJourneyPreview({
+  const again = await testTurn({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
     message: 'catalog',
     environmentLabel: 'Sandbox',
-    session: booked.session,
+    state: booked.state,
   })
   assert.match(again.text, /What would you like/)
   assert.equal(again.text.includes("What's your name"), false)
@@ -124,20 +167,20 @@ test('a finished chapter offers the map instead of greeting again', async () => 
 test('a handoff to a chapter that is not on this map stops', async () => {
   const walk = salonWalk()
   const chapters = walk.chapters.filter((chapter) => chapter.name !== 'Location')
-  const hello = await runJourneyPreview({
+  const hello = await testTurn({
     chapters,
     catalog: walk.catalog,
     startChapter: 'Salon welcome',
     message: 'where are you',
     environmentLabel: 'Production',
   })
-  const stopped = await runJourneyPreview({
+  const stopped = await testTurn({
     chapters,
     catalog: walk.catalog,
     startChapter: 'Salon welcome',
     message: 'Ada',
     environmentLabel: 'Production',
-    session: hello.session,
+    state: hello.state,
   })
   assert.match(stopped.text, /Location is not on this Production map\./)
   assert.equal(stopped.text.includes('Rosewood'), false)
@@ -156,20 +199,20 @@ test('colour qualifies the booking instead of reading a Tuesday offer', async ()
     name: flow.name,
     graph: flow.graph as unknown as FlowGraph,
   }))
-  const open = await runJourneyPreview({
+  const open = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: '',
     environmentLabel: 'Sandbox',
   })
-  const colour = await runJourneyPreview({
+  const colour = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'color',
     environmentLabel: 'Sandbox',
-    session: open.session,
+    state: open.state,
   })
   assert.equal(colour.chapter, 'Book an appointment')
   assert.match(colour.text, /colour work/i)
@@ -177,70 +220,70 @@ test('colour qualifies the booking instead of reading a Tuesday offer', async ()
   assert.equal(/phorest\.com/i.test(colour.text), false)
   assert.equal((colour.text.match(/\?/g) ?? []).length, 1)
 
-  const need = await runJourneyPreview({
+  const need = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'full head',
     environmentLabel: 'Sandbox',
-    session: colour.session,
+    state: colour.state,
   })
   assert.match(need.text, /cut with the colour/i)
-  const upsell = await runJourneyPreview({
+  const upsell = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'yes',
     environmentLabel: 'Sandbox',
-    session: need.session,
+    state: need.state,
   })
   assert.match(upsell.text, /senior stylist/i)
-  const stylist = await runJourneyPreview({
+  const stylist = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'senior',
     environmentLabel: 'Sandbox',
-    session: upsell.session,
+    state: upsell.state,
   })
   assert.match(stylist.text, /When would suit/i)
-  const when = await runJourneyPreview({
+  const when = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'Tuesday afternoon',
     environmentLabel: 'Sandbox',
-    session: stylist.session,
+    state: stylist.state,
   })
   assert.match(when.text, /Tuesday with a senior stylist/)
   assert.match(when.text, /12pm, 2pm, or 3pm/)
   assert.match(when.text, /Which time/)
   assert.equal((when.text.match(/\?/g) ?? []).length, 1)
-  const slot = await runJourneyPreview({
+  const slot = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: '2pm',
     environmentLabel: 'Sandbox',
-    session: when.session,
+    state: when.state,
   })
   assert.match(slot.text, /What's your name/)
-  const named = await runJourneyPreview({
+  const named = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'Sophie',
     environmentLabel: 'Sandbox',
-    session: slot.session,
+    state: slot.state,
   })
   assert.match(named.text, /mobile/i)
-  const mobile = await runJourneyPreview({
+  const mobile = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: '07700 900123',
     environmentLabel: 'Sandbox',
-    session: named.session,
+    state: named.state,
   })
   assert.match(mobile.text, /confirm/i)
   assert.match(mobile.text, /Tuesday at 2pm/)
@@ -262,31 +305,31 @@ test('a mistyped tomorrow offers senior slots and confirms a clock time', async 
     name: flow.name,
     graph: flow.graph as unknown as FlowGraph,
   }))
-  const turn = (message: string, session?: Parameters<typeof runJourneyPreview>[0]['session']) => runJourneyPreview({
+  const turn = (message: string, state?: TestChatState) => testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message,
     environmentLabel: 'Sandbox',
-    session,
+    state,
     now: saturday,
   })
   const open = await turn('')
-  const colour = await turn('color', open.session)
-  const need = await turn('full head', colour.session)
-  const upsell = await turn('yes', need.session)
-  const stylist = await turn('senior', upsell.session)
+  const colour = await turn('color', open.state)
+  const need = await turn('full head', colour.state)
+  const upsell = await turn('yes', need.state)
+  const stylist = await turn('senior', upsell.state)
   assert.match(stylist.text, /When would suit/i)
-  const when = await turn('tomoeeow', stylist.session)
+  const when = await turn('tomoeeow', stylist.state)
   assert.match(when.text, /closed Sunday/)
   assert.match(when.text, /Tuesday with a senior stylist I have 11am, 2pm, or 5pm/)
   assert.equal(/tomoeeow/i.test(when.text), false)
   assert.equal((when.text.match(/\?/g) ?? []).length, 1)
-  const slot = await turn('11am', when.session)
+  const slot = await turn('11am', when.state)
   assert.match(slot.text, /What's your name/)
-  const named = await turn('CT', slot.session)
+  const named = await turn('CT', slot.state)
   assert.match(named.text, /mobile/i)
-  const mobile = await turn('788888877', named.session)
+  const mobile = await turn('788888877', named.state)
   assert.match(mobile.text, /confirm/i)
   assert.match(mobile.text, /Tuesday at 11am/)
   assert.equal(/tomoeeow/i.test(mobile.text), false)
@@ -320,43 +363,43 @@ function withOldHoursDoors(graph: FlowGraph): FlowGraph {
 
 test('ok after Want the hours opens Salon hours, and ok after hours still books', async () => {
   const { chapters, catalog } = salonWalk()
-  const open = await runJourneyPreview({
+  const open = await testTurn({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
     message: '',
     environmentLabel: 'Sandbox',
   })
-  const where = await runJourneyPreview({
+  const where = await testTurn({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
     message: 'where are you',
     environmentLabel: 'Sandbox',
-    session: open.session,
+    state: open.state,
   })
   assert.match(where.text, /Want the hours/)
   assert.equal(where.chapter, 'Location')
-  const hours = await runJourneyPreview({
+  const hours = await testTurn({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
     message: 'ok',
     environmentLabel: 'Sandbox',
-    session: where.session,
+    state: where.state,
   })
   assert.match(hours.text, /Monday to Saturday|09:00/)
   assert.match(hours.text, /Shall I book/)
   assert.equal(hours.chapter, 'Salon hours')
   assert.equal(/been to us before/i.test(hours.text), false)
 
-  const book = await runJourneyPreview({
+  const book = await testTurn({
     chapters,
     catalog,
     startChapter: 'Salon welcome',
     message: 'ok',
     environmentLabel: 'Sandbox',
-    session: hours.session,
+    state: hours.state,
   })
   assert.equal(book.chapter, 'Book an appointment')
   assert.match(book.text, /been to us before|colour work|What would you like done/)
@@ -367,7 +410,7 @@ test('an older Location chart that hears ok as Book still opens hours in the tes
   const chapters = walk.chapters.map((chapter) => (
     chapter.name === 'Location' ? { ...chapter, graph: withOldHoursDoors(chapter.graph) } : chapter
   ))
-  const where = await runJourneyPreview({
+  const where = await testTurn({
     chapters,
     catalog: walk.catalog,
     startChapter: 'Salon welcome',
@@ -375,13 +418,13 @@ test('an older Location chart that hears ok as Book still opens hours in the tes
     environmentLabel: 'Sandbox',
   })
   assert.equal(where.chapter, 'Location')
-  const hours = await runJourneyPreview({
+  const hours = await testTurn({
     chapters,
     catalog: walk.catalog,
     startChapter: 'Salon welcome',
     message: 'ok',
     environmentLabel: 'Sandbox',
-    session: where.session,
+    state: where.state,
   })
   assert.equal(hours.chapter, 'Salon hours')
   assert.match(hours.text, /Monday to Saturday|09:00/)
@@ -413,7 +456,7 @@ test('a named colour stays on the walk and a deal only appears when they ask', a
     name: flow.name,
     graph: flow.graph as unknown as FlowGraph,
   }))
-  const open = await runJourneyPreview({
+  const open = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
@@ -421,71 +464,71 @@ test('a named colour stays on the walk and a deal only appears when they ask', a
     environmentLabel: 'Sandbox',
   })
 
-  const colour = await runJourneyPreview({
+  const colour = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'color',
     environmentLabel: 'Sandbox',
-    session: open.session,
+    state: open.state,
   })
   assert.equal(colour.chapter, 'Book an appointment')
   assert.match(colour.text, /colour work/i)
   assert.equal(/50%|Every Tuesday/i.test(colour.text), false)
 
-  const named = await runJourneyPreview({
+  const named = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'red full head',
     environmentLabel: 'Sandbox',
-    session: colour.session,
+    state: colour.state,
   })
   assert.equal(named.chapter, 'Book an appointment')
   assert.match(named.text, /cut with the colour/i)
   assert.equal(/50%|Every Tuesday/i.test(named.text), false)
 
-  const skipQualify = await runJourneyPreview({
+  const skipQualify = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'full head colour',
     environmentLabel: 'Sandbox',
-    session: open.session,
+    state: open.state,
   })
   assert.equal(skipQualify.chapter, 'Book an appointment')
   assert.match(skipQualify.text, /cut with the colour/i)
   assert.equal(/colour work/i.test(skipQualify.text), false)
   assert.equal(/50%/i.test(skipQualify.text), false)
 
-  const priced = await runJourneyPreview({
+  const priced = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'prices',
     environmentLabel: 'Sandbox',
-    session: open.session,
+    state: open.state,
   })
   assert.equal(priced.chapter, 'Services and prices')
-  const fullHead = await runJourneyPreview({
+  const fullHead = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'red full head',
     environmentLabel: 'Sandbox',
-    session: priced.session,
+    state: priced.state,
   })
   assert.equal(fullHead.chapter, 'Services and prices')
   assert.match(fullHead.text, /£101|£87/)
   assert.equal(/50%|Every Tuesday/i.test(fullHead.text), false)
 
-  const deals = await runJourneyPreview({
+  const deals = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'what offers do you have',
     environmentLabel: 'Sandbox',
-    session: open.session,
+    state: open.state,
   })
   assert.equal(deals.chapter, 'Offers')
   assert.match(deals.text, /50%|offer/i)
@@ -517,20 +560,20 @@ test('cut then men hears Gents instead of the whole map', async () => {
     name: flow.name,
     graph: flow.graph as unknown as FlowGraph,
   }))
-  const open = await runJourneyPreview({
+  const open = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: '',
     environmentLabel: 'Sandbox',
   })
-  const cut = await runJourneyPreview({
+  const cut = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'cut',
     environmentLabel: 'Sandbox',
-    session: open.session,
+    state: open.state,
   })
   assert.match(cut.text, /which cut/i)
   assert.match(cut.text, /Ladies/)
@@ -538,13 +581,13 @@ test('cut then men hears Gents instead of the whole map', async () => {
   assert.equal(/Ladies wash/.test(cut.text), false)
   assert.equal(cut.chapter, 'Services and prices')
 
-  const men = await runJourneyPreview({
+  const men = await testTurn({
     chapters,
     catalog: draft.catalog,
     startChapter: 'Salon welcome',
     message: 'men',
     environmentLabel: 'Sandbox',
-    session: cut.session,
+    state: cut.state,
   })
   assert.match(men.text, /£45|£38/)
   assert.equal(men.chapter, 'Services and prices')
@@ -568,26 +611,26 @@ test('a phrase miss on the test chat can open a chapter the model names', async 
     speak('Plans', 'SIM only from £26 a month.'),
     speak('Hours', 'Open 8 to 8.'),
   ]
-  const open = await runJourneyPreview({
+  const open = await testTurn({
     chapters,
     startChapter: 'Welcome',
     message: '',
     environmentLabel: 'Sandbox',
   })
-  const missed = await runJourneyPreview({
+  const missed = await testTurn({
     chapters,
     startChapter: 'Welcome',
     message: 'how much for unlimited data roaming',
     environmentLabel: 'Sandbox',
-    session: open.session,
+    state: open.state,
   })
   assert.equal(/SIM only/.test(missed.text), false)
-  const classified = await runJourneyPreview({
+  const classified = await testTurn({
     chapters,
     startChapter: 'Welcome',
     message: 'how much for unlimited data roaming',
     environmentLabel: 'Sandbox',
-    session: open.session,
+    state: open.state,
     llm: { classify: async () => ({ category: 'Plans', confidence: 0.9 }) },
   })
   assert.equal(classified.chapter, 'Plans')
@@ -608,15 +651,15 @@ test('a website bot greets, then asks what they need, without asking a name it n
   })
   const pack = packFromLearned(spec, 'hubspot', 'James')
   const chapters = pack.flows.map((flow) => ({ name: flow.name, graph: flow.graph as unknown as FlowGraph }))
-  const turn = (message: string, session?: Parameters<typeof runJourneyPreview>[0]['session']) =>
-    runJourneyPreview({ chapters, startChapter: pack.welcomeName, message, environmentLabel: 'Sandbox', session })
+  const turn = (message: string, state?: TestChatState) =>
+    testTurn({ chapters, startChapter: pack.welcomeName, message, environmentLabel: 'Sandbox', state })
 
   const open = await turn('')
   assert.equal(open.text, "Hi, I'm James at hubspot.")
-  const hi = await turn('hi', open.session)
+  const hi = await turn('hi', open.state)
   assert.equal(hi.text.includes("What's your name"), false)
   assert.match(hi.text, /^What do you need help with\?/)
-  const pricing = await turn('pricing', hi.session)
+  const pricing = await turn('pricing', hi.state)
   assert.equal(pricing.chapter, 'View pricing')
   assert.match(pricing.text, /\$7 a month/)
 })
@@ -640,21 +683,224 @@ test('a model-drafted answer offers the other topics, follows one, and closes on
   assert.equal(spec.menu, 'I can help you buy a phone, get SIM only deal, get broadband, or talk to a person.')
   const pack = packFromLearned(spec, 'Vodafone', 'Voda')
   const chapters = pack.flows.map((flow) => ({ name: flow.name, graph: flow.graph as unknown as FlowGraph }))
-  const turn = (message: string, session?: Parameters<typeof runJourneyPreview>[0]['session']) =>
-    runJourneyPreview({ chapters, startChapter: pack.welcomeName, message, environmentLabel: 'Sandbox', session })
+  const turn = (message: string, state?: TestChatState) =>
+    testTurn({ chapters, startChapter: pack.welcomeName, message, environmentLabel: 'Sandbox', state })
 
   const phone = await turn('I want to buy a phone')
   assert.equal(phone.chapter, 'Buy a phone')
   assert.match(phone.text, /pay monthly contract phones/)
   assert.match(phone.text, /Anything else I can help with\?/)
   assert.equal((phone.text.match(/\?/g) ?? []).length, 1)
-  assert.equal(phone.session?.status, 'waiting_input')
+  assert.equal(phone.state.session?.status, 'waiting_input')
 
-  const broadband = await turn('broadband please', phone.session)
+  const broadband = await turn('broadband please', phone.state)
   assert.equal(broadband.chapter, 'Get broadband')
   assert.match(broadband.text, /Pro Broadband from £39/)
 
-  const done = await turn('no thanks', broadband.session)
+  const done = await turn('no thanks', broadband.state)
   assert.match(done.text, /Thanks for chatting/)
-  assert.equal(done.session?.status, 'completed')
+  assert.equal(done.state.session?.status, 'completed')
+})
+
+function speakChapter(name: string, text: string): { name: string; graph: FlowGraph } {
+  return {
+    name,
+    graph: {
+      nodes: [
+        { id: `${name}-start`, data: { kind: 'trigger_start', label: 'Start', config: {} } },
+        { id: `${name}-say`, data: { kind: 'send_message', label: name, config: { text } } },
+      ],
+      edges: [{ id: `${name}-e`, source: `${name}-start`, target: `${name}-say` }],
+    },
+  }
+}
+
+function pipelineTurn(message: string, state: TestChatState | undefined, options: {
+  chapters?: Array<{ name: string; graph: FlowGraph }>
+  liveAgents?: boolean
+  alwaysHuman?: string[]
+  answer?: TestChatDeps['answer']
+} = {}) {
+  return runTestTurn({
+    tenantId: 'tenant',
+    botId: 'bot',
+    chapters: options.chapters ?? salonWalk().chapters,
+    startChapter: options.chapters ? (options.chapters[0]?.name ?? 'Welcome') : 'Salon welcome',
+    environmentLabel: 'Sandbox',
+    message,
+    catalog: salonWalk().catalog,
+    state,
+  }, {
+    handoverRules: async () => ({ liveAgents: options.liveAgents ?? false, alwaysHuman: options.alwaysHuman ?? [] }),
+    answer: options.answer ?? (async () => {}),
+    llm: async () => quietModel() as never,
+    catalog: async () => undefined,
+    db: {},
+  })
+}
+
+test('an always-human word hands the test chat to a person when the team is on, and the bot then stays quiet', async () => {
+  const open = await pipelineTurn('', undefined, { liveAgents: true, alwaysHuman: ['complaint'] })
+  const asked = await pipelineTurn('I want to make a complaint', open.state, { liveAgents: true, alwaysHuman: ['complaint'] })
+  assert.equal(asked.path, 'handover')
+  assert.equal(asked.state.status, 'escalated')
+  assert.equal(asked.state.outcome, 'escalated')
+  assert.equal(asked.state.handover?.source, 'always_human')
+  assert.equal(asked.state.handover?.priority, 'high')
+  assert.match(asked.state.handover?.summary ?? '', /complaint/)
+  const after = await pipelineTurn('hello?', asked.state, { liveAgents: true, alwaysHuman: ['complaint'] })
+  assert.equal(after.path, 'held')
+  assert.equal(after.text, '')
+})
+
+test('without opening hours for people the test chat keeps the guest with the bot, as live chats do', async () => {
+  const asked = await pipelineTurn('complaint', undefined, { liveAgents: false, alwaysHuman: ['complaint'] })
+  assert.notEqual(asked.path, 'handover')
+  assert.equal(asked.state.handover, null)
+  assert.equal(asked.state.outcome, 'contained_unresolved')
+  assert.match(asked.text, /not on chat/)
+})
+
+test('a bot with no journey answers from knowledge with the chat so far, in the test environment', async () => {
+  const seen: Array<{ text: string; history: unknown[]; environment?: string }> = []
+  const answer: TestChatDeps['answer'] = async (request) => {
+    seen.push({ text: request.text, history: request.history, environment: currentLlmScope()?.environment })
+    request.onChunk(seen.length === 1 ? 'We open at nine.' : 'Yes, on bank holidays too.')
+  }
+  const first = await pipelineTurn('when do you open', undefined, { chapters: [], answer })
+  assert.equal(first.path, 'answer')
+  assert.equal(first.text, 'We open at nine.')
+  const second = await pipelineTurn('bank holidays too?', first.state, { chapters: [], answer })
+  assert.equal(second.text, 'Yes, on bank holidays too.')
+  assert.equal(seen[1]!.environment, 'test')
+  assert.deepEqual(seen[1]!.history, [
+    { role: 'user', content: 'when do you open' },
+    { role: 'assistant', content: 'We open at nine.' },
+  ])
+})
+
+test('a journey that reaches its end resolves the test chat by the bot', async () => {
+  const chapter = speakChapter('Welcome', 'Thanks for chatting.')
+  chapter.graph.nodes.push({ id: 'Welcome-end', data: { kind: 'end_flow', label: 'End', config: {} } })
+  chapter.graph.edges.push({ id: 'Welcome-e2', source: 'Welcome-say', target: 'Welcome-end' })
+  const done = await pipelineTurn('', undefined, { chapters: [chapter] })
+  assert.equal(done.text, 'Thanks for chatting.')
+  assert.equal(done.ended, true)
+  assert.equal(done.state.status, 'resolved')
+  assert.equal(done.state.outcome, 'contained_resolved')
+})
+
+test('a test turn never changes the state it was given', async () => {
+  const open = await pipelineTurn('', undefined)
+  const frozen = JSON.stringify(open.state)
+  await pipelineTurn('where are you', open.state)
+  assert.equal(JSON.stringify(open.state), frozen)
+})
+
+function canvasTurn(chapter: string, graph: FlowGraph, message: string, state?: TestChatState, options: {
+  saved?: Array<{ name: string; graph: FlowGraph }>
+  catalog?: Parameters<typeof runTestTurn>[0]['catalog']
+  classify?: (text: string, params: { categories: string[] }) => Promise<{ category: string; confidence: number }>
+} = {}) {
+  return runTestTurn({
+    tenantId: 'tenant',
+    botId: 'bot',
+    chapters: withWorkingCopy(options.saved ?? [], chapter, graph),
+    startChapter: chapter,
+    environmentLabel: 'Sandbox',
+    message,
+    catalog: options.catalog ?? { facts: [] },
+    state,
+  }, {
+    handoverRules: noTeam,
+    answer: async () => {},
+    llm: async () => quietModel(options.classify) as never,
+    catalog: async () => undefined,
+    db: {},
+  })
+}
+
+test('Test Bot on the welcome follows a handoff into the saved chapter', async () => {
+  const { chapters, catalog } = salonWalk()
+  const welcome = chapters.find((chapter) => chapter.name === 'Salon welcome')!
+  const hello = await canvasTurn(welcome.name, welcome.graph, 'where are you', undefined, { catalog })
+  assert.match(hello.text, /What's your name\?/)
+  const alone = await canvasTurn(welcome.name, welcome.graph, 'Ada', hello.state, { catalog })
+  assert.match(alone.text, /Location is not on this Sandbox map\./)
+  assert.equal(alone.text.includes('Rosewood'), false)
+  const walked = await canvasTurn(welcome.name, welcome.graph, 'where are you', undefined, { saved: chapters, catalog })
+  assert.equal(walked.chapter, 'Location')
+  assert.match(walked.text, /Rosewood/)
+})
+
+test('Test Bot walks the edited chart, not its saved copy', async () => {
+  const { chapters, catalog } = salonWalk()
+  const location = chapters.find((chapter) => chapter.name === 'Location')!
+  const edited = structuredClone(location.graph)
+  for (const node of edited.nodes) {
+    if (node.data.kind === 'send_message' || node.data.kind === 'lookup_fact') node.data.config = { ...node.data.config, text: 'We moved to 9 Elm Street.' }
+  }
+  edited.nodes = edited.nodes.filter((node) => node.data.kind !== 'lookup_fact')
+  const turn = await canvasTurn('Location', edited, '', undefined, { saved: chapters, catalog })
+  assert.equal(turn.text.includes('Rosewood'), false)
+})
+
+test('a second question is left for the next turn', () => {
+  const stacked = "Great! I'd be happy to help you book a haircut. To get you scheduled, I'll need a few details: What day works best for you? Do you have a preferred time? Do you have a specific stylist?"
+  const kept = keepFirstQuestion(stacked)
+  assert.equal((kept.match(/\?/g) ?? []).length, 1)
+  assert.match(kept, /What day works best for you\?/)
+  assert.equal(kept.includes('stylist'), false)
+  assert.equal(keepFirstQuestion("Hi, I'm Bella at Bella Hair Studio."), "Hi, I'm Bella at Bella Hair Studio.")
+  assert.equal(keepFirstQuestion('Have you been to us before?'), 'Have you been to us before?')
+})
+
+test('the booking chart on Test Bot asks once, including a mistyped cut', async () => {
+  const pack = hairStudioPack('Bella Hair Studio')
+  const graph = pack.flows.find((flow) => flow.name === 'Book an appointment')!.graph as unknown as FlowGraph
+  const hello = await canvasTurn('Book an appointment', graph, '', undefined, { catalog: pack.catalog })
+  assert.match(hello.text, /What would you like done\?/)
+  assert.equal((hello.text.match(/\?/g) ?? []).length, 1)
+  assert.equal(hello.text.includes('stylist'), false)
+
+  for (const typed of ['wnat a cut', 'wnat a ctu']) {
+    const cut = await canvasTurn('Book an appointment', graph, typed, hello.state, { catalog: pack.catalog })
+    assert.equal((cut.text.match(/\?/g) ?? []).length, 1)
+    assert.equal(cut.state.session?.variables && (cut.state.session.variables as { flow: Record<string, unknown> }).flow['route'], 'cut')
+    assert.equal(cut.text.toLowerCase().includes('wnat'), false)
+    assert.equal(cut.text.includes('preferred time'), false)
+  }
+})
+
+test('a phrase miss on Test Bot can classify among this chart\'s jobs', async () => {
+  const graph = {
+    nodes: [
+      { id: 'start', data: { kind: 'trigger_start', label: 'Start', config: {} } },
+      { id: 'route', data: { kind: 'route_topic', label: 'Route', config: { routes: [{ handle: 'plans', phrases: ['plans'] }, { handle: 'hours', phrases: ['hours'] }] } } },
+      { id: 'plans', data: { kind: 'send_message', label: 'Plans', config: { text: 'SIM only from £26.' } } },
+      { id: 'hours', data: { kind: 'send_message', label: 'Hours', config: { text: 'Open 8 to 8.' } } },
+      { id: 'other', data: { kind: 'send_message', label: 'Other', config: { text: 'What can I help with?' } } },
+    ],
+    edges: [
+      { id: 'e1', source: 'start', target: 'route' },
+      { id: 'e2', source: 'route', target: 'plans', sourceHandle: 'plans' },
+      { id: 'e3', source: 'route', target: 'hours', sourceHandle: 'hours' },
+      { id: 'e4', source: 'route', target: 'other', sourceHandle: 'other' },
+    ],
+  } as FlowGraph
+  const stub = await canvasTurn('Plans and hours', graph, 'how much for unlimited data roaming')
+  assert.match(stub.text, /What can I help/)
+  const classified = await canvasTurn('Plans and hours', graph, 'how much for unlimited data roaming', undefined, {
+    classify: async () => ({ category: 'plans', confidence: 0.9 }),
+  })
+  assert.match(classified.text, /SIM only/)
+})
+
+test('Test Bot on the location chart looks up the address', async () => {
+  const pack = hairStudioPack('Yuzu')
+  const graph = pack.flows.find((flow) => flow.name === 'Location')!.graph as unknown as FlowGraph
+  const turn = await canvasTurn('Location', graph, 'where are you', undefined, { catalog: pack.catalog })
+  assert.match(turn.text, /Rosewood/)
+  assert.match(turn.text, /hours|price|book/i)
+  assert.equal(turn.state.session?.status, 'waiting_input')
 })

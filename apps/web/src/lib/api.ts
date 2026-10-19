@@ -427,25 +427,26 @@ export const optimizations = {
 export const preview = {
   knowledgeStats: (botId: string) =>
     apiFetch<{ data: { chunkCount: number; sourceCount: number } }>(`/bots/${botId}/preview/knowledge-stats`),
-  journey: (body: {
+  /** No botId while a new bot is still a draft. */
+  journey: (botId: string | null | undefined, body: {
     chapters: Array<{ name: string; graph: unknown }>
     startChapter: string
     message: string
     environmentLabel: string
-    session?: unknown
+    state?: TestChatState
     catalog?: unknown
   }) =>
-    apiFetch<{ data: { handled: boolean; text: string; chapter: string; session?: unknown } }>('/preview/journey', {
+    apiFetch<{ data: TestChatTurn }>(botId ? `/bots/${botId}/preview/journey` : '/preview/journey', {
       method: 'POST',
       body: JSON.stringify(body),
     }),
   /** Returns the raw fetch Response so the caller can consume the SSE stream. */
   chatStream: (botId: string, body: {
     message: string
-    systemPrompt?: string
-    history?: Array<{ role: 'user' | 'assistant'; content: string }>
+    opening?: boolean
     graph?: { nodes: unknown[]; edges: unknown[] }
-    session?: unknown
+    flowName?: string
+    state?: TestChatState
   }): Promise<Response> => {
     const token = (() => { try { const r = localStorage.getItem('ybot-app'); if (!r) return null; const p = JSON.parse(r) as { state?: { token?: string } }; return p?.state?.token ?? null } catch { return null } })()
     return fetch(`${BASE}/bots/${botId}/preview/chat`, {
@@ -458,6 +459,24 @@ export const preview = {
       body: JSON.stringify(body),
     })
   },
+}
+
+/** A test chat's memory between turns. The server owns its shape; send it back unchanged. */
+export interface TestChatState {
+  status: 'active' | 'resolved' | 'escalated'
+  outcome: string | null
+  handover: Partial<HandoverContract> | null
+  [key: string]: unknown
+}
+
+export type TestChatPath = 'journey' | 'name' | 'answer' | 'none' | 'held' | 'handover'
+
+export interface TestChatTurn {
+  text: string
+  path: TestChatPath
+  ended: boolean
+  chapter: string
+  state: TestChatState
 }
 
 /** Build the WebSocket URL for the tenant real-time channel. */

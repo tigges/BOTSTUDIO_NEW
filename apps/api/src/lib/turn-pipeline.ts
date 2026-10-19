@@ -14,7 +14,8 @@
  * A handover (stage 4 or 5) only happens when the bot has opening hours for people.
  * Without them nobody watches the queue, so the bot says so and keeps helping.
  *
- * Sessions live in flow_sessions (Postgres) for every surface.
+ * Sessions live in flow_sessions (Postgres) for every live surface. Journey Test
+ * and Test Bot run the same stages with in-memory ports (test-chat.ts).
  */
 
 import { prisma } from '@ybot/db'
@@ -195,6 +196,25 @@ export async function chatHistory(conversationId: string, current: string, limit
   return lines.reverse().slice(-limit).map(({ role, text }) => ({ role, content: text }))
 }
 
+/** The bot's model answers from the knowledge base, with its own prompt, temperature and length. */
+export async function answerFromKnowledge(request: AnswerRequest): Promise<void> {
+  const cfg = await prisma.botConfig.findUnique({ where: { botId: request.botId } }).catch(() => null)
+  const bot = cfg ? null : await prisma.bot.findUnique({ where: { id: request.botId }, select: { name: true } }).catch(() => null)
+  const systemPrompt = cfg?.systemPrompt
+    ?? `You are a helpful assistant for ${bot?.name ?? 'this business'}. Answer using the knowledge base context.`
+  const model = cfg?.model ?? undefined
+  const chunks = await searchKnowledge(request.text, request.tenantId, request.botId)
+  const adapter = model ? createLlmAdapterForModel(model) : defaultLlm
+  await adapter.stream({
+    messages: [...request.history, { role: 'user', content: request.text }],
+    systemPrompt: systemPrompt + knowledgeBlock(chunks),
+    model,
+    temperature: cfg?.temperature ?? 0.3,
+    maxTokens: cfg?.maxTokens ?? 2048,
+    onChunk: request.onChunk,
+  })
+}
+
 const ports: TurnPorts = {
   async saveInbound(input) {
     const saved = await prisma.message.create({
@@ -227,23 +247,7 @@ const ports: TurnPorts = {
   }),
   nameTurn: takeNameTurn,
   history: chatHistory,
-  async answer(request) {
-    const cfg = await prisma.botConfig.findUnique({ where: { botId: request.botId } }).catch(() => null)
-    const bot = cfg ? null : await prisma.bot.findUnique({ where: { id: request.botId }, select: { name: true } }).catch(() => null)
-    const systemPrompt = cfg?.systemPrompt
-      ?? `You are a helpful assistant for ${bot?.name ?? 'this business'}. Answer using the knowledge base context.`
-    const model = cfg?.model ?? undefined
-    const chunks = await searchKnowledge(request.text, request.tenantId, request.botId)
-    const adapter = model ? createLlmAdapterForModel(model) : defaultLlm
-    await adapter.stream({
-      messages: [...request.history, { role: 'user', content: request.text }],
-      systemPrompt: systemPrompt + knowledgeBlock(chunks),
-      model,
-      temperature: cfg?.temperature ?? 0.3,
-      maxTokens: cfg?.maxTokens ?? 2048,
-      onChunk: request.onChunk,
-    })
-  },
+  answer: answerFromKnowledge,
   async saveOutbound(input, text) {
     if (!text.trim()) return
     const saved = await prisma.message.create({
