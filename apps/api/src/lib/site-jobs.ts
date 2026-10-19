@@ -5,7 +5,7 @@
  * the model fails, or the site is a hair studio (authored salon walk).
  */
 
-import { createLlmAdapter } from '@ybot/llm'
+import { LlmAdapter, llmChain, type LlmProvider } from '@ybot/llm'
 import {
   chooseShopHomes,
   chooseSitePages,
@@ -52,29 +52,13 @@ export interface ImportReport {
 interface ImportProvider {
   name: string
   model: string
-  env: Record<string, string | undefined>
+  modelEnv: string
+  provider: LlmProvider
 }
 
-/** Every cloud key the API has, in the same order as chat, each on the model the API is set to use. */
+/** Every provider the API has, in the same order as chat (Gemini, Claude, OpenAI, Groq, Ollama). */
 export function importProviders(env: Record<string, string | undefined> = process.env): ImportProvider[] {
-  const providers: ImportProvider[] = []
-  if (env['GEMINI_API_KEY']) {
-    const model = env['GEMINI_MODEL'] || 'gemini-2.0-flash'
-    providers.push({ name: 'Gemini', model, env: { GEMINI_API_KEY: env['GEMINI_API_KEY'], GEMINI_MODEL: model } })
-  }
-  if (env['GROQ_API_KEY']) {
-    const model = env['GROQ_MODEL'] || 'llama-3.3-70b-versatile'
-    providers.push({ name: 'Groq', model, env: { GROQ_API_KEY: env['GROQ_API_KEY'], GROQ_MODEL: model } })
-  }
-  if (env['OPENAI_API_KEY']) {
-    const model = env['OPENAI_MODEL'] || 'gpt-4o'
-    providers.push({ name: 'OpenAI', model, env: { OPENAI_API_KEY: env['OPENAI_API_KEY'], OPENAI_MODEL: model } })
-  }
-  if (env['ANTHROPIC_API_KEY']) {
-    const model = env['ANTHROPIC_MODEL'] || 'claude-sonnet-4-5'
-    providers.push({ name: 'Anthropic', model, env: { ANTHROPIC_API_KEY: env['ANTHROPIC_API_KEY'], ANTHROPIC_MODEL: model } })
-  }
-  return providers
+  return llmChain(env).map((link) => ({ name: link.label, model: link.model, modelEnv: link.modelEnv, provider: link.provider }))
 }
 
 export function importProviderName(env: Record<string, string | undefined> = process.env): string | null {
@@ -83,28 +67,27 @@ export function importProviderName(env: Record<string, string | undefined> = pro
 
 /** Each provider that was tried and why it gave nothing. */
 export class ImportModelError extends Error {
-  constructor(readonly failures: Array<{ name: string; model: string; error: unknown }>) {
+  constructor(readonly failures: Array<{ name: string; model: string; modelEnv?: string; error: unknown }>) {
     super(failures.map((failure) => `${failure.name} (${failure.model}): ${String((failure.error as Error)?.message ?? failure.error).slice(0, 200)}`).join('; '))
   }
 }
 
-const ENV_FOR: Record<string, string> = { Gemini: 'GEMINI_MODEL', Groq: 'GROQ_MODEL', OpenAI: 'OPENAI_MODEL', Anthropic: 'ANTHROPIC_MODEL' }
-
-function failureWords(err: unknown, name?: string, model?: string): string {
+function failureWords(err: unknown, model?: string, modelEnv?: string): string {
   const message = String((err as Error)?.message ?? err)
   if (/timed out/i.test(message)) return `took longer than ${IMPORT_TIMEOUT_MS / 1000} seconds`
   const status = message.match(/\b([45]\d\d)\b/)?.[1]
   if (status === '429') return 'is rate limited (HTTP 429)'
   if (status === '401' || status === '403') return `rejected the key (HTTP ${status})`
   if (status === '404' && model) {
-    return `has no model called ${model} (HTTP 404). Set ${name ? ENV_FOR[name] ?? 'the model' : 'the model'} on the API to a current model`
+    return `has no model called ${model} (HTTP 404). Set ${modelEnv ?? 'the model'} on the API to a current model`
   }
+  if (!status && /fetch failed|ECONNREFUSED|ENOTFOUND|EHOSTUNREACH/i.test(message)) return 'could not be reached'
   return status ? `did not answer (HTTP ${status})` : 'did not answer'
 }
 
 export function modelFailureWhy(err: unknown, fallbackName: string): string {
   if (err instanceof ImportModelError) {
-    return err.failures.map((failure) => `${failure.name} ${failureWords(failure.error, failure.name, failure.model)}.`).join(' ')
+    return err.failures.map((failure) => `${failure.name} ${failureWords(failure.error, failure.model, failure.modelEnv)}.`).join(' ')
   }
   return `${fallbackName} ${failureWords(err)}.`
 }
@@ -117,17 +100,17 @@ export function cloudLlmComplete(timeoutMs = IMPORT_TIMEOUT_MS, env: Record<stri
   if (providers.length === 0) return null
   const complete: ChainedComplete = async ({ system, user }) => {
     const deadline = Date.now() + timeoutMs
-    const failures: Array<{ name: string; model: string; error: unknown }> = []
+    const failures: Array<{ name: string; model: string; modelEnv: string; error: unknown }> = []
     for (const provider of providers) {
       const left = deadline - Date.now()
       if (left <= 0) {
-        failures.push({ name: provider.name, model: provider.model, error: new Error('import model timed out') })
+        failures.push({ name: provider.name, model: provider.model, modelEnv: provider.modelEnv, error: new Error('import model timed out') })
         break
       }
       let timer: ReturnType<typeof setTimeout> | undefined
       try {
         const result = await Promise.race([
-          createLlmAdapter(provider.env).complete({
+          new LlmAdapter(provider.provider, provider.model).complete({
             messages: [{ role: 'user', content: user }],
             systemPrompt: system,
             temperature: 0,
@@ -140,7 +123,7 @@ export function cloudLlmComplete(timeoutMs = IMPORT_TIMEOUT_MS, env: Record<stri
         complete.answeredBy = provider.name
         return result.content
       } catch (error) {
-        failures.push({ name: provider.name, model: provider.model, error })
+        failures.push({ name: provider.name, model: provider.model, modelEnv: provider.modelEnv, error })
       } finally {
         clearTimeout(timer)
       }
@@ -435,8 +418,8 @@ export async function draftWebsiteChatWithModel(input: {
   if (cluster === 'hair') return fallback('Hair studios get the authored salon map.')
   const complete = input.complete === undefined ? importLlmComplete() : input.complete
   if (!complete) {
-    if (input.complete === undefined) warnImport(input.pages, 'no Gemini, Groq, OpenAI or Anthropic key is set')
-    return fallback('No AI model key is set on the server. Add GEMINI_API_KEY or GROQ_API_KEY to the API.')
+    if (input.complete === undefined) warnImport(input.pages, 'no Gemini, Claude or Ollama is set')
+    return fallback('No AI model is set on the server. Add GEMINI_API_KEY or ANTHROPIC_API_KEY, or point OLLAMA_BASE_URL at an Ollama server.')
   }
   let miss = 'The AI model gave no usable topics.'
   const jobs = await jobsFromModelPages(input.pages, complete, (why) => { miss = why })

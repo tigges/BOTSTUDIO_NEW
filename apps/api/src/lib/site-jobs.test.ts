@@ -228,14 +228,14 @@ test('the draft says whether the model drafted it, and why not', async () => {
   assert.match(reasons[5]!.why, /salon map/)
 })
 
-test('a retired Groq model hands the import to the next key, and the reason names the model', async () => {
+test('a failing Gemini model hands the import to Claude, and Groq waits behind both', async () => {
   const realFetch = globalThis.fetch
   const asked: string[] = []
   globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
     const href = String(url)
     const body = JSON.parse(String(init?.body ?? '{}')) as { model?: string }
     asked.push(`${new URL(href).host} ${body.model}`)
-    if (href.includes('groq')) {
+    if (href.includes('groq') || href.includes('googleapis')) {
       return new Response('{"error":{"message":"The model does not exist","code":"model_not_found"}}', { status: 404 })
     }
     return new Response(JSON.stringify({
@@ -245,8 +245,11 @@ test('a retired Groq model hands the import to the next key, and the reason name
     }), { status: 200 })
   }) as typeof fetch
   try {
-    const env = { GROQ_API_KEY: 'g', GROQ_MODEL: 'llama-retired', ANTHROPIC_API_KEY: 'a' }
-    assert.deepEqual(importProviders(env).map((provider) => `${provider.name} ${provider.model}`), ['Groq llama-retired', 'Anthropic claude-sonnet-4-5'])
+    const env = { GROQ_API_KEY: 'g', GROQ_MODEL: 'llama-retired', ANTHROPIC_API_KEY: 'a', GEMINI_API_KEY: 'k', GEMINI_MODEL: 'gemini-gone' }
+    assert.deepEqual(
+      importProviders(env).map((provider) => `${provider.name} ${provider.model}`),
+      ['Gemini gemini-gone', 'Claude claude-sonnet-5-5', 'Groq llama-retired'],
+    )
     const chained = cloudLlmComplete(5_000, env)!
     const reports: Array<{ by: string; why: string }> = []
     const draft = await draftWebsiteChatWithModel({
@@ -256,9 +259,9 @@ test('a retired Groq model hands the import to the next key, and the reason name
       complete: chained,
       report: (report) => reports.push(report),
     })
-    assert.deepEqual(asked, ['api.groq.com llama-retired', 'api.anthropic.com claude-sonnet-4-5'])
-    assert.equal(chained.answeredBy, 'Anthropic')
-    assert.deepEqual(reports, [{ by: 'model', why: 'Anthropic drafted 1 topic from the pages.' }])
+    assert.deepEqual(asked, ['generativelanguage.googleapis.com gemini-gone', 'api.anthropic.com claude-sonnet-5-5'])
+    assert.equal(chained.answeredBy, 'Claude')
+    assert.deepEqual(reports, [{ by: 'model', why: 'Claude drafted 1 topic from the pages.' }])
     assert.ok(draft.doors.some((door) => /£26 a month/.test(door.answer)))
 
     const groqOnly = cloudLlmComplete(5_000, { GROQ_API_KEY: 'g', GROQ_MODEL: 'llama-retired' })!
@@ -266,6 +269,26 @@ test('a retired Groq model hands the import to the next key, and the reason name
     await draftWebsiteChatWithModel({ pages: simPages().pages, companyName: 'Vodafone', complete: groqOnly, report: (report) => failed.push(report) })
     assert.equal(failed[0]?.by, 'pages')
     assert.equal(failed[0]?.why, 'Groq has no model called llama-retired (HTTP 404). Set GROQ_MODEL on the API to a current model.')
+  } finally {
+    globalThis.fetch = realFetch
+  }
+})
+
+test('Ollama joins the import chain last when OLLAMA_BASE_URL is set, and an unreachable one says so', async () => {
+  const realFetch = globalThis.fetch
+  globalThis.fetch = (async () => { throw new TypeError('fetch failed') }) as typeof fetch
+  try {
+    const env = { OLLAMA_BASE_URL: 'http://nas:11434', ANTHROPIC_API_KEY: 'a' }
+    assert.deepEqual(importProviders(env).map((provider) => `${provider.name} ${provider.model}`), ['Claude claude-sonnet-5-5', 'Ollama llama3.2'])
+    assert.equal(importProviders({}).length, 0)
+    const failed: Array<{ by: string; why: string }> = []
+    await draftWebsiteChatWithModel({
+      pages: simPages().pages,
+      companyName: 'Vodafone',
+      complete: cloudLlmComplete(5_000, { OLLAMA_BASE_URL: 'http://nas:11434' })!,
+      report: (report) => failed.push(report),
+    })
+    assert.deepEqual(failed, [{ by: 'pages', why: 'Ollama could not be reached.' }])
   } finally {
     globalThis.fetch = realFetch
   }
