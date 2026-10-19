@@ -167,6 +167,7 @@ model Bot {
   templateOptimizations TemplateOptimization[]
   automationRules AutomationRule[]
   tools        Tool[]
+  guardrailPolicies GuardrailPolicy[]
 
   @@map("bots")
 }
@@ -180,6 +181,8 @@ model BotConfig {
   maxTokens    Int      @default(2048)
   systemPrompt String   @default("You are a helpful assistant.")
   inboxConfig  Json     @default("{}")
+  /// Personal data render modes per reader and custom patterns (see @ybot/shared privacy.ts).
+  privacy      Json     @default("{}")
   updatedAt    DateTime @updatedAt
 
   bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
@@ -965,4 +968,22 @@ model ToolRun {
   @@index([toolId, createdAt])
   @@index([conversationId])
   @@map("tool_runs")
+}
+
+/// Content guardrails for one bot. At most one policy per bot is active.
+model GuardrailPolicy {
+  id        String   @id @default(cuid())
+  tenantId  String
+  botId     String
+  name      String
+  active    Boolean  @default(false)
+  /// GuardrailRule[] (see @ybot/shared guardrails.ts)
+  rules     Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@index([botId, active])
+  @@map("guardrail_policies")
 }

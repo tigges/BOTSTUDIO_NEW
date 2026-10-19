@@ -1,5 +1,15 @@
 export { PrismaClient } from '@prisma/client'
 export { prisma } from './client.js'
+export {
+  auditAction,
+  changedFields,
+  currentAuditActor,
+  hideSecrets,
+  runWithAuditContext,
+  setAuditActor,
+  withAuditActor,
+  type AuditActor,
+} from './audit.js'
 export type {
   Prisma,
   Tenant,
@@ -36,4 +46,5 @@ export type {
   Webhook,
   Activity,
   StartTemplate,
+  GuardrailPolicy,
 } from '@prisma/client'
