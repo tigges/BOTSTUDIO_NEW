@@ -29,6 +29,7 @@ import { installLlmLedger, withLlmScope } from './lib/llm-ledger.js'
 import { setTurnBroadcast } from './lib/turn-pipeline.js'
 import { systemRoutes } from './routes/system.js'
 import { cannedRoutes, reportsRoutes, databaseRoutes, integrationsRoutes } from './routes/studio.js'
+import { toolsRoutes, authProfilesRoutes } from './routes/tools.js'
 import { authMiddleware } from './middleware/auth.js'
 import { wsRoutes, broadcastToTenant } from './ws.js'
 import { initQueues } from './queues.js'
@@ -119,6 +120,8 @@ await app.register(widgetRoutes, { prefix: '/api/v1' })
 await app.register(channelWebhookRoutes, { prefix: '/api/v1' })
 await app.register(optimizationRoutes, { prefix: '/api/v1/bots' })
 await app.register(workflowsRoutes, { prefix: '/api/v1/bots' })
+await app.register(toolsRoutes, { prefix: '/api/v1/bots' })
+await app.register(authProfilesRoutes, { prefix: '/api/v1/auth-profiles' })
 await app.register(dashboardsRoutes, { prefix: '/api/v1/bots' })
 await app.register(reportsRoutes, { prefix: '/api/v1/bots' })
 await app.register(cannedRoutes, { prefix: '/api/v1/canned-replies' })
