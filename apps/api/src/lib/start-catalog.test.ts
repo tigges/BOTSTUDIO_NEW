@@ -12,6 +12,7 @@ import {
   draftClusteredTemplate,
   identityFor,
   learnedSpecFromJobs,
+  menuLine,
   inspectFlowGraph,
   pageFromHtml,
   personaAvatar,
@@ -299,4 +300,14 @@ test('model topic blurbs end on a sentence or an ellipsis, never a cut word and 
   const blurb = (name: string) => spec.topics.find((item) => item.flowName === name)?.blurb ?? ''
   assert.equal(blurb('Buy a phone'), 'Vodafone offers pay monthly contract phones and pay as you go phones.')
   assert.equal(blurb('Get SIM only deal'), 'Vodafone offers SIM only plans with minutes, texts and mobile data…')
+})
+
+test('the fallback menu reads as tasks for job names and as topics otherwise', () => {
+  const topic = (name: string) => ({ flowName: name, choice: name, phrases: [], question: '', answer: '', blurb: '' })
+  assert.equal(
+    menuLine([topic('Get a demo'), topic('View pricing'), topic('Contact support'), topic('Talk to a person')]),
+    'I can help you get a demo, view pricing, contact support, or talk to a person.',
+  )
+  assert.equal(menuLine([topic('Opening hours'), topic('Plans'), topic('Talk to a person')]), 'I can help with opening hours, plans, or a person on the team.')
+  assert.equal(menuLine([topic('SIM only'), topic('Broadband')]), 'I can help with SIM only, broadband, or a person on the team.')
 })
