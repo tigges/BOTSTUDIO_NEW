@@ -104,9 +104,15 @@ function hintHits(pattern: RegExp, text: string): number {
   return [...text.matchAll(new RegExp(pattern.source, 'gi'))].length
 }
 
+/** One salon word in a long page is a passing mention, such as a "Beauty" link on a news homepage. */
+function hairCarries(hits: number, text: string): boolean {
+  const words = text.split(/\s+/).filter(Boolean).length
+  return hits >= 3 || hits * 150 >= words
+}
+
 /**
  * A salon word on a product page is usually a sample (Hair & Spa on BotStudio).
- * Hair only wins when it is the only match, or the page names the studio often.
+ * Hair only wins when it is the only match and more than a passing mention, or the page names the studio often.
  */
 export function suggestCluster(text: string): ClusterId {
   const blob = `${text}`
@@ -122,7 +128,7 @@ export function suggestCluster(text: string): ClusterId {
     product.sort((a, b) => b[1] - a[1] || CLUSTER_RANK.indexOf(a[0]) - CLUSTER_RANK.indexOf(b[0]))
     return product[0]![0]
   }
-  return hair > 0 ? 'hair' : 'custom'
+  return hair > 0 && hairCarries(hair, blob) ? 'hair' : 'custom'
 }
 
 function handleFor(name: string): string {

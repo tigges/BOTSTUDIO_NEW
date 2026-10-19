@@ -81,6 +81,9 @@ test('crawled brand names come off so the map can sit as a template', () => {
   assert.equal(suggestCluster('Gmail inbox compose search'), 'email')
   assert.equal(suggestCluster('Ladies wash cut and style at the salon'), 'hair')
   assert.equal(suggestCluster('Welcome to the studio. We love hair.'), 'hair')
+  const newsHome = `Home News Sport Weather iPlayer Sounds Bitesize. ${'Live updates as the story develops across the country today. '.repeat(40)}Style and Beauty`
+  assert.equal(suggestCluster(newsHome), 'custom')
+  assert.equal(suggestCluster(`${'Book online any day of the week. '.repeat(40)}Hair salon with a senior stylist`), 'hair')
   assert.equal(
     suggestCluster(
       'Build, operate, and connect your hybrid agent workforce. Bots answer from your own content. Hair & Spa. Colour. Cut. Start with the website widget. The same chat in Inbox. https://botstudio.uk/',
