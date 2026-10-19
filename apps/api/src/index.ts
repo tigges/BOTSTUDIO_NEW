@@ -25,6 +25,7 @@ import { startWebhookWorker } from './workers/webhook-deliver.js'
 import { startConversationAnalysisWorker } from './workers/conversation-analysis.js'
 import { startCampaignWorker } from './workers/campaign-send.js'
 import { startQuietChatSweep } from './lib/chat-outcome.js'
+import { installLlmLedger, withLlmScope } from './lib/llm-ledger.js'
 import { systemRoutes } from './routes/system.js'
 import { cannedRoutes, reportsRoutes, databaseRoutes, integrationsRoutes } from './routes/studio.js'
 import { authMiddleware } from './middleware/auth.js'
@@ -124,11 +125,13 @@ await app.register(databaseRoutes, { prefix: '/api/v1/database' })
 await app.register(integrationsRoutes, { prefix: '/api/v1/integrations' })
 await app.register(systemRoutes, { prefix: '/api/v1/system' })
 
+installLlmLedger()
+
 try {
   await app.listen({ port: PORT, host: HOST })
   console.log(`API running on http://${HOST}:${PORT}`)
   import('./scripts/demo-program.js')
-    .then((mod) => mod.applyDemoProgram())
+    .then((mod) => withLlmScope({ source: 'authoring' }, () => mod.applyDemoProgram()))
     .then((result) => console.log('[demo-program]', JSON.stringify(result)))
     .catch((err) => console.warn('[demo-program]', err instanceof Error ? err.message : err))
   import('./scripts/ensure-demos.js')

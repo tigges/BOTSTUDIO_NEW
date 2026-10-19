@@ -21,6 +21,7 @@ import { installWebsiteScan } from '../lib/install-website-scan.js'
 import { PublicSiteError, readPublicSite } from '../lib/public-site.js'
 import { draftSiteSpecWithModel, draftWebsiteChatWithModel, type ImportReport } from '../lib/site-jobs.js'
 import { ensureOptionalChannels, ensureWebChannels } from '../lib/web-channels.js'
+import { enterLlmScope } from '../lib/llm-ledger.js'
 
 
 interface JwtPayload {
@@ -44,6 +45,7 @@ export async function botsRoutes(app: FastifyInstance) {
   })
 
   app.post('/scan', { preHandler: canBuild }, async (request, reply) => {
+    enterLlmScope({ source: 'authoring', tenantId: (request.user as JwtPayload).tenantId })
     const body = request.body as { url?: string; personaName?: string; companyName?: string }
     try {
       const pages = await readPublicSite(body.url ?? '')
@@ -106,6 +108,7 @@ export async function botsRoutes(app: FastifyInstance) {
   })
 
   app.post('/start-templates/preview', { preHandler: canBuild }, async (request, reply) => {
+    enterLlmScope({ source: 'authoring', tenantId: (request.user as JwtPayload).tenantId })
     const body = request.body as { url?: string; personaName?: string; companyName?: string; clusterId?: ClusterId }
     try {
       const pages = await readPublicSite(body.url ?? '')
@@ -126,6 +129,7 @@ export async function botsRoutes(app: FastifyInstance) {
 
   app.post('/start-templates', { preHandler: canBuild }, async (request, reply) => {
     const { tenantId } = request.user as JwtPayload
+    enterLlmScope({ source: 'authoring', tenantId })
     const body = request.body as { url?: string; personaName?: string; companyName?: string; clusterId?: ClusterId }
     try {
       const pages = await readPublicSite(body.url ?? '')
@@ -179,6 +183,7 @@ export async function botsRoutes(app: FastifyInstance) {
 
   app.post('/', { preHandler: canBuild }, async (request, reply) => {
     const { tenantId } = request.user as JwtPayload
+    enterLlmScope({ source: 'authoring', tenantId })
     const body = request.body as {
       name?: string
       description?: string
@@ -248,6 +253,7 @@ export async function botsRoutes(app: FastifyInstance) {
     await ensureWebChannels(tenantId, bot.id)
     await ensureOptionalChannels(tenantId, bot.id, Array.isArray(body.channels) ? body.channels : [])
 
+    enterLlmScope({ source: 'authoring', tenantId, botId: bot.id })
     const sandbox = bot.environments.find((env) => env.kind === 'sandbox')
     const companyName = name
     if (start === 'hair-studio') {

@@ -12,6 +12,7 @@ import { fillNameTokens } from '@ybot/shared'
 import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
 import type { LlmMessage } from '@ybot/llm'
 import { runFlowIfPublished } from './flow-runner.js'
+import { conversationScope, enterLlmScope, withLlmScope } from './llm-ledger.js'
 
 const llm = createLlmAdapter()
 const embedAI = createEmbeddingAdapter()
@@ -61,6 +62,10 @@ export interface BotReplyResult {
  * Creates/upserts Contact and Conversation records as needed.
  */
 export async function getBotReply(params: BotReplyParams): Promise<BotReplyResult> {
+  return withLlmScope({ source: 'runtime', tenantId: params.tenantId, botId: params.botId }, () => replyFor(params))
+}
+
+async function replyFor(params: BotReplyParams): Promise<BotReplyResult> {
   const { channelId, botId, tenantId, userText, externalId, conversationId: incomingConvoId, history = [] } = params
 
   const channel = await prisma.channel.findFirst({
@@ -96,6 +101,7 @@ export async function getBotReply(params: BotReplyParams): Promise<BotReplyResul
 
   // ── Save inbound message ──────────────────────────────────────────────────
   if (conversationId) {
+    enterLlmScope(await conversationScope(conversationId))
     await prisma.message.create({
       data: { tenantId, conversationId, direction: 'inbound', authorKind: 'user', content: { text: userText } },
     }).catch(() => {})

@@ -12,6 +12,7 @@
 
 import { prisma } from '@ybot/db'
 import { createEmbeddingAdapter } from '@ybot/llm'
+import { withLlmScope } from '../lib/llm-ledger.js'
 
 const embedder = createEmbeddingAdapter()
 
@@ -159,7 +160,10 @@ export async function startKnowledgeSyncWorker(): Promise<void> {
     )
 
     new Worker('knowledge-sync', async (job) => {
-      await ingestKnowledgeSource(job.data)
+      await withLlmScope(
+        { source: 'retrieval', tenantId: job.data.tenantId, botId: job.data.botId },
+        () => ingestKnowledgeSource(job.data),
+      )
     }, { connection, concurrency: 2 })
 
     console.log('[knowledge-sync worker] started')

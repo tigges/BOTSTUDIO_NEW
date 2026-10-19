@@ -20,6 +20,7 @@ import { runJourneyPreview, shapeTurn, type FlowGraph, type JourneyPreviewSnapsh
 import { z } from 'zod'
 import { CATALOG_ENTITY, catalogFromValues, type StudioCatalog } from '@ybot/shared'
 import { runCanvasPreview, type PreviewSnapshot } from '../lib/preview-flow.js'
+import { enterLlmScope } from '../lib/llm-ledger.js'
 
 
 // Shared adapters (module-level singletons)
@@ -106,6 +107,7 @@ export async function previewRoutes(app: FastifyInstance) {
   app.post<{ Params: { botId: string } }>('/:botId/preview/chat', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { botId } = request.params
+    enterLlmScope({ source: 'runtime', tenantId, botId, environment: 'test' })
     const body = z.object({
       message: z.string().min(1).max(4000),
       systemPrompt: z.string().optional(),
@@ -283,6 +285,7 @@ export async function journeyPreviewRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN'))
 
   app.post('/preview/journey', async (request, reply) => {
+    enterLlmScope({ source: 'runtime', tenantId: (request.user as JWT | undefined)?.tenantId, environment: 'test' })
     const body = z.object({
       chapters: z.array(z.object({
         name: z.string().min(1).max(120),

@@ -12,6 +12,7 @@
 
 import { prisma } from '@ybot/db'
 import { createLlmAdapter } from '@ybot/llm'
+import { withLlmScope } from '../lib/llm-ledger.js'
 
 const llm = createLlmAdapter()
 
@@ -244,7 +245,10 @@ export async function startConversationAnalysisWorker(): Promise<void> {
     )
 
     new Worker('conversation-analysis', async (job) => {
-      await analyseConversation(job.data)
+      await withLlmScope(
+        { source: 'summarisation', tenantId: job.data.tenantId, botId: job.data.botId, conversationId: job.data.conversationId },
+        () => analyseConversation(job.data),
+      )
     }, { connection, concurrency: 2 })
 
     console.log('[conversation-analysis worker] started')

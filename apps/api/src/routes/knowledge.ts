@@ -6,6 +6,7 @@ import { DEFAULT_MODELS, currentModelId } from '@ybot/llm'
 import { enqueueKnowledgeSync } from '../queues.js'
 import { extractTextFromBuffer } from '../lib/extract-text.js'
 import { rereadWebsitePages } from '../lib/reread-website.js'
+import { enterLlmScope } from '../lib/llm-ledger.js'
 import { readPublicSite } from '../lib/public-site.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
@@ -187,6 +188,7 @@ export async function knowledgeRoutes(app: FastifyInstance) {
       try {
         const bot = await prisma.bot.findFirst({ where: { id: botId, tenantId }, select: { name: true, personaName: true } })
         const pages = await readPublicSite(url)
+        enterLlmScope({ source: 'authoring', tenantId, botId })
         await rereadWebsitePages({
           tenantId,
           botId,
