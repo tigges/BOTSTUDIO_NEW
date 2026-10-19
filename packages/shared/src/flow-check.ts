@@ -5,6 +5,8 @@
  * A missing branch with no obvious destination stays for a person to decide.
  */
 
+import { handoverContext, handoverPriority } from './handover.js'
+
 export interface CheckNode {
   id: string
   data?: { kind?: string; label?: string; config?: Record<string, unknown> }
@@ -255,6 +257,25 @@ export function inspectFlowGraph(graph: CheckGraph | null | undefined, options: 
         issues.push({ level: 'block', code: 'missing-flow', nodeId: node.id, message: `${label} opens “${flowName}”, and this bot has no flow with that name.` })
       } else if (leaving.length > 0) {
         issues.push({ level: 'note', code: 'jump', nodeId: node.id, message: `${label} opens ${flowName}. The line after this step does not run.` })
+      }
+    }
+
+    if (kind === 'handover' || kind === 'transfer_agent') {
+      if (!handoverPriority(config['priority'])) {
+        issues.push({
+          level: 'block',
+          code: 'handover-priority',
+          nodeId: node.id,
+          message: `${label} uses priority “${String(config['priority'])}”. Pick low, medium, high or critical.`,
+        })
+      }
+      if (!handoverContext(config['context'])) {
+        issues.push({
+          level: 'block',
+          code: 'handover-context',
+          nodeId: node.id,
+          message: `${label} sends “${String(config['context'])}” to the team. Pick the full transcript or the summary only.`,
+        })
       }
     }
 

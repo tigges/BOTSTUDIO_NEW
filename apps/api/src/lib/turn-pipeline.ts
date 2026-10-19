@@ -4,19 +4,26 @@
  * Stages, in order:
  *   1. scope    every model call in the turn is attributed to this chat (llm_calls)
  *   2. inbound  save the guest's line, start the SLA clock, fire message rules
- *   3. journey  the published journey answers (chapters, jumps, handover, outcome)
- *   4. name     a name the guest just gave is thanked
- *   5. answer   no journey line: answer from the knowledge base with the bot's model
- *   6. outbound save the reply, stop the SLA clock, tell the Inbox
+ *   3. held     a person holds the chat: the bot stays quiet
+ *   4. human    a word on the always-human list hands over before any journey runs
+ *   5. journey  the published journey answers (chapters, jumps, handover, outcome)
+ *   6. name     a name the guest just gave is thanked
+ *   7. answer   no journey line: answer from the knowledge base with the bot's model
+ *   8. outbound save the reply, stop the SLA clock, tell the Inbox
+ *
+ * A handover (stage 4 or 5) only happens when the bot has opening hours for people.
+ * Without them nobody watches the queue, so the bot says so and keeps helping.
  *
  * Sessions live in flow_sessions (Postgres) for every surface.
  */
 
 import { prisma } from '@ybot/db'
 import { createLlmAdapter, createLlmAdapterForModel, type LlmMessage } from '@ybot/llm'
-import { fillNameTokens } from '@ybot/shared'
+import { alwaysHumanMatch, alwaysHumanRequest, fillNameTokens, type HandoverContract, type HandoverRequest } from '@ybot/shared'
 import { triggerRules } from './automation-engine.js'
+import { keepWithBot, markNoTeam } from './chat-outcome.js'
 import { runFlowIfPublished, type FlowRunResult } from './flow-runner.js'
+import { chatIsHeld, handOverChat, handoverRulesFor, HANDOVER_LINE, type HandoverRules } from './handover.js'
 import { knowledgeBlock, searchKnowledge } from './knowledge-search.js'
 import { conversationScope, withLlmScope } from './llm-ledger.js'
 import { onInboundCustomerMessage, onOutboundReply } from './sla.js'
@@ -42,7 +49,13 @@ export interface TurnResult {
   text: string
   /** The journey reached its end; a waiting question is still open when false. */
   ended: boolean
-  path: 'journey' | 'name' | 'answer' | 'none'
+  /** held: a person has the chat and the bot said nothing. handover: the bot just passed it on. */
+  path: 'journey' | 'name' | 'answer' | 'none' | 'held' | 'handover'
+}
+
+/** A person has the chat, so the guest waits for their reply. */
+export function withPerson(result: TurnResult): boolean {
+  return result.path === 'held' || result.path === 'handover'
 }
 
 export interface AnswerRequest {
@@ -55,6 +68,10 @@ export interface AnswerRequest {
 
 export interface TurnPorts {
   saveInbound(input: TurnInput): Promise<void>
+  held(conversationId: string): Promise<boolean>
+  handoverRules(botId: string): Promise<HandoverRules>
+  handOver(input: TurnInput, request: HandoverRequest, source: HandoverContract['source']): Promise<void>
+  noTeam(conversationId: string): Promise<void>
   runJourney(input: TurnInput): Promise<FlowRunResult>
   nameTurn(conversationId: string, text: string): Promise<NamePlan & { contact: VisitorName | null }>
   history(conversationId: string, current: string): Promise<LlmMessage[]>
@@ -75,8 +92,29 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
 
   if (!input.opening && !input.inboundSaved) await ports.saveInbound(input)
 
+  if (await ports.held(input.conversationId)) return { text: '', ended: false, path: 'held' }
+
+  let rules: HandoverRules | undefined
+  const handOver = async (request: HandoverRequest, source: HandoverContract['source'], lines: string[]): Promise<TurnResult> => {
+    rules ??= await ports.handoverRules(input.botId)
+    const said = lines.filter((line) => line.trim())
+    if (!rules.liveAgents) {
+      await ports.noTeam(input.conversationId)
+      return reply(keepWithBot(said).join('\n\n'), { ended: false, path: source === 'journey' ? 'journey' : 'none' })
+    }
+    await ports.handOver(input, request, source)
+    return reply(said.length ? said.join('\n\n') : HANDOVER_LINE, { ended: false, path: 'handover' })
+  }
+
+  if (!input.opening && input.text) {
+    rules = await ports.handoverRules(input.botId)
+    const word = alwaysHumanMatch(input.text, rules.alwaysHuman)
+    if (word) return handOver(alwaysHumanRequest(word), 'always_human', [])
+  }
+
   try {
     const journey = await ports.runJourney(input)
+    if (journey.handover) return handOver(journey.handover, 'journey', journey.messages)
     if (journey.handled) {
       const text = journey.messages.filter((line) => line.trim()).join('\n\n')
       if (text) return reply(text, { ended: Boolean(journey.ended), path: 'journey' })
@@ -163,6 +201,7 @@ const ports: TurnPorts = {
       data: { tenantId: input.tenantId, conversationId: input.conversationId, direction: 'inbound', authorKind: 'user', content: { text: input.text } },
     }).catch(() => null)
     if (saved) broadcast(input.tenantId, { event: 'message.created', data: saved })
+    await prisma.conversation.update({ where: { id: input.conversationId }, data: { updatedAt: new Date() } }).catch(() => {})
     await onInboundCustomerMessage({ conversationId: input.conversationId, botId: input.botId }).catch(() => null)
     const count = await prisma.message.count({ where: { conversationId: input.conversationId, direction: 'inbound' } }).catch(() => 0)
     triggerRules('message.received', {
@@ -174,6 +213,12 @@ const ports: TurnPorts = {
       conversationStatus: 'active',
     }).catch(() => {})
   },
+  held: chatIsHeld,
+  handoverRules: handoverRulesFor,
+  async handOver(input, request, source) {
+    await handOverChat({ conversationId: input.conversationId, tenantId: input.tenantId, botId: input.botId, request, source })
+  },
+  noTeam: markNoTeam,
   runJourney: (input) => runFlowIfPublished({
     conversationId: input.conversationId,
     botId: input.botId,

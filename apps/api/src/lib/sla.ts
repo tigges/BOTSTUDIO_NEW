@@ -2,7 +2,7 @@
  * SLA clocks and working-hours away replies.
  *
  * Targets live in BotConfig.inboxConfig:
- *   { sla: { first_response, resolution }, workingHours: { start, end, timezone, awayMessage } }
+ *   { sla: { first_response, resolution }, workingHours: { start, end, timezone, awayMessage }, alwaysHuman: string[] }
  *
  * First response is met by the first outbound reply (bot, agent, or the away message).
  * Resolution is met when the conversation is resolved or closed before resolutionDueAt.
@@ -11,6 +11,7 @@
  */
 
 import { prisma } from '@ybot/db'
+import { handoverList } from '@ybot/shared'
 import { triggerRules } from './automation-engine.js'
 
 export const DEFAULT_AWAY_MESSAGE =
@@ -28,6 +29,8 @@ export interface WorkingHours {
 export interface InboxPolicy {
   sla: { firstResponseHours: number; resolutionHours: number }
   workingHours: WorkingHours
+  /** Words and phrases that always send the chat to a person, ahead of any journey. */
+  alwaysHuman: string[]
 }
 
 export const DEFAULT_POLICY: InboxPolicy = {
@@ -39,6 +42,7 @@ export const DEFAULT_POLICY: InboxPolicy = {
     timezone: 'Europe/London',
     awayMessage: DEFAULT_AWAY_MESSAGE,
   },
+  alwaysHuman: [],
 }
 
 export interface SlaSnapshot {
@@ -78,6 +82,7 @@ export function parseInboxPolicy(raw: unknown): InboxPolicy {
       timezone: typeof hours['timezone'] === 'string' && hours['timezone'] ? hours['timezone'] : DEFAULT_POLICY.workingHours.timezone,
       awayMessage: away,
     },
+    alwaysHuman: handoverList(cfg['alwaysHuman']).slice(0, 100),
   }
 }
 

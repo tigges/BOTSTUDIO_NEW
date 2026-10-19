@@ -304,7 +304,8 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   const correctionFlow = pack.flows.find((flow) => flow.name === 'Colour correction')!
   const correctionGraph = correctionFlow.graph as unknown as FlowGraph
   const handed = await machine.run(atStart(correctionGraph, 'home dye'), correctionGraph, 'home dye')
-  assert.equal(handed.handover?.team, 'salon')
+  assert.equal(handed.handover?.routing.queue, 'salon')
+  assert.equal(handed.handover?.priority, 'medium')
   assert.match(spoken(handed), /passing this chat to the studio/)
 })
 

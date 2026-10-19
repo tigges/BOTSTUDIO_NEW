@@ -5,6 +5,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import React from 'react'
+import type { ReturnOutcome } from '@ybot/shared'
 import * as api from './api'
 import * as demo from './demo-data'
 import { useAppStore } from '../store/app'
@@ -366,6 +367,18 @@ export function useAssignConversation() {
     mutationFn: ({ id, assignedTo }: { id: string; assignedTo: string | null }) =>
       api.conversations.update(id, { assignedTo }),
     onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['conversation', v.id] }),
+  })
+}
+
+export function useHandBackConversation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, outcome, note }: { id: string; outcome: ReturnOutcome; note?: string }) =>
+      api.conversations.handBack(id, { outcome, ...(note ? { note } : {}) }),
+    onSuccess: (_d, v) => {
+      void qc.invalidateQueries({ queryKey: ['conversation', v.id] })
+      void qc.invalidateQueries({ queryKey: ['conversations'] })
+    },
   })
 }
 

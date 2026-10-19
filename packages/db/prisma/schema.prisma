@@ -395,6 +395,8 @@ model Conversation {
   slaBreachedAt        DateTime?
   /** contained_resolved | contained_partial | contained_unresolved | escalated | abandoned; null while open. */
   outcome              String?
+  /** The handover contract (reason, priority, tags, summary, variables, routing, context) and how it came back. */
+  handover             Json?
 
   bot         Bot          @relation(fields: [botId], references: [id], onDelete: Cascade)
   environment Environment  @relation(fields: [environmentId], references: [id])

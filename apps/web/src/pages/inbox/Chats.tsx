@@ -14,7 +14,9 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
 import { cn } from '@ybot/ui'
 import { formatLlmCost, llmCallsLine } from '../../lib/outcome-format'
-import { useConversations, useConversation, useSendMessage, useAssignConversation, useResolveConversation, useCreateConversation } from '../../lib/hooks'
+import { useConversations, useConversation, useSendMessage, useAssignConversation, useResolveConversation, useCreateConversation, useHandBackConversation } from '../../lib/hooks'
+import { showsHandover } from '../../lib/handover-format'
+import { HandoverCard } from './HandoverCard'
 import { useConversationWS, useTenantWS } from '../../lib/ws'
 import { useAppStore } from '../../store/app'
 import * as api from '../../lib/api'
@@ -24,6 +26,7 @@ import { claimChat, queueContact } from '../../lib/inbox-nav'
 import { ChatText } from '../../components/ChatText'
 import { chatMarkup, chatText } from '../../lib/chat-text'
 import { useCannedReplies, useTeamMembers, useLabels, useCreateLabel, useCreateTicket } from '../../lib/hooks'
+import type { ReturnOutcome } from '@ybot/shared'
 
 type ConvoStatus = 'active' | 'resolved' | 'escalated' | 'pending' | 'bot'
 type View = 'all' | 'mine' | 'unassigned' | 'escalated'
@@ -114,6 +117,8 @@ export function ChatsPage() {
   const sendMessage = useSendMessage()
   const assignConversation = useAssignConversation()
   const resolveConversation = useResolveConversation()
+  const handBack = useHandBackConversation()
+  const [handBackError, setHandBackError] = useState<string | undefined>()
   const createConversation = useCreateConversation()
   const [showNewConvo, setShowNewConvo] = useState(false)
   const [newConvoMessage, setNewConvoMessage] = useState('')
@@ -236,6 +241,19 @@ export function ChatsPage() {
   async function resolveConvo() {
     if (!selectedId) return
     try { await resolveConversation.mutateAsync(selectedId) } catch { /* demo */ }
+  }
+
+  useEffect(() => { setHandBackError(undefined) }, [selectedId])
+
+  async function handBackChat(outcome: ReturnOutcome, note: string) {
+    if (!selectedId) return
+    setHandBackError(undefined)
+    try {
+      await handBack.mutateAsync({ id: selectedId, outcome, note })
+      await refetchConvo()
+    } catch (err) {
+      setHandBackError(err instanceof Error ? `The chat was not handed back: ${err.message}` : 'The chat was not handed back. Try again.')
+    }
   }
 
   async function assignTo(agentId: string | null) {
@@ -437,6 +455,16 @@ export function ChatsPage() {
               </DropdownMenu>
             </div>
           </div>
+
+          {selectedConvo && selectedConvo.id === selected.id && showsHandover(selectedConvo) && (
+            <HandoverCard
+              chat={selectedConvo}
+              memberName={(id) => members.find((m) => m.id === id)?.displayName}
+              busy={handBack.isPending}
+              error={handBackError}
+              onHandBack={handBackChat}
+            />
+          )}
 
           {/* Label chips */}
           {selected.labels && selected.labels.length > 0 && (

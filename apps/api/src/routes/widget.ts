@@ -4,6 +4,7 @@
  * GET  /widget.js                     — serves the compiled embed widget script
  * GET  /widget-test/:channelId        — browser-loadable test page for a channel
  * POST /public/chat/:channelId        — SSE streaming chat (creates DB conversation)
+ * GET  /public/chat/:channelId/:conversationId/replies — a person's replies once they have the chat
  * POST /public/csat/:channelId        — submit CSAT rating for a conversation
  */
 
@@ -12,7 +13,8 @@ import { prisma } from '@ybot/db'
 import { readFile } from 'node:fs/promises'
 import { resolve, dirname } from 'node:path'
 import { proposeDraftFlows, textMightStartDraft } from '../lib/draft-flows.js'
-import { runTurn } from '../lib/turn-pipeline.js'
+import { runTurn, withPerson } from '../lib/turn-pipeline.js'
+import { isHeld } from '../lib/handover.js'
 import { triggerRules } from '../lib/automation-engine.js'
 import { appBuildLabel, BELLA_PUBLIC_CHANNEL, resolveDemoChannel } from '../lib/demo-page.js'
 import { visitorTurn } from '../lib/widget-open.js'
@@ -57,7 +59,7 @@ const WIDGET_INLINE_JS = /* js */`
   var conversationId=null;
   var sessionId='ws_'+Date.now()+'_'+Math.random().toString(36).slice(2);
   var open=false,messages=[],loading=false;
-  var csatState=null;
+  var csatState=null,liveTimer=null,watchGen=0,seenReplies={};
   function css(el,s){Object.assign(el.style,s);}
   function mk(tag,a){var n=document.createElement(tag);for(var k in a)n.setAttribute(k,a[k]);return n;}
   var HOSTS={'phorest.com':'Phorest','fresha.com':'Fresha','booksy.com':'Booksy','calendly.com':'Calendly','setmore.com':'Setmore','simplybook.me':'SimplyBook','vagaro.com':'Vagaro','squareup.com':'Square','square.site':'Square'};
@@ -143,17 +145,34 @@ const WIDGET_INLINE_JS = /* js */`
     if(opening)body.opening=true; else body.message=text;
     var res=await fetch(API_BASE+'/public/chat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!res.ok||!res.body){updMsg(bi,'Sorry, something went wrong. ('+res.status+')');return;}
-    var reader=res.body.getReader(),dec=new TextDecoder(),buf='',botText='';
+    var reader=res.body.getReader(),dec=new TextDecoder(),buf='',botText='',live=false;
     while(true){
       var r=await reader.read();if(r.done)break;
       buf+=dec.decode(r.value,{stream:true});
       var lines=buf.split('\\n');buf=lines.pop()||'';
       for(var i=0;i<lines.length;i++){
         var line=lines[i];
-        if(line.startsWith('data: ')){try{var d=JSON.parse(line.slice(6));if(d.conversationId)conversationId=d.conversationId;if(d.chunk){botText+=d.chunk;updMsg(bi,botText,true);}if(d.done)updMsg(bi,botText,false,!!d.ended);}catch(e){}}
+        if(line.startsWith('data: ')){try{var d=JSON.parse(line.slice(6));if(d.conversationId)conversationId=d.conversationId;if(d.chunk){botText+=d.chunk;updMsg(bi,botText,true);}if(d.done){live=!!d.live;updMsg(bi,botText,false,!!d.ended);}}catch(e){}}
       }
     }
-    if(!botText)updMsg(bi,"I\\'m sorry, I couldn\\'t generate a response.",false,false);
+    if(conversationId)watchReplies(live);
+    if(!botText&&live){messages.splice(bi,1);render();}
+    else if(!botText)updMsg(bi,"I\\'m sorry, I couldn\\'t generate a response.",false,false);
+  }
+  async function checkReplies(){
+    try{
+      var res=await fetch(API_BASE+'/public/chat/'+channelId+'/'+conversationId+'/replies?session='+encodeURIComponent(sessionId));
+      if(!res.ok)return false;
+      var d=await res.json();
+      (d.replies||[]).forEach(function(m){if(seenReplies[m.id])return;seenReplies[m.id]=true;addMsg('bot',m.text);});
+      return !!d.live;
+    }catch(e){return false;}
+  }
+  function watchReplies(live){
+    var gen=++watchGen;
+    if(liveTimer)clearTimeout(liveTimer);
+    var tick=async function(){var now=await checkReplies();if(gen!==watchGen)return;liveTimer=setTimeout(tick,now?4000:15000);};
+    liveTimer=setTimeout(tick,live?1000:15000);
   }
   async function send(){
     var text=ta.value.trim();if(!text||loading)return;
@@ -478,9 +497,39 @@ export async function widgetRoutes(app: FastifyInstance) {
       opening: !visitor.showVisitor,
       onChunk: (chunk) => send({ chunk }),
     })
-    send(streamDoneEvent(turn.ended))
+    send(streamDoneEvent(turn.ended, withPerson(turn)))
     reply.raw.end()
   })
+
+  // ── GET /public/chat/:channelId/:conversationId/replies — a person's replies ─
+  app.get<{ Params: { channelId: string; conversationId: string }; Querystring: { session?: string } }>(
+    '/public/chat/:channelId/:conversationId/replies',
+    { config: { rateLimit: { max: 40, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      setCors(reply)
+      const { channelId, conversationId } = request.params
+      const session = request.query.session ?? ''
+      const chat = await prisma.conversation.findFirst({
+        where: { id: conversationId, channelId },
+        select: { status: true, assignedTo: true, contact: { select: { externalId: true } } },
+      })
+      if (!chat || !session || chat.contact?.externalId !== session) {
+        return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'This chat was not found for this visitor.' } })
+      }
+      const rows = await prisma.message.findMany({
+        where: { conversationId, direction: 'outbound', authorKind: 'agent' },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: { id: true, content: true, createdAt: true },
+      })
+      const replies = rows.reverse().flatMap((row) => {
+        const content = row.content && typeof row.content === 'object' ? row.content as { text?: unknown; internal?: unknown } : {}
+        if (content.internal === true || typeof content.text !== 'string' || !content.text.trim()) return []
+        return [{ id: row.id, text: content.text, at: row.createdAt.toISOString() }]
+      })
+      return reply.send({ live: isHeld(chat), replies })
+    },
+  )
 
   // ── POST /public/csat/:channelId — rate a bot response ────────────────────
   app.post<{ Params: { channelId: string } }>('/public/csat/:channelId', async (request, reply) => {

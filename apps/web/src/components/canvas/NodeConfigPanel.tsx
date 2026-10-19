@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { X, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button, Input } from '@ybot/ui'
 import type { NodeKind } from '@ybot/shared'
-import { NODE_DEFINITIONS } from '@ybot/shared'
+import { HANDOVER_PRIORITIES, NODE_DEFINITIONS, handoverContext, handoverPriority } from '@ybot/shared'
 import type { Node } from '@xyflow/react'
 import type { FlowNodeData } from './FlowNode'
 
@@ -13,7 +13,38 @@ interface NodeConfigPanelProps {
   onClose: () => void
 }
 
-const CONFIG_FIELDS: Partial<Record<NodeKind, Array<{ key: string; label: string; type: string; placeholder?: string; hint?: string }>>> = {
+interface ConfigField {
+  key: string
+  label: string
+  type: string
+  placeholder?: string
+  hint?: string
+  options?: Array<{ value: string; label: string }>
+}
+
+const HANDOVER_FIELDS: ConfigField[] = [
+  { key: 'reason', label: 'Reason', type: 'text', placeholder: 'Colour correction needs a stylist', hint: 'The first line the team sees. {{variables}} work here.' },
+  {
+    key: 'priority', label: 'Priority', type: 'select',
+    options: HANDOVER_PRIORITIES.map((value) => ({ value, label: value[0]!.toUpperCase() + value.slice(1) })),
+  },
+  { key: 'tags', label: 'Tags', type: 'text', placeholder: 'colour, vip', hint: 'Separate with commas.' },
+  { key: 'summary', label: 'Summary for the team', type: 'textarea', placeholder: 'Leave empty to write one from the chat' },
+  { key: 'variables', label: 'Variables to pass on', type: 'text', placeholder: 'service, preferred_day', hint: 'Leave empty to pass every answer the guest gave.' },
+  { key: 'queue', label: 'Queue', type: 'text', placeholder: 'support' },
+  { key: 'skills', label: 'Skills', type: 'text', placeholder: 'colour, bookings', hint: 'Separate with commas.' },
+  { key: 'queuePriority', label: 'Queue priority (number)', type: 'number', placeholder: 'Follows the priority', hint: 'Higher is more urgent.' },
+  {
+    key: 'context', label: 'What travels with the chat', type: 'select',
+    options: [
+      { value: 'full_transcript', label: 'Full transcript' },
+      { value: 'summary_only', label: 'Summary only' },
+    ],
+    hint: 'Summary only keeps the transcript out of webhooks. The Inbox still shows the chat.',
+  },
+]
+
+const CONFIG_FIELDS: Partial<Record<NodeKind, ConfigField[]>> = {
   send_message: [
     { key: 'text', label: 'Message text', type: 'textarea', placeholder: 'Hello {{user.name}}! How can I help?' },
   ],
@@ -37,11 +68,7 @@ const CONFIG_FIELDS: Partial<Record<NodeKind, Array<{ key: string; label: string
     { key: 'body', label: 'Request body (JSON)', type: 'textarea', placeholder: '{"key": "{{flow.value}}"}' },
     { key: 'saveAs', label: 'Save response to', type: 'text', placeholder: 'flow.apiResponse' },
   ],
-  transfer_agent: [
-    { key: 'team', label: 'Route to team', type: 'text', placeholder: 'Support Team' },
-    { key: 'note', label: 'Handover note', type: 'textarea', placeholder: 'Context for the agent…' },
-    { key: 'priority', label: 'Priority', type: 'select', placeholder: 'normal' },
-  ],
+  transfer_agent: HANDOVER_FIELDS,
   delay: [
     { key: 'seconds', label: 'Delay (seconds)', type: 'number', placeholder: '5' },
   ],
@@ -62,11 +89,7 @@ const CONFIG_FIELDS: Partial<Record<NodeKind, Array<{ key: string; label: string
     { key: 'saveAs', label: 'Save response to', type: 'text', placeholder: 'flow.llmResponse' },
     { key: 'model', label: 'Model override', type: 'text', placeholder: 'Leave empty to use bot default' },
   ],
-  handover: [
-    { key: 'team', label: 'Route to team', type: 'text', placeholder: 'Support Team' },
-    { key: 'note', label: 'Handover note', type: 'textarea', placeholder: 'Context for the agent…' },
-    { key: 'priority', label: 'Priority', type: 'text', placeholder: 'normal' },
-  ],
+  handover: HANDOVER_FIELDS,
   search_knowledge: [
     { key: 'query', label: 'Search query', type: 'text', placeholder: '{{user.message}}' },
     { key: 'topK', label: 'Top K results', type: 'number', placeholder: '3' },
@@ -146,6 +169,20 @@ export function NodeConfigPanel({ node, onUpdate, onDelete, onClose }: NodeConfi
     return JSON.stringify(value, null, 2)
   }
 
+  /** Handover steps saved before the contract used team and note. */
+  function legacyValue(key: string): unknown {
+    if (data.kind !== 'handover' && data.kind !== 'transfer_agent') return undefined
+    if (key === 'queue') return data.config?.['team']
+    if (key === 'reason') return data.config?.['note']
+    return undefined
+  }
+
+  function selectedOption(key: string, value: string): string {
+    if (key === 'priority') return handoverPriority(value) ?? value
+    if (key === 'context') return handoverContext(value) ?? value
+    return value
+  }
+
   function updateConfig(key: string, value: string) {
     if (!node) return
     onUpdate(node.id, {
@@ -204,7 +241,26 @@ export function NodeConfigPanel({ node, onUpdate, onDelete, onClose }: NodeConfi
           <p className="text-xs text-[var(--text-muted)] italic">No configuration for this node.</p>
         ) : (
           fields.map((field) => {
-            const val = fieldValue(data.config?.[field.key])
+            const val = fieldValue(data.config?.[field.key] ?? legacyValue(field.key))
+            const hint = field.hint ? <p className="text-[10px] text-[var(--text-muted)]">{field.hint}</p> : null
+            if (field.options) {
+              const selected = selectedOption(field.key, val)
+              return (
+                <div key={field.key} className="flex flex-col gap-1">
+                  <label htmlFor={`cfg-${field.key}`} className="text-xs font-medium text-[var(--text-secondary)]">{field.label}</label>
+                  <select
+                    id={`cfg-${field.key}`}
+                    value={selected}
+                    onChange={(e) => updateConfig(field.key, e.target.value)}
+                    className="w-full rounded border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-xs text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none"
+                  >
+                    {!field.options.some((option) => option.value === selected) && <option value={selected}>{selected} (not allowed)</option>}
+                    {field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                  {hint}
+                </div>
+              )
+            }
             if (field.type === 'textarea') {
               return (
                 <div key={field.key} className="flex flex-col gap-1">
@@ -216,17 +272,20 @@ export function NodeConfigPanel({ node, onUpdate, onDelete, onClose }: NodeConfi
                     onChange={(e) => updateConfig(field.key, e.target.value)}
                     className="w-full rounded border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--border-focus)] focus:outline-none resize-none"
                   />
+                  {hint}
                 </div>
               )
             }
             return (
-              <Input
-                key={field.key}
-                label={field.label}
-                placeholder={field.placeholder}
-                value={val}
-                onChange={(e) => updateConfig(field.key, e.target.value)}
-              />
+              <div key={field.key} className="flex flex-col gap-1">
+                <Input
+                  label={field.label}
+                  placeholder={field.placeholder}
+                  value={val}
+                  onChange={(e) => updateConfig(field.key, e.target.value)}
+                />
+                {hint}
+              </div>
             )
           })
         )}

@@ -15,6 +15,8 @@ test('a finished flow asks for a rating', () => {
 test('the widget script rates only a finished flow and does not ask for a name', () => {
   const source = readFileSync(new URL('../routes/widget.ts', import.meta.url), 'utf8')
   assert.match(source, /function updMsg\(i,text,streaming,ended\)/)
-  assert.match(source, /if\(d\.done\)updMsg\(bi,botText,false,!!d\.ended\)/)
+  assert.match(source, /if\(d\.done\)\{live=!!d\.live;updMsg\(bi,botText,false,!!d\.ended\);\}/)
+  assert.match(source, /if\(!botText&&live\)\{messages\.splice\(bi,1\);render\(\);\}/)
+  assert.match(source, /'\/replies\?session='/)
   assert.doesNotMatch(source, /What's your name/)
 })
