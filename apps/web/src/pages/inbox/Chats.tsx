@@ -4,7 +4,7 @@ import {
   AlertCircle, Clock, CheckCheck, MoreHorizontal, Tag,
   UserPlus, ArrowRightLeft, Ticket, StickyNote, MessageCircle,
   Phone, Mail, Globe, Hash, ChevronRight, X, Mic,
-  Circle, Zap, Star, Wrench,
+  Circle, Zap, Star, Wrench, ShieldAlert,
 } from 'lucide-react'
 import { Avatar, Badge, Input, Button, Skeleton } from '@ybot/ui'
 import {
@@ -27,7 +27,7 @@ import { claimChat, queueContact } from '../../lib/inbox-nav'
 import { ChatText } from '../../components/ChatText'
 import { chatMarkup, chatText } from '../../lib/chat-text'
 import { useCannedReplies, useTeamMembers, useLabels, useCreateLabel, useCreateTicket } from '../../lib/hooks'
-import type { ReturnOutcome } from '@ybot/shared'
+import { GUARDRAIL_ACTION_LABELS, type GuardrailHit, type ReturnOutcome } from '@ybot/shared'
 
 type ConvoStatus = 'active' | 'resolved' | 'escalated' | 'pending' | 'bot'
 type View = 'all' | 'mine' | 'unassigned' | 'escalated'
@@ -56,6 +56,12 @@ interface Convo {
   previousConvos?: number
 }
 
+function guardrailFlag(hits: GuardrailHit[]): string {
+  const first = hits[0]!
+  const more = hits.length > 1 ? ` +${hits.length - 1}` : ''
+  return `${GUARDRAIL_ACTION_LABELS[first.action]}: ${first.name}${more}`
+}
+
 interface Message {
   id: string
   from: 'user' | 'bot' | 'agent'
@@ -64,6 +70,7 @@ interface Message {
   time: string
   isNote?: boolean
   tool?: api.ToolNote
+  guardrails?: GuardrailHit[]
 }
 
 const CANNED_RESPONSES = [
@@ -199,6 +206,7 @@ export function ChatsPage() {
     time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     isNote: Boolean(m.content?.internal),
     tool: m.content?.tool,
+    guardrails: m.content?.guardrails,
   }))
 
   const selected = convos.find((c) => c.id === selectedId) ?? (selectedId ? undefined : convos[0])
@@ -530,6 +538,14 @@ export function ChatsPage() {
                       )}>
                         <ChatText text={msg.text} />
                       </div>
+                      {msg.guardrails && msg.guardrails.length > 0 && (
+                        <span
+                          className="mt-1 inline-flex items-center gap-1 rounded-full border border-[var(--warning)]/30 bg-[var(--warning-muted)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--warning)]"
+                          title={msg.guardrails.map((hit) => `${hit.name}: ${GUARDRAIL_ACTION_LABELS[hit.action]}`).join('\n')}
+                        >
+                          <ShieldAlert size={9} /> {guardrailFlag(msg.guardrails)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}

@@ -34,15 +34,25 @@ type AuditSeverity = 'info' | 'warning' | 'success' | 'error'
 interface AuditEvent {
   id: string
   actor: { name: string; email: string }
-  action: AuditAction
+  action: string
   resource: string
   details: string
+  change: AuditChange | null
   ip: string
   timestamp: string
   severity: AuditSeverity
 }
 
-const ACTION_CFG: Record<AuditAction, { icon: React.ReactNode; label: string; category: string }> = {
+interface AuditChange {
+  before: Record<string, unknown> | null
+  after: Record<string, unknown> | null
+  changes: string[]
+  source: string | null
+}
+
+type ActionConfig = { icon: React.ReactNode; label: string; category: string }
+
+const ACTION_CFG: Record<AuditAction, ActionConfig> = {
   'user.login':           { icon: <LogIn size={12} />,        label: 'User signed in',         category: 'Auth' },
   'user.logout':          { icon: <LogIn size={12} />,        label: 'User signed out',         category: 'Auth' },
   'user.invited':         { icon: <UserPlus size={12} />,     label: 'User invited',           category: 'Team' },
@@ -71,22 +81,91 @@ const SEVERITY_VARIANT: Record<AuditSeverity, 'info' | 'success' | 'warning' | '
   info: 'info', success: 'success', warning: 'warning', error: 'error',
 }
 
-const MOCK_EVENTS: AuditEvent[] = [
-  { id: 'A-001', actor: { name: 'Charles', email: 'charles@acme.com' }, action: 'bot.published', resource: 'Acme Support Bot', details: 'Published to Production environment', ip: '82.10.45.12', timestamp: '2m ago', severity: 'success' },
-  { id: 'A-002', actor: { name: 'Sarah K', email: 'sarah@acme.com' }, action: 'flow.updated', resource: 'Welcome Flow', details: 'Updated 3 nodes: Send Message, Ask Question, Condition', ip: '192.168.1.45', timestamp: '18m ago', severity: 'info' },
-  { id: 'A-003', actor: { name: 'Charles', email: 'charles@acme.com' }, action: 'template.approved', resource: 'Order Confirmation', details: 'WhatsApp template approved by provider', ip: '82.10.45.12', timestamp: '45m ago', severity: 'success' },
-  { id: 'A-004', actor: { name: 'Charles', email: 'charles@acme.com' }, action: 'user.invited', resource: 'lucy@acme.com', details: 'Invited with role: Agent', ip: '82.10.45.12', timestamp: '1h ago', severity: 'info' },
-  { id: 'A-005', actor: { name: 'Mike R', email: 'mike@acme.com' }, action: 'user.login', resource: 'ybot-console', details: 'Signed in via email/password', ip: '10.0.0.55', timestamp: '2h ago', severity: 'info' },
-  { id: 'A-006', actor: { name: 'Tom B', email: 'tom@acme.com' }, action: 'knowledge.synced', resource: 'acme.com/help', details: 'Crawled 284 pages, generated 1,204 chunks', ip: '10.0.0.77', timestamp: '2h ago', severity: 'success' },
-  { id: 'A-007', actor: { name: 'Charles', email: 'charles@acme.com' }, action: 'webhook.created', resource: 'WH-004', details: 'Created webhook: https://slack.com/services/…', ip: '82.10.45.12', timestamp: '3h ago', severity: 'info' },
-  { id: 'A-008', actor: { name: 'System', email: 'system@ybot.io' }, action: 'channel.disconnected', resource: 'SMS (Twilio)', details: 'SMS channel auth failed — token expired', ip: 'system', timestamp: '5h ago', severity: 'error' },
-  { id: 'A-009', actor: { name: 'Sarah K', email: 'sarah@acme.com' }, action: 'flow.published', resource: 'Product FAQ', details: 'Published to Production (v4)', ip: '192.168.1.45', timestamp: '8h ago', severity: 'success' },
-  { id: 'A-010', actor: { name: 'Charles', email: 'charles@acme.com' }, action: 'api_key.created', resource: 'API key #3', details: 'Created API key with read-only scope', ip: '82.10.45.12', timestamp: '1d ago', severity: 'warning' },
-  { id: 'A-011', actor: { name: 'Charles', email: 'charles@acme.com' }, action: 'user.role_changed', resource: 'Sarah K', details: 'Changed role from Agent → Supervisor', ip: '82.10.45.12', timestamp: '2d ago', severity: 'warning' },
-  { id: 'A-012', actor: { name: 'Anna W', email: 'anna@acme.com' }, action: 'contact.deleted', resource: 'contact#8821', details: 'Permanently deleted contact record', ip: '172.16.0.32', timestamp: '3d ago', severity: 'error' },
-]
+const CATEGORY_BY_RESOURCE: Record<string, string> = {
+  guardrail_policy: 'Safety', bot_config: 'Bot', bot: 'Bot', environment: 'Bot',
+  flow: 'Build', flow_version: 'Build', tool: 'Build', auth_profile: 'Build', workflow: 'Build', intent: 'Build', entity: 'Build', faq: 'Build', knowledge_source: 'Build',
+  user: 'Team', invitation: 'Team', api_key: 'Auth',
+  channel: 'Config', channel_connection: 'Config', webhook: 'Config', integration_connection: 'Config',
+  conversation: 'Inbox', contact: 'Inbox', ticket: 'Inbox', canned_response: 'Inbox',
+  campaign: 'Engage', template: 'Engage', automation_rule: 'Automation', tenant: 'Settings',
+}
 
-const CATEGORIES = Array.from(new Set(Object.values(ACTION_CFG).map((a) => a.category)))
+const VERB: Record<string, { label: string; icon: React.ReactNode; severity: AuditSeverity }> = {
+  created: { label: 'created', icon: <CheckCircle2 size={12} />, severity: 'success' },
+  updated: { label: 'changed', icon: <Pencil size={12} />, severity: 'info' },
+  deleted: { label: 'deleted', icon: <Trash2 size={12} />, severity: 'warning' },
+}
+
+function humanise(noun: string): string {
+  const words = noun.replace(/_/g, ' ')
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+/** Known product events keep their wording; every audited model write reads "<Thing> created/changed/deleted". */
+function actionConfig(action: string): ActionConfig & { severity: AuditSeverity } {
+  const known = ACTION_CFG[action as AuditAction]
+  if (known) return { ...known, severity: 'info' }
+  const [noun = action, verb = ''] = action.split('.')
+  const v = VERB[verb]
+  return {
+    icon: v?.icon ?? <Info size={12} />,
+    label: v ? `${humanise(noun)} ${v.label}` : humanise(action),
+    category: CATEGORY_BY_RESOURCE[noun] ?? 'Other',
+    severity: v?.severity ?? 'info',
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+}
+
+function auditChange(metadata: Record<string, unknown> | undefined): AuditChange | null {
+  if (!metadata || !('before' in metadata || 'after' in metadata)) return null
+  return {
+    before: asRecord(metadata['before']),
+    after: asRecord(metadata['after']),
+    changes: Array.isArray(metadata['changes']) ? (metadata['changes'] as unknown[]).filter((f): f is string => typeof f === 'string') : [],
+    source: typeof metadata['source'] === 'string' ? metadata['source'] : null,
+  }
+}
+
+const HIDDEN_FIELDS = new Set(['id', 'tenantId', 'createdAt', 'updatedAt'])
+
+function shortValue(value: unknown): string {
+  if (value === undefined || value === null) return '—'
+  const text = typeof value === 'string' ? value : JSON.stringify(value)
+  return text.length > 400 ? `${text.slice(0, 400)}…` : text
+}
+
+function ChangeTable({ change }: { change: AuditChange }) {
+  const row = change.after ?? change.before ?? {}
+  const fields = change.changes.length
+    ? change.changes
+    : Object.keys(row).filter((key) => !HIDDEN_FIELDS.has(key))
+  const showBefore = change.before !== null
+  const showAfter = change.after !== null
+  if (fields.length === 0) return <p className="text-xs text-[var(--text-muted)]">No fields changed.</p>
+  return (
+    <table className="w-full table-fixed text-xs">
+      <thead>
+        <tr className="text-left text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+          <th className="w-40 py-1 pr-3 font-medium">Field</th>
+          {showBefore && <th className="py-1 pr-3 font-medium">Before</th>}
+          {showAfter && <th className="py-1 font-medium">After</th>}
+        </tr>
+      </thead>
+      <tbody>
+        {fields.map((field) => (
+          <tr key={field} className="align-top border-t border-[var(--border)]">
+            <td className="py-1.5 pr-3 font-mono text-[var(--text-secondary)]">{field}</td>
+            {showBefore && <td className={cn('break-words py-1.5 pr-3 font-mono text-[11px]', change.changes.length ? 'text-[var(--error)]' : 'text-[var(--text-muted)]')}>{shortValue(change.before?.[field])}</td>}
+            {showAfter && <td className={cn('break-words py-1.5 font-mono text-[11px]', change.changes.length ? 'text-[var(--success)]' : 'text-[var(--text-primary)]')}>{shortValue(change.after?.[field])}</td>}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
 
 function formatAuditTime(iso?: string) {
   if (!iso) return '?'
@@ -100,32 +179,39 @@ function formatAuditTime(iso?: string) {
 }
 
 export function AuditPage() {
-  const { data: apiEvents = [] } = useAuditLog()
+  const { data: apiEvents = [], isLoading, isError, refetch } = useAuditLog()
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [severityFilter, setSeverityFilter] = useState<AuditSeverity | 'all'>('all')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   // Map API audit events to display shape (fall back to static mock if API not available)
-  const events: AuditEvent[] = apiEvents.map((e) => ({
-        id: e.id,
-        actor: { name: e.user?.displayName ?? 'System', email: e.user?.email ?? '' },
-        action: (e.action in ACTION_CFG ? e.action : 'automation.alert') as AuditEvent['action'],
-        resource: (e.resource ?? e.resourceId ?? '—'),
-        details: JSON.stringify(e.metadata ?? {}),
-        ip: (e.metadata?.ip ?? 'unknown') as string,
-        timestamp: formatAuditTime(e.createdAt),
-        severity: ('info') as AuditSeverity,
-      }))
+  const events: AuditEvent[] = apiEvents.map((e) => {
+    const change = auditChange(e.metadata)
+    const name = change && typeof (change.after ?? change.before)?.['name'] === 'string' ? String((change.after ?? change.before)!['name']) : null
+    return {
+      id: e.id,
+      actor: { name: e.user?.displayName ?? 'System', email: e.user?.email ?? '' },
+      action: e.action,
+      resource: name ?? e.resourceId ?? e.resource ?? '—',
+      details: change ? '' : JSON.stringify(e.metadata ?? {}),
+      change,
+      ip: typeof e.metadata?.ip === 'string' ? e.metadata.ip : 'unknown',
+      timestamp: formatAuditTime(e.createdAt),
+      severity: actionConfig(e.action).severity,
+    }
+  })
+  const categories = Array.from(new Set([...Object.values(ACTION_CFG).map((a) => a.category), ...events.map((e) => actionConfig(e.action).category)]))
 
   const filtered = events.filter((e) => {
     const matchSearch = !search ||
       e.actor.name.toLowerCase().includes(search.toLowerCase()) ||
       e.action.toLowerCase().includes(search.toLowerCase()) ||
-      ACTION_CFG[e.action]?.label?.toLowerCase().includes(search.toLowerCase()) ||
+      actionConfig(e.action).label.toLowerCase().includes(search.toLowerCase()) ||
       e.resource.toLowerCase().includes(search.toLowerCase()) ||
-      e.details.toLowerCase().includes(search.toLowerCase())
-    const matchCat = categoryFilter === 'all' || ACTION_CFG[e.action]?.category === categoryFilter
+      e.details.toLowerCase().includes(search.toLowerCase()) ||
+      (e.change?.changes ?? []).some((field) => field.toLowerCase().includes(search.toLowerCase()))
+    const matchCat = categoryFilter === 'all' || actionConfig(e.action).category === categoryFilter
     const matchSev = severityFilter === 'all' || e.severity === severityFilter
     return matchSearch && matchCat && matchSev
   })
@@ -145,8 +231,16 @@ export function AuditPage() {
         <SubNav items={SUBNAV} />
       </div>
 
-      {apiEvents.length === 0 && (
-        <div className="px-6 py-3 border-b border-[var(--border)] text-sm text-[var(--text-muted)]">No audit events yet.</div>
+      {isLoading && (
+        <div className="px-6 py-3 border-b border-[var(--border)] text-sm text-[var(--text-muted)]">Loading audit events…</div>
+      )}
+      {isError && (
+        <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--border)] text-sm text-[var(--error)]">
+          The audit log could not be loaded. <Button size="sm" variant="secondary" onClick={() => refetch()}>Retry</Button>
+        </div>
+      )}
+      {!isLoading && !isError && apiEvents.length === 0 && (
+        <div className="px-6 py-3 border-b border-[var(--border)] text-sm text-[var(--text-muted)]">No audit events yet. Every change someone makes in the console is recorded here with what it was before and after.</div>
       )}
 
       {/* Toolbar */}
@@ -164,7 +258,7 @@ export function AuditPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             <DropdownMenuItem onClick={() => setCategoryFilter('all')}>All categories</DropdownMenuItem>
-            {CATEGORIES.map((c) => (
+            {categories.map((c) => (
               <DropdownMenuItem key={c} onClick={() => setCategoryFilter(c)}>{c}</DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -200,7 +294,7 @@ export function AuditPage() {
           </thead>
           <tbody>
             {filtered.map((ev) => {
-              const ac = ACTION_CFG[ev.action]
+              const ac = actionConfig(ev.action)
               const isExpanded = expanded.has(ev.id)
               return (
                 <React.Fragment key={ev.id}>
@@ -243,9 +337,12 @@ export function AuditPage() {
                       <td colSpan={6} className="px-4 py-3">
                         <div className="flex items-start gap-2">
                           <Info size={13} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
-                          <div>
-                            <p className="text-xs font-medium text-[var(--text-secondary)] mb-1">Event details</p>
-                            <p className="text-xs text-[var(--text-muted)]">{ev.details}</p>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-[var(--text-secondary)] mb-1">
+                              {ev.change ? (ev.change.changes.length ? `Changed: ${ev.change.changes.join(', ')}` : 'Record') : 'Event details'}
+                              {ev.change?.source && <span className="ml-2 font-normal text-[var(--text-muted)]">via {ev.change.source === 'console' ? 'the console' : ev.change.source === 'api' ? 'an API key' : 'a script'}</span>}
+                            </p>
+                            {ev.change ? <ChangeTable change={ev.change} /> : <p className="text-xs text-[var(--text-muted)]">{ev.details}</p>}
                           </div>
                         </div>
                       </td>

@@ -20,6 +20,7 @@ test('the card says what travels and where the handover came from', () => {
   assert.equal(contextLine(undefined), 'Full transcript travels with this chat.')
   assert.match(contextLine('summary_only'), /^Summary only/)
   assert.equal(sourceLine('always_human'), 'Always-human word')
+  assert.equal(sourceLine('guardrail'), 'Guardrail')
   assert.equal(sourceLine('journey'), 'Journey step')
 })
 
