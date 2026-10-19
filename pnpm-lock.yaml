@@ -114,9 +114,6 @@ importers:
 
   apps/runtime:
     dependencies:
-      '@ybot/db':
-        specifier: workspace:*
-        version: link:../../packages/db
       '@ybot/llm':
         specifier: workspace:*
         version: link:../../packages/llm
@@ -212,13 +209,13 @@ importers:
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
+      prisma:
+        specifier: ^6.1.0
+        version: 6.19.3(typescript@5.9.3)
     devDependencies:
       '@types/bcryptjs':
         specifier: ^2.4.4
         version: 2.4.6
-      prisma:
-        specifier: ^6.1.0
-        version: 6.19.3(typescript@5.9.3)
       tsx:
         specifier: ^4.19.2
         version: 4.23.13

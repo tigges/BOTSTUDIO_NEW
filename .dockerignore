@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/.turbo
+.git
+data
+docs
+qa
+playwright-report
+test-results
+coverage
+**/*.log
+.env
+.env.*

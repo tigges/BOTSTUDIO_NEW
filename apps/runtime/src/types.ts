@@ -48,10 +48,15 @@ export interface NodeResult {
   error?: string
 }
 
+/** The slice of PrismaClient the nodes use. Kept narrow so the runtime builds without @ybot/db. */
+export interface RuntimeDb {
+  $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): PromiseLike<T>
+}
+
 // Injectable services for nodes to use
 export interface ExecutionServices {
   llm: import('./llm-adapter.js').LlmAdapter
-  db: import('@ybot/db').PrismaClient
+  db: RuntimeDb
   redis?: import('ioredis').Redis
   httpFetch: typeof fetch
   catalog?: import('@ybot/shared').StudioCatalog

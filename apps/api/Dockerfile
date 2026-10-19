@@ -1,31 +1,31 @@
-# ── Build stage ───────────────────────────────────────────────────────────────
-FROM node:22-alpine AS builder
-
-RUN corepack enable && corepack prepare pnpm@10 --activate
+# ── Base ──────────────────────────────────────────────────────────────────────
+FROM node:22-alpine AS base
+RUN corepack enable
 WORKDIR /app
 
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* ./
-COPY packages/shared/package.json   packages/shared/
-COPY packages/db/package.json       packages/db/
-COPY packages/ui/package.json       packages/ui/
-COPY packages/llm/package.json      packages/llm/
-COPY apps/runtime/package.json      apps/runtime/
-COPY apps/api/package.json          apps/api/
+# ── Prune: only the packages @ybot/api depends on ─────────────────────────────
+FROM base AS pruner
+COPY . .
+RUN pnpm dlx turbo@2.11.2 prune @ybot/api --docker
 
+# ── Build stage ───────────────────────────────────────────────────────────────
+FROM base AS builder
+COPY --from=pruner /app/out/json/ .
 RUN pnpm install --frozen-lockfile
 
-COPY packages/ packages/
-COPY apps/runtime/ apps/runtime/
-COPY apps/api/ apps/api/
+COPY --from=pruner /app/out/full/ .
 COPY tsconfig.base.json ./
-
 ENV DATABASE_URL=postgresql://dummy:dummy@localhost/dummy
-RUN pnpm --filter @ybot/db generate
-RUN pnpm --filter @ybot/db build
-RUN pnpm --filter @ybot/shared build
-RUN pnpm --filter @ybot/llm build
-RUN pnpm --filter @ybot/runtime build
-RUN pnpm --filter @ybot/api build
+RUN pnpm exec turbo run build --filter=@ybot/api --ui=stream
+
+# ── Production dependencies only ──────────────────────────────────────────────
+# Install scripts stay on so @prisma/engines fetches its engines here, not at
+# container start.
+FROM base AS deps
+COPY --from=pruner /app/out/json/ .
+RUN pnpm install --frozen-lockfile --prod
+COPY packages/db/prisma packages/db/prisma
+RUN cd packages/db && ./node_modules/.bin/prisma generate --schema prisma/schema.prisma
 
 # ── Production stage ──────────────────────────────────────────────────────────
 FROM node:22-alpine AS runner
@@ -43,43 +43,20 @@ ENV APP_VERSION=${APP_VERSION} \
 
 RUN apk add --no-cache curl
 
-# Install prisma CLI globally so migrations can be run from this container.
-# Version pinned to match packages/db devDependency.
-RUN npm install -g prisma@6 --ignore-scripts
-
 WORKDIR /app
 
-# Root node_modules: pnpm virtual store + workspace package symlinks (Docker
-# follows symlinks so @ybot/* land as real directories with their dist/ files)
-COPY --from=builder /app/node_modules                  node_modules/
+# The Prisma CLI is a dependency of @ybot/db; docker-entrypoint.sh runs it
+# for migrations at start.
+ENV PATH="/app/packages/db/node_modules/.bin:${PATH}"
 
-# apps/api/node_modules: pnpm stores each workspace package's direct deps
-# (fastify, bullmq, ioredis, etc.) here as symlinks — Docker dereferences them
-COPY --from=builder /app/apps/api/node_modules         apps/api/node_modules/
-
-# Explicit copies of workspace package dist outputs (belt-and-suspenders in
-# case the symlink dereferencing above doesn't capture rebuilt artefacts)
-COPY --from=builder /app/packages/shared/dist          packages/shared/dist/
-COPY --from=builder /app/packages/shared/package.json  packages/shared/package.json
-COPY --from=builder /app/packages/llm/dist             packages/llm/dist/
-COPY --from=builder /app/packages/llm/package.json     packages/llm/package.json
-COPY --from=builder /app/packages/db                   packages/db/
-COPY --from=builder /app/apps/runtime/dist             apps/runtime/dist/
-COPY --from=builder /app/apps/runtime/package.json     apps/runtime/package.json
-COPY --from=builder /app/apps/api/dist                 apps/api/dist/
-COPY --from=builder /app/apps/api/package.json         apps/api/package.json
+COPY --from=deps /app/ ./
+COPY --from=builder /app/packages/shared/dist  packages/shared/dist/
+COPY --from=builder /app/packages/llm/dist     packages/llm/dist/
+COPY --from=builder /app/packages/db/dist      packages/db/dist/
+COPY --from=builder /app/apps/runtime/dist     apps/runtime/dist/
+COPY --from=builder /app/apps/api/dist         apps/api/dist/
 COPY apps/api/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x docker-entrypoint.sh
-
-# Node resolves a package import from the file that imports it, then walks
-# upward. The flow runner is @ybot/runtime, and this image does not copy that
-# package's node_modules. Link the workspace packages at the app root so an
-# import from apps/runtime can find them.
-RUN mkdir -p /app/node_modules/@ybot \
- && ln -sfn /app/packages/shared /app/node_modules/@ybot/shared \
- && ln -sfn /app/packages/db /app/node_modules/@ybot/db \
- && ln -sfn /app/packages/llm /app/node_modules/@ybot/llm \
- && ln -sfn /app/apps/runtime /app/node_modules/@ybot/runtime
 
 EXPOSE 3001
 CMD ["sh", "docker-entrypoint.sh"]

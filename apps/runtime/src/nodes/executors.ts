@@ -185,7 +185,7 @@ export async function executeSearchKnowledge(ctx: NodeContext): Promise<NodeResu
   })
   try {
     // pgvector RAG query via the db service (requires vector extension and embedding column)
-    const results = await (services.db.$queryRawUnsafe as (sql: string, ...params: unknown[]) => Promise<Array<{ id: string; content: string; similarity: number }>>)(
+    const results = await services.db.$queryRawUnsafe<Array<{ id: string; content: string; similarity: number }>>(
       `SELECT id, content, 1 - (embedding <=> $1::vector) AS similarity
        FROM "DocumentChunk"
        WHERE tenant_id = $2
