@@ -1,37 +1,30 @@
 /**
- * Bot preview / test-run routes.
+ * Test routes for the flow builder. Both run the live turn pipeline over the
+ * working copy (lib/test-chat.ts) and write nothing to the chat list.
  *
- * POST /api/v1/bots/:botId/preview/chat
- *   Body: { message: string; sessionId?: string; systemPrompt?: string }
- *   Response: Server-Sent Events (text/event-stream)
+ * POST /api/v1/bots/:botId/preview/chat     Test Bot on the canvas (Server-Sent Events)
+ *   Body: { message, opening?, graph?, flowName?, state? }
  *     - event: chunk   data: {"text": "..."}
- *     - event: done    data: {"sessionId": "...", "fullText": "..."}
+ *     - event: done    data: {"fullText": "...", "state": {...}, "path": "...", "chapter": "..."}
  *     - event: error   data: {"message": "..."}
  *
- * This endpoint is used by the chatbot widget preview panel in the flow builder.
- * It does not create persistent DB records — purely ephemeral for testing.
+ * POST /api/v1/bots/:botId/preview/journey  Journey Test (JSON)
+ * POST /api/v1/preview/journey               Journey Test while a new bot is still a draft
+ *   Body: { chapters, startChapter, message, environmentLabel, state?, catalog? }
+ *
+ * GET  /api/v1/bots/:botId/preview/knowledge-stats
  */
 
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
-import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter, hasCloudLlm } from '@ybot/llm'
-import { runJourneyPreview, shapeTurn, type FlowGraph, type JourneyPreviewSnapshot } from '@ybot/runtime'
+import { type FlowGraph } from '@ybot/runtime'
 import { z } from 'zod'
-import { CATALOG_ENTITY, catalogFromValues, type StudioCatalog } from '@ybot/shared'
-import { runCanvasPreview, type PreviewSnapshot } from '../lib/preview-flow.js'
-import { enterLlmScope } from '../lib/llm-ledger.js'
-
-
-// Shared adapters (module-level singletons)
-const llm = createLlmAdapter()
-const embedAdapter = createEmbeddingAdapter()
+import type { StudioCatalog } from '@ybot/shared'
+import { savedJourney } from '../lib/flow-runner.js'
+import { runTestTurn, withWorkingCopy, type TestChatDeps, type TestChatState } from '../lib/test-chat.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
-
-function previewClassifyLlm() {
-  return hasCloudLlm() ? createLlmAdapter() : undefined
-}
 
 const graphSchema = z.object({
   nodes: z.array(z.object({
@@ -50,49 +43,84 @@ const graphSchema = z.object({
   }).passthrough()),
 })
 
-const journeySessionSchema = z.object({
-  chapter: z.string(),
-  currentNodeId: z.string(),
-  status: z.enum(['running', 'waiting_input', 'completed', 'failed', 'handed_over']),
-  waitingFor: z.object({
-    nodeId: z.string(),
-    variable: z.string(),
-    type: z.string(),
-    choices: z.array(z.string()).optional(),
-    question: z.string().optional(),
-  }).optional(),
-  variables: z.object({
-    flow: z.record(z.unknown()),
-    global: z.record(z.unknown()),
-    contact: z.record(z.unknown()),
-  }),
-  lastQuestion: z.string().optional(),
+const lineSchema = z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(8000) })
+
+/** The state a test chat handed out on its last turn. */
+const stateSchema = z.object({
+  session: z.object({
+    id: z.string(),
+    botId: z.string(),
+    tenantId: z.string(),
+    flowId: z.string(),
+    flowVersionId: z.string(),
+    currentNodeId: z.string(),
+    variables: z.unknown(),
+    status: z.string(),
+    waitingFor: z.unknown(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }).nullable(),
+  contactMeta: z.record(z.unknown()),
+  transcript: z.array(lineSchema).max(80),
+  status: z.enum(['active', 'resolved', 'escalated']),
+  outcome: z.enum(['contained_resolved', 'contained_partial', 'contained_unresolved', 'escalated', 'abandoned']).nullable(),
+  subject: z.string().nullable(),
+  handover: z.record(z.unknown()).nullable(),
+  ticket: z.object({ subject: z.string(), description: z.string() }).nullable(),
 })
 
-async function searchKnowledge(query: string, tenantId: string, botId: string, topK = 5): Promise<string[]> {
-  try {
-    const embedResult = await embedAdapter.embed({ texts: [query] })
-    const embedding = embedResult.embeddings[0]
-    if (!embedding || embedding.length === 0) return []
+const catalogSchema = z.object({
+  facts: z.array(z.object({
+    id: z.string(),
+    kind: z.string(),
+    title: z.string(),
+    phrases: z.array(z.string()),
+    fact: z.string(),
+    source: z.string().optional(),
+  })),
+})
 
-    const rows = await (prisma.$queryRawUnsafe as (sql: string, ...params: unknown[]) => Promise<Array<{ content: string }>>)(
-      `SELECT dc.content
-       FROM "document_chunks" dc
-       JOIN "documents" d ON dc."documentId" = d.id
-       JOIN "knowledge_sources" ks ON d."knowledgeSourceId" = ks.id
-       WHERE dc."tenantId" = $1
-         AND ks."botId" = $2
-         AND dc.embedding IS NOT NULL
-       ORDER BY dc.embedding <=> $3::vector
-       LIMIT $4`,
+const TEST_CHAT_FAILED = 'This test chat could not answer just now. Reset the chat to try again.'
+
+const journeyBody = z.object({
+  chapters: z.array(z.object({
+    name: z.string().min(1).max(120),
+    graph: graphSchema,
+  })).min(1).max(40),
+  startChapter: z.string().min(1).max(120),
+  message: z.string().max(4000).default(''),
+  environmentLabel: z.string().min(1).max(40).default('Sandbox'),
+  state: stateSchema.optional(),
+  catalog: catalogSchema.optional(),
+})
+
+/** A bot that is not created yet has a new bot's defaults: nobody on chat, no always-human words, no knowledge. */
+const DRAFT_DEPS: Partial<TestChatDeps> = {
+  handoverRules: async () => ({ liveAgents: false, alwaysHuman: [] }),
+  catalog: async () => undefined,
+}
+
+async function journeyTurn(request: FastifyRequest, reply: FastifyReply, botId: string | undefined) {
+  const { tenantId } = request.user as JWT
+  const body = journeyBody.safeParse(request.body)
+  if (!body.success) {
+    return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
+  }
+  try {
+    const turn = await runTestTurn({
       tenantId,
-      botId,
-      JSON.stringify(embedding),
-      topK,
-    )
-    return rows.map((r) => r.content)
-  } catch {
-    return []
+      botId: botId ?? '',
+      chapters: body.data.chapters.map((chapter) => ({ name: chapter.name, graph: chapter.graph as FlowGraph })),
+      startChapter: body.data.startChapter,
+      environmentLabel: body.data.environmentLabel,
+      message: body.data.message,
+      catalog: body.data.catalog as StudioCatalog | undefined,
+      state: body.data.state as TestChatState | undefined,
+    }, botId ? {} : DRAFT_DEPS)
+    return { data: turn }
+  } catch (err) {
+    request.log.warn({ err }, 'journey test failed')
+    return reply.status(500).send({ error: { code: 'JOURNEY', message: TEST_CHAT_FAILED } })
   }
 }
 
@@ -100,151 +128,66 @@ export async function previewRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
   app.addHook('preHandler', requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN'))
 
-  /**
-   * POST /api/v1/bots/:botId/preview/chat
-   * Streams an SSE response: chunks from Claude with RAG context from the bot's knowledge base.
-   */
   app.post<{ Params: { botId: string } }>('/:botId/preview/chat', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { botId } = request.params
-    enterLlmScope({ source: 'runtime', tenantId, botId, environment: 'test' })
     const body = z.object({
-      message: z.string().min(1).max(4000),
-      systemPrompt: z.string().optional(),
-      history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() })).default([]),
-      graph: z.object({
-        nodes: z.array(z.object({
-          id: z.string(),
-          data: z.object({
-            kind: z.string(),
-            label: z.string().optional(),
-            config: z.record(z.unknown()).optional(),
-          }).passthrough(),
-        }).passthrough()),
-        edges: z.array(z.object({
-          id: z.string(),
-          source: z.string(),
-          target: z.string(),
-          sourceHandle: z.string().optional(),
-        }).passthrough()),
-      }).optional(),
-      session: z.object({
-        currentNodeId: z.string(),
-        status: z.enum(['running', 'waiting_input', 'completed', 'failed', 'handed_over']),
-        waitingFor: z.object({
-          nodeId: z.string(),
-          variable: z.string(),
-          type: z.string(),
-          choices: z.array(z.string()).optional(),
-        }).optional(),
-        variables: z.object({
-          flow: z.record(z.unknown()),
-          global: z.record(z.unknown()),
-          contact: z.record(z.unknown()),
-        }),
-      }).optional(),
+      message: z.string().max(4000).default(''),
+      opening: z.boolean().optional(),
+      graph: graphSchema.optional(),
+      flowName: z.string().min(1).max(120).optional(),
+      state: stateSchema.optional(),
     }).safeParse(request.body)
-
     if (!body.success) {
       return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
     }
-
-    const bot = await prisma.bot.findFirst({ where: { id: botId, tenantId } })
-    if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
-
-    const { message, systemPrompt, history, graph, session } = body.data
-
-    if (graph) {
-      try {
-        const catalogRow = await prisma.entity.findFirst({ where: { botId, tenantId, name: CATALOG_ENTITY } }).catch(() => null)
-        const turn = await runCanvasPreview({
-          graph: graph as FlowGraph,
-          message,
-          session: session as PreviewSnapshot | undefined,
-          catalog: catalogFromValues(catalogRow?.values),
-          llm: previewClassifyLlm(),
-        })
-        if (turn.handled) {
-          reply.raw.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no',
-          })
-          const sendFlow = (event: string, data: object) => {
-            reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-          }
-          sendFlow('chunk', { text: turn.text })
-          sendFlow('done', { fullText: turn.text, ragChunks: 0, session: turn.session })
-          reply.raw.end()
-          return
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        reply.raw.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-          'X-Accel-Buffering': 'no',
-        })
-        reply.raw.write(`event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`)
-        reply.raw.end()
-        return
-      }
+    const { message, opening, graph, flowName, state } = body.data
+    if (!message.trim() && !opening) {
+      return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Type a message, or open the chat.' } })
     }
 
-    // Load per-bot model config
-    const cfg = await prisma.botConfig.findUnique({ where: { botId } }).catch(() => null)
-    const botModel = cfg?.model ?? undefined
+    const bot = await prisma.bot.findFirst({ where: { id: botId, tenantId }, select: { id: true } })
+    if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
 
-    // SSE headers
+    const saved = await savedJourney(botId)
+    const startChapter = graph ? (flowName ?? 'This chart') : saved.entry
+    const chapters = graph ? withWorkingCopy(saved.chapters, startChapter!, graph as FlowGraph) : saved.chapters
+
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
       'X-Accel-Buffering': 'no',
     })
-
-    function sendEvent(event: string, data: object) {
+    const send = (event: string, data: object) => {
       reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
     }
-
     try {
-      const context = await searchKnowledge(message, tenantId, botId)
-
-      const defaultSystem = `You are a helpful assistant for "${bot.name}". Be concise and friendly. Ask at most one question. Do not list several questions. If you don't know something, say so.`
-      const activeSystemPrompt = systemPrompt ?? defaultSystem
-
-      const contextBlock = context.length > 0
-        ? `\n\n--- KNOWLEDGE BASE CONTEXT ---\n${context.map((c, i) => `[${i + 1}] ${c}`).join('\n\n')}\n--- END CONTEXT ---\n\nUse only the above context to answer. If the answer isn't there, say you don't know.`
-        : ''
-
-      let fullText = ''
-
-      const messages = [
-        ...history.map((h) => ({ role: h.role as 'user' | 'assistant', content: h.content })),
-        { role: 'user' as const, content: message },
-      ]
-
-      await (botModel ? createLlmAdapterForModel(botModel) : llm).stream({
-        messages,
-        systemPrompt: activeSystemPrompt + contextBlock,
-        temperature: cfg?.temperature ?? 0.3,
-        maxTokens: cfg?.maxTokens ?? 1024,
-        onChunk: (chunk) => {
-          fullText += chunk
-        },
+      const turn = await runTestTurn({
+        tenantId,
+        botId,
+        chapters,
+        startChapter: startChapter ?? '',
+        environmentLabel: 'Sandbox',
+        message,
+        opening,
+        state: state as TestChatState | undefined,
+        onChunk: (text) => send('chunk', { text }),
       })
-
-      const spoken = shapeTurn(fullText)
-      sendEvent('chunk', { text: spoken })
-      sendEvent('done', { fullText: spoken, ragChunks: context.length })
+      send('done', { fullText: turn.text, state: turn.state, path: turn.path, ended: turn.ended, chapter: turn.chapter })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      sendEvent('error', { message: msg })
+      request.log.warn({ err }, 'test chat failed')
+      send('error', { message: TEST_CHAT_FAILED })
     } finally {
       reply.raw.end()
     }
+  })
+
+  app.post<{ Params: { botId: string } }>('/:botId/preview/journey', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const bot = await prisma.bot.findFirst({ where: { id: request.params.botId, tenantId }, select: { id: true } })
+    if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
+    return journeyTurn(request, reply, bot.id)
   })
 
   /**
@@ -275,59 +218,8 @@ export async function previewRoutes(app: FastifyInstance) {
   })
 }
 
-/**
- * POST /api/v1/preview/journey
- * Walks the working-copy chapters with the server LLM keys.
- * Phrase match still wins. complete() is not asked, so the model cannot add a list of questions.
- */
-export async function journeyPreviewRoutes(app: FastifyInstance) {
+export async function draftPreviewRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
   app.addHook('preHandler', requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN'))
-
-  app.post('/preview/journey', async (request, reply) => {
-    enterLlmScope({ source: 'runtime', tenantId: (request.user as JWT | undefined)?.tenantId, environment: 'test' })
-    const body = z.object({
-      chapters: z.array(z.object({
-        name: z.string().min(1).max(120),
-        graph: graphSchema,
-      })).min(1).max(40),
-      startChapter: z.string().min(1).max(120),
-      message: z.string().max(4000).default(''),
-      environmentLabel: z.string().min(1).max(40).default('Sandbox'),
-      session: journeySessionSchema.optional(),
-      catalog: z.object({
-        facts: z.array(z.object({
-          id: z.string(),
-          kind: z.string(),
-          title: z.string(),
-          phrases: z.array(z.string()),
-          fact: z.string(),
-          source: z.string().optional(),
-        })),
-      }).optional(),
-    }).safeParse(request.body)
-
-    if (!body.success) {
-      return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
-    }
-
-    try {
-      const turn = await runJourneyPreview({
-        chapters: body.data.chapters.map((chapter) => ({
-          name: chapter.name,
-          graph: chapter.graph as FlowGraph,
-        })),
-        startChapter: body.data.startChapter,
-        message: body.data.message,
-        environmentLabel: body.data.environmentLabel,
-        session: body.data.session as JourneyPreviewSnapshot | undefined,
-        catalog: body.data.catalog as StudioCatalog | undefined,
-        llm: previewClassifyLlm(),
-      })
-      return { data: turn }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'This journey could not be walked just now.'
-      return reply.status(500).send({ error: { code: 'JOURNEY', message: msg } })
-    }
-  })
+  app.post('/preview/journey', (request, reply) => journeyTurn(request, reply, undefined))
 }
