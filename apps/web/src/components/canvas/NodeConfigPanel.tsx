@@ -1,17 +1,32 @@
 import React, { useState } from 'react'
 import { X, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button, Input } from '@ybot/ui'
-import type { NodeKind } from '@ybot/shared'
-import { HANDOVER_PRIORITIES, NODE_DEFINITIONS, handoverContext, handoverPriority } from '@ybot/shared'
+import type { FlowIssue, NodeKind } from '@ybot/shared'
+import {
+  AI_DEFAULT_TURNS, AI_MAX_TURNS, HANDOVER_PRIORITIES, NODE_DEFINITIONS, SWITCHABLE_STEP_KINDS,
+  handoverContext, handoverPriority, stepMode,
+} from '@ybot/shared'
 import type { Node } from '@xyflow/react'
 import type { FlowNodeData } from './FlowNode'
+import { RouterEditor } from './RouterEditor'
 
 interface NodeConfigPanelProps {
   node: Node | null
+  /** What the flow check says about this step right now. */
+  issues?: FlowIssue[]
   onUpdate: (nodeId: string, data: Partial<FlowNodeData>) => void
   onDelete: (nodeId: string) => void
   onClose: () => void
 }
+
+const AI_FIELDS: ConfigField[] = [
+  { key: 'goal', label: 'Goal', type: 'textarea', placeholder: 'Find out which colour the guest wants', hint: 'What the model works toward on this step.' },
+  { key: 'exitWhen', label: 'Exit when', type: 'text', placeholder: 'The guest has named one colour', hint: 'Once this is true the step follows its Done line.' },
+  {
+    key: 'maxTurns', label: 'Turn limit', type: 'number', placeholder: String(AI_DEFAULT_TURNS),
+    hint: `Replies the model may send here, 1 to ${AI_MAX_TURNS}. At the limit the step follows its Turn limit line, or its Done line when Turn limit is not connected.`,
+  },
+]
 
 interface ConfigField {
   key: string
@@ -78,7 +93,7 @@ const CONFIG_FIELDS: Partial<Record<NodeKind, ConfigField[]>> = {
     { key: 'body', label: 'Body', type: 'textarea', placeholder: 'Hello {{user.name}}…' },
   ],
   llm_prompt: [
-    { key: 'prompt', label: 'System prompt', type: 'textarea', placeholder: 'You are a helpful assistant…' },
+    { key: 'prompt', label: 'Instructions', type: 'textarea', placeholder: 'Answer in two sentences. Mention the booking link.' },
     { key: 'systemPrompt', label: 'System prompt', type: 'textarea', placeholder: 'You are a friendly assistant…' },
     { key: 'saveAs', label: 'Save response to', type: 'text', placeholder: 'flow.llmResponse' },
     { key: 'model', label: 'Model override', type: 'text', placeholder: 'Leave empty to use bot default' },
@@ -128,7 +143,7 @@ const CONFIG_FIELDS: Partial<Record<NodeKind, ConfigField[]>> = {
   ],
 }
 
-export function NodeConfigPanel({ node, onUpdate, onDelete, onClose }: NodeConfigPanelProps) {
+export function NodeConfigPanel({ node, issues = [], onUpdate, onDelete, onClose }: NodeConfigPanelProps) {
   const [labelEdit, setLabelEdit] = useState<string | null>(null)
 
   if (!node) return null
@@ -190,6 +205,15 @@ export function NodeConfigPanel({ node, onUpdate, onDelete, onClose }: NodeConfi
     })
   }
 
+  const mode = stepMode(data.kind, data.config)
+
+  function setMode(next: 'deterministic' | 'ai') {
+    if (!node) return
+    const config: Record<string, unknown> = { ...(data.config ?? {}), mode: next }
+    if (next === 'ai' && !config['maxTurns']) config['maxTurns'] = String(AI_DEFAULT_TURNS)
+    onUpdate(node.id, { config })
+  }
+
   return (
     <div className="flex w-[280px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--bg-surface)]">
       {/* Header */}
@@ -237,57 +261,59 @@ export function NodeConfigPanel({ node, onUpdate, onDelete, onClose }: NodeConfi
 
       {/* Config fields */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {fields.length === 0 ? (
+        {issues.length > 0 && (
+          <ul className="space-y-1" data-testid="step-issues">
+            {issues.map((issue, index) => (
+              <li
+                key={`${issue.code}-${index}`}
+                className={`rounded px-2 py-1.5 text-[11px] ${issue.level === 'note' ? 'bg-[var(--bg-overlay)] text-[var(--text-secondary)]' : 'bg-[var(--error)]/10 text-[var(--text-primary)]'}`}
+              >
+                <span className="font-medium">{issue.level === 'note' ? 'Worth a look: ' : 'Fix before publishing: '}</span>
+                {issue.message}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="flex flex-col gap-1" data-testid="step-mode">
+          <span className="text-xs font-medium text-[var(--text-secondary)]">Mode</span>
+          {SWITCHABLE_STEP_KINDS.has(data.kind) ? (
+            <div role="radiogroup" aria-label="Mode" className="grid grid-cols-2 rounded border border-[var(--border)] p-0.5 text-xs">
+              {(['deterministic', 'ai'] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === value}
+                  onClick={() => setMode(value)}
+                  className={`rounded px-2 py-1 ${mode === value ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                >
+                  {value === 'ai' ? 'AI' : 'Deterministic'}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span className="text-xs text-[var(--text-primary)]">{mode === 'ai' ? 'AI' : 'Deterministic'}</span>
+          )}
+          <p className="text-[10px] text-[var(--text-muted)]">
+            {mode === 'ai'
+              ? 'The model talks with the guest toward the goal, one question at a time, until the exit condition is met or the turn limit is reached.'
+              : data.kind === 'route_topic'
+                ? 'Rules decide first. The model only picks a route when no rule did.'
+                : 'Runs exactly as written. No model decides here.'}
+          </p>
+        </div>
+
+        {data.kind === 'route_topic' && (
+          <RouterEditor config={data.config} onChange={(routes) => onUpdate(node.id, { config: { ...(data.config ?? {}), routes } })} />
+        )}
+
+        {mode === 'ai' && AI_FIELDS.map(renderField)}
+
+        {fields.length === 0 && data.kind !== 'route_topic' ? (
           <p className="text-xs text-[var(--text-muted)] italic">No configuration for this node.</p>
         ) : (
-          fields.map((field) => {
-            const val = fieldValue(data.config?.[field.key] ?? legacyValue(field.key))
-            const hint = field.hint ? <p className="text-[10px] text-[var(--text-muted)]">{field.hint}</p> : null
-            if (field.options) {
-              const selected = selectedOption(field.key, val)
-              return (
-                <div key={field.key} className="flex flex-col gap-1">
-                  <label htmlFor={`cfg-${field.key}`} className="text-xs font-medium text-[var(--text-secondary)]">{field.label}</label>
-                  <select
-                    id={`cfg-${field.key}`}
-                    value={selected}
-                    onChange={(e) => updateConfig(field.key, e.target.value)}
-                    className="w-full rounded border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-xs text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none"
-                  >
-                    {!field.options.some((option) => option.value === selected) && <option value={selected}>{selected} (not allowed)</option>}
-                    {field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
-                  {hint}
-                </div>
-              )
-            }
-            if (field.type === 'textarea') {
-              return (
-                <div key={field.key} className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-[var(--text-secondary)]">{field.label}</label>
-                  <textarea
-                    rows={3}
-                    placeholder={field.placeholder}
-                    value={val}
-                    onChange={(e) => updateConfig(field.key, e.target.value)}
-                    className="w-full rounded border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--border-focus)] focus:outline-none resize-none"
-                  />
-                  {hint}
-                </div>
-              )
-            }
-            return (
-              <div key={field.key} className="flex flex-col gap-1">
-                <Input
-                  label={field.label}
-                  placeholder={field.placeholder}
-                  value={val}
-                  onChange={(e) => updateConfig(field.key, e.target.value)}
-                />
-                {hint}
-              </div>
-            )
-          })
+          fields.map(renderField)
         )}
       </div>
 
@@ -304,4 +330,53 @@ export function NodeConfigPanel({ node, onUpdate, onDelete, onClose }: NodeConfi
       </div>
     </div>
   )
+
+  function renderField(field: ConfigField) {
+    const val = fieldValue(data.config?.[field.key] ?? legacyValue(field.key))
+    const hint = field.hint ? <p className="text-[10px] text-[var(--text-muted)]">{field.hint}</p> : null
+    if (field.options) {
+      const selected = selectedOption(field.key, val)
+      return (
+        <div key={field.key} className="flex flex-col gap-1">
+          <label htmlFor={`cfg-${field.key}`} className="text-xs font-medium text-[var(--text-secondary)]">{field.label}</label>
+          <select
+            id={`cfg-${field.key}`}
+            value={selected}
+            onChange={(e) => updateConfig(field.key, e.target.value)}
+            className="w-full rounded border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-xs text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none"
+          >
+            {!field.options.some((option) => option.value === selected) && <option value={selected}>{selected} (not allowed)</option>}
+            {field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          {hint}
+        </div>
+      )
+    }
+    if (field.type === 'textarea') {
+      return (
+        <div key={field.key} className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-[var(--text-secondary)]">{field.label}</label>
+          <textarea
+            rows={3}
+            placeholder={field.placeholder}
+            value={val}
+            onChange={(e) => updateConfig(field.key, e.target.value)}
+            className="w-full rounded border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--border-focus)] focus:outline-none resize-none"
+          />
+          {hint}
+        </div>
+      )
+    }
+    return (
+      <div key={field.key} className="flex flex-col gap-1">
+        <Input
+          label={field.label}
+          placeholder={field.placeholder}
+          value={val}
+          onChange={(e) => updateConfig(field.key, e.target.value)}
+        />
+        {hint}
+      </div>
+    )
+  }
 }

@@ -6,6 +6,7 @@
  */
 
 import { handoverContext, handoverPriority } from './handover.js'
+import { FALLBACK_ROUTE, GUARD_OPERATORS, aiStepContract, isGuardOperator, routerRoutes, stepMode, type AiStepField } from './orchestrator.js'
 
 export interface CheckNode {
   id: string
@@ -44,7 +45,13 @@ const LINEAR = new Set([
   'classify_intent', 'create_ticket', 'delay', 'llm_generate', 'llm_prompt', 'send_email',
   'buttons', 'carousel', 'quick_replies',
 ])
-const OPERATORS = new Set(['equals', 'not_equals', 'contains', 'greater_than', 'less_than', 'is_set', 'is_empty'])
+const OPERATORS: ReadonlySet<string> = new Set(GUARD_OPERATORS)
+const AI_FIELD_NAMES: Record<AiStepField, string> = { goal: 'a goal', exitWhen: 'an exit condition', maxTurns: 'a turn limit (1 to 20)' }
+
+function sentenceList(items: string[]): string {
+  if (items.length <= 1) return items.join('')
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
+}
 
 function kindOf(node: CheckNode): string {
   return node.data?.kind ?? ''
@@ -186,8 +193,17 @@ export function inspectFlowGraph(graph: CheckGraph | null | undefined, options: 
       }
       for (const handle of routeHandles(node)) {
         if (leaving.some((edge) => edge.sourceHandle === handle)) continue
+        if (handle === FALLBACK_ROUTE) {
+          issues.push({
+            level: 'block',
+            code: 'router-fallback',
+            nodeId: node.id,
+            message: `${label} has no fallback. Connect Other to the step that handles anything no route takes.`,
+          })
+          continue
+        }
         const route = routeList(node).find((item) => item.handle === handle)
-        const destination = handle === 'other' ? undefined : destinationFor(nodes, route?.flowName, handle)
+        const destination = destinationFor(nodes, route?.flowName, handle)
         issues.push({
           level: destination ? 'repair' : 'block',
           code: 'missing-route',
@@ -257,6 +273,49 @@ export function inspectFlowGraph(graph: CheckGraph | null | undefined, options: 
         issues.push({ level: 'block', code: 'missing-flow', nodeId: node.id, message: `${label} opens “${flowName}”, and this bot has no flow with that name.` })
       } else if (leaving.length > 0) {
         issues.push({ level: 'note', code: 'jump', nodeId: node.id, message: `${label} opens ${flowName}. The line after this step does not run.` })
+      }
+    }
+
+    if (kind === 'route_topic') {
+      for (const route of routerRoutes(config)) {
+        const guard = route.guard
+        if (guard && (!guard.field || !isGuardOperator(guard.operator))) {
+          issues.push({
+            level: 'block',
+            code: 'route-guard',
+            nodeId: node.id,
+            message: !guard.field
+              ? `${label}: the rule on route “${route.label}” does not name the value to check.`
+              : `${label}: the rule on route “${route.label}” uses “${guard.operator}”, which the bot does not understand.`,
+          })
+        } else if (guard && !['is_set', 'is_empty'].includes(guard.operator) && !guard.value) {
+          issues.push({
+            level: 'block',
+            code: 'route-guard',
+            nodeId: node.id,
+            message: `${label}: the rule on route “${route.label}” checks ${guard.field} but has no value to compare with.`,
+          })
+        }
+        if (!route.guard && !route.phrases.length && !route.intent) {
+          issues.push({
+            level: 'note',
+            code: 'route-intent',
+            nodeId: node.id,
+            message: `${label}: route “${route.label}” has no words and no intent, so the model only sees its name.`,
+          })
+        }
+      }
+    }
+
+    if (stepMode(kind, config) === 'ai') {
+      const { missing } = aiStepContract(config)
+      if (missing.length) {
+        issues.push({
+          level: 'block',
+          code: 'ai-step',
+          nodeId: node.id,
+          message: `${label} is an AI step and needs ${sentenceList(missing.map((field) => AI_FIELD_NAMES[field]))}.`,
+        })
       }
     }
 

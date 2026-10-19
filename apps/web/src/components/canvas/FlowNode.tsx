@@ -6,7 +6,7 @@ import {
   Globe, Workflow, Headphones, CheckCircle, Clock, Mail,
   Sparkles, Search, Layout, Layers, Zap, FileText,
 } from 'lucide-react'
-import type { JourneyMark, NodeKind } from '@ybot/shared'
+import { routerRoutes, stepMode, type JourneyMark, type NodeKind } from '@ybot/shared'
 
 const ICON_MAP: Record<NodeKind, React.ElementType> = {
   start: Play,
@@ -82,6 +82,8 @@ export interface FlowNodeData {
   config?: Record<string, unknown>
   selected?: boolean
   mark?: JourneyMark
+  /** Problems the flow check says must be fixed before publishing. */
+  blocking?: number
 }
 
 export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
@@ -99,6 +101,9 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
   const hasKBSources = ['knowledge_search', 'search_knowledge'].includes(nodeData.kind)
   const hasLookupSources = nodeData.kind === 'lookup_catalog'
   const hasStartSource = ['start', 'trigger_start'].includes(nodeData.kind)
+  const ai = stepMode(nodeData.kind, nodeData.config) === 'ai'
+  const routeCount = nodeData.kind === 'route_topic' ? routerRoutes(nodeData.config).length : 0
+  const blocking = nodeData.blocking ?? 0
 
   const mark = nodeData.mark
 
@@ -109,6 +114,8 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
         'shadow-[0_4px_12px_rgba(0,0,0,0.4)] transition-all duration-150',
         selected
           ? 'border-[var(--accent)] shadow-[0_0_0_3px_rgba(99,102,241,0.25)]'
+          : blocking > 0
+            ? 'border-[var(--error)]'
           : mark === 'improve'
             ? 'border-[var(--accent)] shadow-[0_0_0_3px_rgba(99,102,241,0.18)]'
             : mark === 'error'
@@ -132,11 +139,20 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
         <span className="text-[13px] font-semibold leading-tight truncate max-w-[130px]" style={{ color: 'var(--text-primary, #f1f5f9)' }}>
           {nodeData.label}
         </span>
+        {ai && (
+          <span className="ml-auto rounded px-1 text-[9px] font-semibold" style={{ background: `${color}30`, color }} title="AI step: the model talks toward a goal">
+            AI
+          </span>
+        )}
       </div>
 
       {/* Body */}
       <div className="px-3 py-[6px]">
-        {nodeData.config && Object.keys(nodeData.config).length > 0 ? (
+        {nodeData.kind === 'route_topic' ? (
+          <p className="text-[11px]" style={{ color: 'var(--text-secondary, #cbd5e1)' }}>
+            {routeCount} {routeCount === 1 ? 'route' : 'routes'} + fallback
+          </p>
+        ) : nodeData.config && Object.keys(nodeData.config).length > 0 ? (
           <div className="space-y-[3px]">
             {Object.entries(nodeData.config).slice(0, 2).map(([k, v]) => (
               <div key={k} className="flex items-start gap-1">
@@ -156,6 +172,11 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
         {mark === 'error' && (
           <p className="mt-1 text-[10px] font-medium text-[var(--text-primary)]">Needs a look</p>
         )}
+        {blocking > 0 && (
+          <p className="mt-1 text-[10px] font-medium text-[var(--error)]" data-testid="step-blocking">
+            {blocking} to fix before publishing
+          </p>
+        )}
       </div>
 
       {/* Handles */}
@@ -167,7 +188,30 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
         />
       )}
 
-      {hasSingleSource && (
+      {hasSingleSource && ai && (
+        <>
+          <Handle
+            type="source"
+            id="out"
+            position={Position.Bottom}
+            style={{ left: '30%' }}
+            className="!h-3 !w-3 !bg-[var(--success)] !border-2"
+          />
+          <Handle
+            type="source"
+            id="max_turns"
+            position={Position.Bottom}
+            style={{ left: '70%' }}
+            className="!h-3 !w-3 !bg-[var(--warning,#f59e0b)] !border-2"
+          />
+          <div className="flex justify-between px-2 pb-1">
+            <span className="text-[8px] text-[var(--success)]">Done</span>
+            <span className="text-[8px] text-[var(--text-muted)]">Turn limit</span>
+          </div>
+        </>
+      )}
+
+      {hasSingleSource && !ai && (
         <Handle
           type="source"
           id="out"

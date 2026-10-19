@@ -10,6 +10,7 @@ import {
   hasCloudLlm,
   llmChain,
   resolveLlmEnv,
+  LlmAdapter,
 } from './index.js'
 
 function withFetch(handler: (host: string, body: Record<string, unknown>) => Response | Promise<Response>) {
@@ -176,4 +177,21 @@ test('a Claude reply reads only its text blocks, and an empty one counts as a fa
   } finally {
     fetch.restore()
   }
+})
+
+test('classify shows the model what each category means when the caller says', async () => {
+  const prompts: string[] = []
+  const adapter = new LlmAdapter({
+    complete: async (params) => {
+      prompts.push(params.systemPrompt ?? '')
+      return { content: '{"category":"book","confidence":0.9}', model: 'fake', inputTokens: 1, outputTokens: 1, durationMs: 1 }
+    },
+    embed: async () => ({ embeddings: [], model: 'fake' }),
+  })
+  const result = await adapter.classify('can I come in Friday', {
+    categories: ['book', 'hours', 'other'],
+    descriptions: { book: 'The guest wants an appointment' },
+  })
+  assert.equal(result.category, 'book')
+  assert.match(prompts[0]!, /- book: The guest wants an appointment\n- hours\n- other/)
 })

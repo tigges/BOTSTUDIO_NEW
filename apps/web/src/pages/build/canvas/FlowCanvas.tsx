@@ -197,12 +197,22 @@ export function FlowCanvasPage() {
   const envLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
   const shown = versionForEnvironment(flow?.versions, environmentId, selectedEnv)
   const canvasVersion = shown?.version ?? 0
+  const flowNames = useMemo(() => (flows ?? []).map((item) => item.name), [flows])
+  const review = useMemo(() => reviewFlow({ nodes, edges }, { flowNames }), [nodes, edges, flowNames])
+  const blockingByNode = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const issue of review.blocks) {
+      if (issue.nodeId) counts.set(issue.nodeId, (counts.get(issue.nodeId) ?? 0) + 1)
+    }
+    return counts
+  }, [review])
   const displayNodes = useMemo(() => nodes.map((node) => {
     const data = node.data as unknown as FlowNodeData
     const nextMark = canvasMarkFor(data, mark)
-    if (data.mark === nextMark) return node
-    return { ...node, data: { ...data, mark: nextMark } }
-  }), [nodes, mark])
+    const blocking = blockingByNode.get(node.id) ?? 0
+    if (data.mark === nextMark && (data.blocking ?? 0) === blocking) return node
+    return { ...node, data: { ...data, mark: nextMark, blocking } }
+  }), [nodes, mark, blockingByNode])
   const previewGraph = useMemo(() => ({
     nodes: nodes.map((node) => {
       const data = node.data as unknown as FlowNodeData
@@ -401,9 +411,6 @@ export function FlowCanvasPage() {
     setSaving(false)
   }
 
-  const flowNames = (flows ?? []).map((item) => item.name)
-  const review = reviewFlow({ nodes, edges }, { flowNames })
-
   function applyGraph(graph: { nodes: Array<{ id: string }>; edges: Array<{ id: string; source: string; target: string }> }) {
     remember()
     setNodes(graph.nodes.map((node, index) => normalizeCanvasNode(node as Node, index)))
@@ -510,8 +517,15 @@ export function FlowCanvasPage() {
           >
             <Play size={13} /> {showTestPanel ? 'Hide Test' : 'Test Bot'}
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setCheckOpen(true)}>
-            Check
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCheckOpen(true)}
+            data-testid="flow-check-status"
+            title={review.blocks.length ? 'Publishing is blocked until these are fixed' : 'Check this flow'}
+            className={review.blocks.length ? 'text-[var(--error)]' : undefined}
+          >
+            {review.blocks.length ? `${review.blocks.length} to fix` : 'Check'}
           </Button>
           <Button size="sm" onClick={handlePublish} disabled={saving || !environmentId || canvasVersion === 0}>
             <Share2 size={13} /> Publish
@@ -654,6 +668,7 @@ export function FlowCanvasPage() {
 
         <NodeConfigPanel
           node={selectedNode}
+          issues={selectedNode ? [...review.blocks, ...review.notes].filter((issue) => issue.nodeId === selectedNode.id) : []}
           onUpdate={handleUpdateNode}
           onDelete={handleDeleteNode}
           onClose={() => setSelectedNode(null)}

@@ -35,6 +35,8 @@ export interface NodeContext {
   services: ExecutionServices
   /** Optional callback invoked with each streamed token for llm_generate nodes */
   streamChunk?: (chunk: string) => void
+  /** The guest's reply to an AI step that is waiting on this node. */
+  reply?: string
 }
 
 // What a node returns

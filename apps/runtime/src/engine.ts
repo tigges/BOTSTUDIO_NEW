@@ -28,6 +28,7 @@ const EXECUTORS: Record<string, NodeExecutor> = {
   end_flow:         executeEndFlow,
   search_knowledge: executeSearchKnowledge,
   llm_generate:     executeLlmGenerate,
+  llm_prompt:       executeLlmGenerate,
 }
 
 export interface GraphNode {
@@ -81,6 +82,15 @@ export class SessionMachine {
 
     const allNewMessages: Array<{ direction: 'outbound'; content: { text: string } }> = []
     let ticket: { subject: string; description?: string } | undefined
+
+    let aiReply: string | undefined
+    // An AI step takes the reply itself and decides whether it is finished, so the chat stays on that node.
+    if (session.status === 'waiting_input' && session.waitingFor?.type === 'ai' && incomingText) {
+      aiReply = incomingText
+      session.currentNodeId = session.waitingFor.nodeId || session.currentNodeId
+      session.waitingFor = undefined
+      session.status = 'running'
+    }
 
     // If session is waiting for input, resume from that node with the user's text
     if (session.status === 'waiting_input' && session.waitingFor && incomingText) {
@@ -149,7 +159,9 @@ export class SessionMachine {
         input: session.variables.flow,
         services: this.services,
         streamChunk: node.data.kind === 'llm_generate' ? streamChunk : undefined,
+        ...(aiReply !== undefined && currentId === session.currentNodeId ? { reply: aiReply } : {}),
       }
+      aiReply = undefined
 
       const result = await executor(ctx)
 
@@ -195,6 +207,9 @@ export class SessionMachine {
     if (handle) {
       const match = edges.find((edge) => handlesMatch(edge.sourceHandle, handle))
       if (match) return match.target
+      // An AI step without its own turn-limit line carries on along its usual line.
+      if (handle === 'max_turns') return edges[0]?.target ?? ''
+      if (handle === 'out') return edges.find((edge) => edge.sourceHandle !== 'max_turns')?.target ?? ''
       return edges.find((edge) => !edge.sourceHandle)?.target ?? ''
     }
     return edges[0]?.target ?? ''
