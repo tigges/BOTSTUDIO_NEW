@@ -1,17 +1,18 @@
 /**
  * ChatWidget — Embedded conversational test widget.
  *
- * Streams responses from POST /api/v1/bots/:botId/preview/chat (SSE).
- * Used in the FlowCanvas "Test Bot" panel and anywhere else you want an
- * interactive preview of a bot without creating real Conversation records.
+ * Streams responses from POST /api/v1/bots/:botId/preview/chat (SSE). The server
+ * runs the live turn pipeline over the chart on screen and hands back the chat's
+ * state, which goes back with the next message. No Conversation records are made.
  */
 
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Send, Loader2, Sparkles, Database, X, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button, Avatar } from '@ybot/ui'
 import { cn } from '@ybot/ui'
 import { ChatText } from './ChatText'
-import { preview } from '../lib/api'
+import { preview, type TestChatPath, type TestChatState } from '../lib/api'
+import { testChatNote } from '../lib/test-chat-format'
 import { useAppStore } from '../store/app'
 
 const isDemoMode = () => import.meta.env.VITE_DEMO_MODE === 'true'
@@ -31,6 +32,8 @@ interface ChatMessage {
   content: string
   streaming?: boolean
   ragChunks?: number
+  /** What happened beyond the bot's words (a handover, an outcome). */
+  note?: boolean
 }
 
 export interface PreviewGraph {
@@ -38,23 +41,17 @@ export interface PreviewGraph {
   edges: Array<{ id: string; source: string; target: string; sourceHandle?: string }>
 }
 
-interface PreviewSnapshot {
-  currentNodeId: string
-  status: string
-  waitingFor?: { nodeId: string; variable: string; type: string; choices?: string[] }
-  variables: { flow: Record<string, unknown>; global: Record<string, unknown>; contact: Record<string, unknown> }
-}
-
 interface ChatWidgetProps {
   botId: string
   botName?: string
   avatarUrl?: string | null
-  systemPrompt?: string
   onClose?: () => void
   className?: string
   autoFocus?: boolean
   /** The chart on screen. Test Bot walks this, one question at a time. */
   flowGraph?: PreviewGraph
+  /** The chapter the chart belongs to; handoffs into other chapters use their saved copies. */
+  flowName?: string
 }
 
 function welcomeLine(name: string, followsChart: boolean): string {
@@ -65,7 +62,7 @@ function welcomeLine(name: string, followsChart: boolean): string {
   return `Hi! I'm ${name}. Ask me anything — I'll search my knowledge base and answer.`
 }
 
-export function ChatWidget({ botId, botName = 'Bot', avatarUrl, systemPrompt, onClose, className, autoFocus = false, flowGraph }: ChatWidgetProps) {
+export function ChatWidget({ botId, botName = 'Bot', avatarUrl, onClose, className, autoFocus = false, flowGraph, flowName }: ChatWidgetProps) {
   const followsChart = Boolean(flowGraph)
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     const content = welcomeLine(botName, followsChart)
@@ -78,7 +75,7 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, systemPrompt, on
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
-  const sessionRef = useRef<PreviewSnapshot | undefined>(undefined)
+  const stateRef = useRef<TestChatState | undefined>(undefined)
   const graphRef = useRef(flowGraph)
   graphRef.current = flowGraph
   const token = useAppStore((s: { token: string | null }) => s.token)
@@ -101,19 +98,11 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, systemPrompt, on
     return () => window.clearTimeout(id)
   }, [autoFocus])
 
-  const historyForApi = useCallback((): Array<{ role: 'user' | 'assistant'; content: string }> => {
-    return messages
-      .filter((m) => m.id !== 'welcome' && !m.streaming)
-      .map((m) => ({ role: m.role, content: m.content }))
-      .slice(-10) // keep last 10 turns for context
-  }, [messages])
-
   const busyRef = useRef(false)
 
-  async function deliver(openingText?: string) {
-    const opening = openingText !== undefined
-    const text = (opening ? openingText : input).trim()
-    if (!text || busyRef.current) return
+  async function deliver(opening = false) {
+    const text = opening ? '' : input.trim()
+    if ((!text && !opening) || busyRef.current) return
 
     if (!opening) setInput('')
     busyRef.current = true
@@ -151,13 +140,15 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, systemPrompt, on
     abortRef.current = new AbortController()
     let fullText = ''
     let ragChunks = 0
+    let note: string | undefined
+    const before = stateRef.current
 
     try {
       const res = await preview.chatStream(botId, {
         message: text,
-        systemPrompt,
-        history: opening ? [] : historyForApi(),
-        ...(graphRef.current ? { graph: graphRef.current, session: sessionRef.current } : {}),
+        opening,
+        state: before,
+        ...(graphRef.current ? { graph: graphRef.current, flowName } : {}),
       })
 
       if (!res.ok || !res.body) {
@@ -189,8 +180,11 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, systemPrompt, on
           if (line.startsWith('event: ')) continue
           if (!line.startsWith('data: ')) continue
           try {
-            const data = JSON.parse(line.slice(6)) as { text?: string; fullText?: string; ragChunks?: number; message?: string; session?: PreviewSnapshot }
-            if (data.session) sessionRef.current = data.session
+            const data = JSON.parse(line.slice(6)) as { text?: string; fullText?: string; ragChunks?: number; message?: string; state?: TestChatState; path?: TestChatPath }
+            if (data.state && data.path) {
+              stateRef.current = data.state
+              note = testChatNote(before, data.state, data.path)
+            }
             if (data.text !== undefined) {
               fullText += data.text
               setMessages((prev) =>
@@ -202,7 +196,7 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, systemPrompt, on
               ragChunks = data.ragChunks ?? 0
             }
             if (data.message !== undefined) {
-              fullText = `I had trouble generating a response. Please try again.`
+              fullText = data.message
             }
           } catch { /* skip */ }
         }
@@ -210,13 +204,15 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, systemPrompt, on
     } catch {
       fullText = 'Connection lost. Please check that the API server is running.'
     } finally {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId
-            ? { ...m, content: fullText || "I couldn't generate a response.", streaming: false, ragChunks }
-            : m
-        )
-      )
+      const quiet = !fullText && note !== undefined
+      setMessages((prev) => [
+        ...prev.flatMap((m) => {
+          if (m.id !== assistantId) return [m]
+          if (quiet) return []
+          return [{ ...m, content: fullText || "I couldn't generate a response.", streaming: false, ragChunks }]
+        }),
+        ...(note ? [{ id: `n_${Date.now()}`, role: 'assistant' as const, content: note, note: true }] : []),
+      ])
       setLoading(false)
       busyRef.current = false
       inputRef.current?.focus()
@@ -229,7 +225,7 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, systemPrompt, on
   useEffect(() => {
     if (!followsChart || isDemoMode() || openedRef.current) return
     openedRef.current = true
-    void deliverRef.current('hi')
+    void deliverRef.current(true)
   }, [followsChart])
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -241,13 +237,13 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, systemPrompt, on
 
   function reset() {
     abortRef.current?.abort()
-    sessionRef.current = undefined
+    stateRef.current = undefined
     busyRef.current = false
     setLoading(false)
     setInput('')
     if (followsChart && !isDemoMode()) {
       setMessages([])
-      void deliverRef.current('hi')
+      void deliverRef.current(true)
       return
     }
     setMessages([{ id: 'welcome', role: 'assistant', content: welcomeLine(botName, false) }])
@@ -313,7 +309,11 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, systemPrompt, on
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
-        {messages.map((msg) => (
+        {messages.map((msg) => msg.note ? (
+          <p key={msg.id} className="px-2 text-center text-[11px] leading-relaxed text-[var(--text-muted)]" data-testid="test-bot-note">
+            {msg.content}
+          </p>
+        ) : (
           <div key={msg.id} className={cn('flex gap-2', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
             {msg.role === 'assistant' && (
               <Avatar name={botName} src={avatarUrl} size="xs" className="shrink-0 mt-1" />
@@ -375,7 +375,7 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, systemPrompt, on
           </Button>
         </div>
         <p className="mt-1.5 text-center text-[10px] text-[var(--text-muted)]">
-          {followsChart ? 'This chat follows the chart. One question at a time.' : `Powered by BotStudio · RAG + ${import.meta.env.VITE_LLM_LABEL ?? 'Claude'}`}
+          {followsChart ? 'Runs like a live chat from this chart; nothing reaches the Inbox.' : 'Runs like a live chat; nothing reaches the Inbox.'}
         </p>
       </div>
     </div>

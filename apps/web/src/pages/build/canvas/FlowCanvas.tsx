@@ -693,6 +693,7 @@ export function FlowCanvasPage() {
               avatarUrl={selectedBot?.avatarUrl}
               autoFocus
               flowGraph={previewGraph}
+              flowName={flow?.name}
               className="flex-1 rounded-none border-0 shadow-none"
             />
           </div>
