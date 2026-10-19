@@ -15,7 +15,7 @@ import type { FlowGraph, ToolCallResult } from '@ybot/runtime'
 import { turnSafety, type TurnSafety } from './guardrails.js'
 import { handoverRulesFor, type HandoverRules } from './handover.js'
 import { botCatalog, botLlm, runJourney, type JourneyLlm, type JourneyStore, type SavedSession, type VersionRow } from './flow-runner.js'
-import { withLlmScope } from './llm-ledger.js'
+import { withLlmScope, type LlmSource } from './llm-ledger.js'
 import { answerFromKnowledge, runTurnWith, type AnswerRequest, type TurnPorts, type TurnResult } from './turn-pipeline.js'
 import { planNameTurn, type VisitorName } from './visitor-name.js'
 import type { ChatOutcome } from './chat-outcome.js'
@@ -59,6 +59,8 @@ export interface TestTurnInput {
   catalog?: StudioCatalog
   state?: TestChatState
   onChunk?: (chunk: string) => void
+  /** Ledger source for the model calls. Eval runs are recorded as 'eval'. */
+  ledgerSource?: LlmSource
 }
 
 export interface TestTurn {
@@ -284,7 +286,7 @@ export async function runTestTurn(input: TestTurnInput, overrides: Partial<TestC
   const state: TestChatState = structuredClone(input.state ?? newTestState())
   const ports = testPorts(input, state, deps)
   const message = input.message.trim()
-  const scope = { source: 'runtime' as const, tenantId: input.tenantId, botId: input.botId, environment: 'test' }
+  const scope = { source: input.ledgerSource ?? 'runtime', tenantId: input.tenantId, botId: input.botId, environment: 'test' }
   const result = await withLlmScope(scope, () => runTurnWith(ports, {
     conversationId: TEST_CHAT_ID,
     tenantId: input.tenantId,
