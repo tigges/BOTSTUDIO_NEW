@@ -22,6 +22,7 @@ import { type FlowGraph } from '@ybot/runtime'
 import { z } from 'zod'
 import type { StudioCatalog } from '@ybot/shared'
 import { savedJourney } from '../lib/flow-runner.js'
+import { openEventStream } from '../lib/event-stream.js'
 import { runTestTurn, withWorkingCopy, type TestChatDeps, type TestChatState } from '../lib/test-chat.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
@@ -153,15 +154,8 @@ export async function previewRoutes(app: FastifyInstance) {
     const startChapter = graph ? (flowName ?? 'This chart') : saved.entry
     const chapters = graph ? withWorkingCopy(saved.chapters, startChapter!, graph as FlowGraph) : saved.chapters
 
-    reply.raw.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    })
-    const send = (event: string, data: object) => {
-      reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-    }
+    const stream = openEventStream(reply)
+    const send = (event: string, data: object) => stream.send(data, event)
     try {
       const turn = await runTestTurn({
         tenantId,
@@ -179,7 +173,7 @@ export async function previewRoutes(app: FastifyInstance) {
       request.log.warn({ err }, 'test chat failed')
       send('error', { message: TEST_CHAT_FAILED })
     } finally {
-      reply.raw.end()
+      stream.end()
     }
   })
 

@@ -13,7 +13,8 @@ import { prisma } from '@ybot/db'
 import { readFile } from 'node:fs/promises'
 import { resolve, dirname } from 'node:path'
 import { proposeDraftFlows, textMightStartDraft } from '../lib/draft-flows.js'
-import { runTurn, withPerson } from '../lib/turn-pipeline.js'
+import { ANSWER_FAILED, runTurn, withPerson } from '../lib/turn-pipeline.js'
+import { openEventStream } from '../lib/event-stream.js'
 import { isHeld } from '../lib/handover.js'
 import { triggerRules } from '../lib/automation-engine.js'
 import { appBuildLabel, BELLA_PUBLIC_CHANNEL, resolveDemoChannel } from '../lib/demo-page.js'
@@ -471,34 +472,34 @@ export async function widgetRoutes(app: FastifyInstance) {
       void withLlmScope({ source: 'authoring', tenantId, botId }, () => proposeDraftFlows(botId)).catch(() => {})
     }
 
-    reply.raw.setHeader('Content-Type', 'text/event-stream')
-    reply.raw.setHeader('Cache-Control', 'no-cache')
-    reply.raw.setHeader('Connection', 'keep-alive')
-    reply.raw.setHeader('X-Accel-Buffering', 'no')
-    reply.raw.setHeader('Access-Control-Allow-Origin', '*')
-    reply.raw.flushHeaders?.()
+    const stream = openEventStream(reply, { 'Access-Control-Allow-Origin': '*' })
+    const send = (data: object) => stream.send(data)
 
-    const send = (data: object) => reply.raw.write(`data: ${JSON.stringify(data)}\n\n`)
+    try {
+      if (!conversationId) {
+        send({ chunk: 'This chat is not set up yet. Please try again later.' })
+        send(streamDoneEvent(false))
+        return
+      }
 
-    if (!conversationId) {
-      send({ chunk: 'This chat is not set up yet. Please try again later.' })
+      // Emit conversationId first so client can persist it
+      send({ conversationId })
+      const turn = await runTurn({
+        conversationId,
+        tenantId,
+        botId,
+        text: userText,
+        opening: !visitor.showVisitor,
+        onChunk: (chunk) => send({ chunk }),
+      })
+      send(streamDoneEvent(turn.ended, withPerson(turn)))
+    } catch (err) {
+      request.log.error({ err, conversationId, channelId }, 'widget turn failed')
+      send({ chunk: ANSWER_FAILED })
       send(streamDoneEvent(false))
-      reply.raw.end()
-      return
+    } finally {
+      stream.end()
     }
-
-    // Emit conversationId first so client can persist it
-    send({ conversationId })
-    const turn = await runTurn({
-      conversationId,
-      tenantId,
-      botId,
-      text: userText,
-      opening: !visitor.showVisitor,
-      onChunk: (chunk) => send({ chunk }),
-    })
-    send(streamDoneEvent(turn.ended, withPerson(turn)))
-    reply.raw.end()
   })
 
   // ── GET /public/chat/:channelId/:conversationId/replies — a person's replies ─
