@@ -491,7 +491,7 @@ export function ChatsPage() {
                   /* Internal note bubble */
                   <div className="flex gap-2.5 justify-start">
                     <Avatar name={msg.name} size="sm" />
-                    <div>
+                    <div className="min-w-0 max-w-[70%]">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-medium text-[var(--text-secondary)]">{msg.name}</span>
                         <span className="text-[10px] text-[var(--text-muted)]">{msg.time}</span>
@@ -499,7 +499,7 @@ export function ChatsPage() {
                           <StickyNote size={9} /> internal note
                         </span>
                       </div>
-                      <div className="rounded-[var(--radius-md)] px-3 py-2 text-sm bg-[var(--warning-muted,#2d2000)] border border-[var(--warning,#fbbf24)]/25 text-[var(--text-primary)] max-w-[70%]">
+                      <div className="rounded-[var(--radius-md)] px-3 py-2 text-sm bg-[var(--warning-muted,#2d2000)] border border-[var(--warning,#fbbf24)]/25 text-[var(--text-primary)]">
                         <ChatText text={msg.text} />
                         {msg.tool && (
                           <details className="mt-1.5 text-[11px]">
