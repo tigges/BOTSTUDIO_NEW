@@ -88,14 +88,19 @@ services:
       REDIS_URL:      redis://:${REDIS_PASSWORD:-valkey123}@valkey:6379
       JWT_SECRET:     ${JWT_SECRET:-change-me-in-production}
       FRONTEND_URL:   ${FRONTEND_URL:-http://localhost}
-      # LLM (provide at least one). Gemini Flash is the free default.
+      # LLM (provide at least one). Tried in order: Gemini, Claude, OpenAI, Groq, then Ollama.
+      # LLM_PROVIDER (gemini | claude | ollama | openai | groq) moves one to the front.
+      LLM_PROVIDER:      ${LLM_PROVIDER:-}
       GEMINI_API_KEY:    ${GEMINI_API_KEY:-}
-      GEMINI_MODEL:      ${GEMINI_MODEL:-gemini-2.0-flash}
+      GEMINI_MODEL:      ${GEMINI_MODEL:-gemini-flash-latest}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL:   ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+      OLLAMA_BASE_URL:   ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL:      ${OLLAMA_MODEL:-llama3.2}
+      OPENAI_API_KEY:    ${OPENAI_API_KEY:-}
+      OPENAI_MODEL:      ${OPENAI_MODEL:-gpt-4o}
       GROQ_API_KEY:      ${GROQ_API_KEY:-}
       GROQ_MODEL:        ${GROQ_MODEL:-llama-3.3-70b-versatile}
-      OPENAI_API_KEY:    ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OLLAMA_BASE_URL:   ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       # Object storage
       S3_ENDPOINT:    ${S3_ENDPOINT:-http://minio:9000}
       S3_BUCKET:      ${S3_BUCKET:-ybot-uploads}

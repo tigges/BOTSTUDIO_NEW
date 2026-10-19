@@ -32,20 +32,27 @@ const MODEL_GROUPS: Array<{
     signupUrl: 'https://aistudio.google.com',
     free: true,
     models: [
-      { value: 'gemini-2.0-flash',    label: 'Gemini 2.0 Flash',    note: 'Recommended default — fast, capable, free tier' },
-      { value: 'gemini-1.5-flash',    label: 'Gemini 1.5 Flash',    note: 'Free tier, slightly older' },
-      { value: 'gemini-1.5-pro',      label: 'Gemini 1.5 Pro',      note: 'Higher quality, lower RPM on free tier' },
+      { value: 'gemini-flash-latest',      label: 'Gemini Flash',      note: 'Recommended default — fast, capable, free tier. Always the current Flash' },
+      { value: 'gemini-flash-lite-latest', label: 'Gemini Flash-Lite', note: 'Cheapest and fastest, free tier' },
     ],
   },
   {
-    label: 'Groq',
-    envVar: 'GROQ_API_KEY',
-    signupUrl: 'https://console.groq.com',
+    label: 'Anthropic Claude',
+    envVar: 'ANTHROPIC_API_KEY',
+    signupUrl: 'https://console.anthropic.com',
+    models: [
+      { value: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', note: 'Best reasoning; also drafts website imports' },
+      { value: 'claude-haiku-5-5',  label: 'Claude Haiku 5.5',  note: 'Fast and cheap' },
+    ],
+  },
+  {
+    label: 'Local (Ollama)',
+    envVar: 'OLLAMA_BASE_URL',
+    signupUrl: 'https://ollama.com',
     free: true,
     models: [
-      { value: 'groq/llama-3.3-70b-versatile', label: 'Llama 3.3 70B',   note: 'Best open-source quality, free tier' },
-      { value: 'groq/llama-3.1-8b-instant',    label: 'Llama 3.1 8B',    note: 'Ultra-fast, lower quality' },
-      { value: 'groq/mixtral-8x7b-32768',      label: 'Mixtral 8x7B',    note: 'Good for multilingual' },
+      { value: 'ollama/llama3.2', label: 'Llama 3.2 (local)', note: 'Runs on your own server, no API key' },
+      { value: 'ollama/mistral',  label: 'Mistral (local)',   note: 'Lightweight option' },
     ],
   },
   {
@@ -58,22 +65,11 @@ const MODEL_GROUPS: Array<{
     ],
   },
   {
-    label: 'Anthropic',
-    envVar: 'ANTHROPIC_API_KEY',
-    signupUrl: 'https://console.anthropic.com',
+    label: 'Groq',
+    envVar: 'GROQ_API_KEY',
+    signupUrl: 'https://console.groq.com',
     models: [
-      { value: 'claude-sonnet-4-5',   label: 'Claude Sonnet 4.5', note: 'Latest Sonnet, excellent reasoning' },
-      { value: 'claude-3-5-sonnet',   label: 'Claude 3.5 Sonnet', note: 'Previous Sonnet' },
-      { value: 'claude-3-haiku',      label: 'Claude 3 Haiku',    note: 'Fast and cheap' },
-    ],
-  },
-  {
-    label: 'Local (Ollama)',
-    envVar: 'OLLAMA_BASE_URL',
-    signupUrl: 'https://ollama.ai',
-    models: [
-      { value: 'ollama/llama3.2',  label: 'Llama 3.2 (local)',  note: 'No internet needed' },
-      { value: 'ollama/mistral',   label: 'Mistral (local)',    note: 'Lightweight option' },
+      { value: 'groq/llama-3.3-70b-versatile', label: 'Llama 3.3 70B', note: 'Needs a Groq account with API access' },
     ],
   },
 ]
@@ -104,13 +100,13 @@ export function TrainingPage() {
   const selectedBotId = useAppStore((s: { selectedBotId: string | null }) => s.selectedBotId)
   const [training, setTraining] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [selectedModel, setSelectedModel] = useState(config?.model ?? 'gemini-2.0-flash')
+  const [selectedModel, setSelectedModel] = useState(config?.model ?? 'gemini-flash-latest')
   const [temperature, setTemperature] = useState(String(config?.temperature ?? 0.3))
   const [systemPrompt, setSystemPrompt] = useState(config?.systemPrompt ?? 'You are a helpful customer support assistant.')
 
   React.useEffect(() => {
     if (config) {
-      setSelectedModel(config.model ?? 'gemini-2.0-flash')
+      setSelectedModel(config.model ?? 'gemini-flash-latest')
       setTemperature(String(config.temperature ?? 0.3))
       setSystemPrompt(config.systemPrompt ?? '')
     }

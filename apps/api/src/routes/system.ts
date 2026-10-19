@@ -3,6 +3,13 @@ import { prisma } from '@ybot/db'
 import { requireRole } from '../middleware/auth.js'
 import * as os from 'node:os'
 import * as http from 'node:http'
+import { DEFAULT_MODELS, currentModelId, llmChain } from '@ybot/llm'
+
+function llmOrder(): string {
+  const links = llmChain()
+  if (links.length === 0) return 'nothing set (Ollama on localhost)'
+  return links.map((link) => `${link.label} (${link.model})`).join(' → ')
+}
 
 
 function dockerRequest(path: string): Promise<unknown> {
@@ -218,11 +225,12 @@ async function configHandler() {
           S3_REGION:   { set: isSet('S3_REGION'),   label: 'S3 Region',           value: e['S3_REGION'] ?? null },
         },
         llm: {
-          GEMINI_API_KEY:    { set: isSet('GEMINI_API_KEY'),    label: 'Gemini API Key' },
-          GROQ_API_KEY:      { set: isSet('GROQ_API_KEY'),      label: 'Groq API Key' },
-          OPENAI_API_KEY:    { set: isSet('OPENAI_API_KEY'),    label: 'OpenAI API Key' },
-          ANTHROPIC_API_KEY: { set: isSet('ANTHROPIC_API_KEY'), label: 'Anthropic API Key' },
+          LLM_PROVIDER:      { set: true, label: `Tried in order: ${llmOrder()}`, value: e['LLM_PROVIDER'] || null },
+          GEMINI_API_KEY:    { set: isSet('GEMINI_API_KEY'),    label: 'Gemini API Key', value: isSet('GEMINI_API_KEY') ? currentModelId(e['GEMINI_MODEL'] || DEFAULT_MODELS.gemini) : null },
+          ANTHROPIC_API_KEY: { set: isSet('ANTHROPIC_API_KEY'), label: 'Claude (Anthropic) API Key', value: isSet('ANTHROPIC_API_KEY') ? currentModelId(e['ANTHROPIC_MODEL'] || DEFAULT_MODELS.anthropic) : null },
           OLLAMA_BASE_URL:   { set: isSet('OLLAMA_BASE_URL'),   label: 'Ollama Base URL', endpoint: e['OLLAMA_BASE_URL'] ?? null },
+          OPENAI_API_KEY:    { set: isSet('OPENAI_API_KEY'),    label: 'OpenAI API Key' },
+          GROQ_API_KEY:      { set: isSet('GROQ_API_KEY'),      label: 'Groq API Key' },
         },
         app: {
           NODE_ENV:     { set: true, label: 'Environment', value: e['NODE_ENV'] ?? 'development' },

@@ -164,7 +164,7 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, systemPrompt, on
         // Non-demo API error — show friendly message
         fullText = res.status === 401
           ? 'Not authenticated. Please sign in again.'
-          : 'The bot preview is unavailable right now. Make sure the API is running and an LLM key (GEMINI_API_KEY, GROQ_API_KEY, or a paid key) is configured.'
+          : 'The bot preview is unavailable right now. Make sure the API is running and a model is configured (GEMINI_API_KEY, ANTHROPIC_API_KEY, or OLLAMA_BASE_URL).'
         setMessages((prev) =>
           prev.map((m) => m.id === assistantId ? { ...m, content: fullText, streaming: false } : m)
         )
