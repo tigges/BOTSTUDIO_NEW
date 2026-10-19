@@ -3,6 +3,7 @@ import { LlmAdapter } from './types.js'
 import { OpenAIProvider } from './providers/openai.js'
 import { AnthropicProvider } from './providers/anthropic.js'
 import { GroqProvider, OllamaProvider } from './providers/ollama.js'
+import { RecordingProvider } from './ledger.js'
 
 export type LlmProviderName = 'gemini' | 'anthropic' | 'openai' | 'groq' | 'ollama'
 
@@ -99,6 +100,10 @@ export interface LlmLink {
 }
 
 function providerFor(name: LlmProviderName, env: Env): LlmProvider {
+  return new RecordingProvider(name, bareProvider(name, env))
+}
+
+function bareProvider(name: LlmProviderName, env: Env): LlmProvider {
   switch (name) {
     case 'gemini': return new OpenAIProvider(env['GEMINI_API_KEY']!, GEMINI_BASE_URL)
     case 'anthropic': return new AnthropicProvider(env['ANTHROPIC_API_KEY']!)
