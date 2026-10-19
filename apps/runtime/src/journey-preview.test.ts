@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { chatPlain, draftWebsiteChat, hairStudioPack, pageFromHtml } from '@ybot/shared'
+import { chatPlain, draftWebsiteChat, hairStudioPack, learnedSpecFromJobs, packFromLearned, pageFromHtml } from '@ybot/shared'
 import { runJourneyPreview } from './journey-preview.js'
 import type { FlowGraph } from './engine.js'
 
@@ -592,4 +592,42 @@ test('a phrase miss on the test chat can open a chapter the model names', async 
   })
   assert.equal(classified.chapter, 'Plans')
   assert.match(classified.text, /SIM only/)
+})
+
+test('a model-drafted answer offers the other topics, follows one, and closes on no thanks', async () => {
+  const pages = [pageFromHtml('https://www.vodafone.co.uk/', '<html><head><title>Vodafone</title></head><body><p>Phones, SIM only and broadband from Vodafone.</p></body></html>')]
+  const job = (name: string, phrases: string[], answer: string) => ({
+    flowName: name, choice: name, phrases, question: `What about ${name.toLowerCase()}?`, answer, blurb: answer.slice(0, 80),
+  })
+  const spec = learnedSpecFromJobs({
+    pages,
+    companyName: 'Vodafone',
+    personaName: 'Voda',
+    keepBrand: true,
+    topics: [
+      job('Buy a phone', ['buy a phone', 'new phone'], 'Vodafone offers pay monthly contract phones and pay as you go phones.'),
+      job('Get SIM only deal', ['sim only', 'sim deal'], 'Vodafone offers SIM only plans with minutes, texts and mobile data.'),
+      job('Get broadband', ['broadband', 'home internet'], 'Vodafone offers Pro Broadband from £39 a month with Vodafone TV at no extra cost.'),
+    ],
+  })
+  assert.equal(spec.menu, 'I can help you buy a phone, get SIM only deal, get broadband, or talk to a person.')
+  const pack = packFromLearned(spec, 'Vodafone', 'Voda')
+  const chapters = pack.flows.map((flow) => ({ name: flow.name, graph: flow.graph as unknown as FlowGraph }))
+  const turn = (message: string, session?: Parameters<typeof runJourneyPreview>[0]['session']) =>
+    runJourneyPreview({ chapters, startChapter: pack.welcomeName, message, environmentLabel: 'Sandbox', session })
+
+  const phone = await turn('I want to buy a phone')
+  assert.equal(phone.chapter, 'Buy a phone')
+  assert.match(phone.text, /pay monthly contract phones/)
+  assert.match(phone.text, /Anything else I can help with\?/)
+  assert.equal((phone.text.match(/\?/g) ?? []).length, 1)
+  assert.equal(phone.session?.status, 'waiting_input')
+
+  const broadband = await turn('broadband please', phone.session)
+  assert.equal(broadband.chapter, 'Get broadband')
+  assert.match(broadband.text, /Pro Broadband from £39/)
+
+  const done = await turn('no thanks', broadband.session)
+  assert.match(done.text, /Thanks for chatting/)
+  assert.equal(done.session?.status, 'completed')
 })

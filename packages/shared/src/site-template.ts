@@ -139,24 +139,78 @@ function companyLabel(companyName: string): string {
   return companyName.trim() || 'your company'
 }
 
-function answerFlow(topic: SiteTopic, tag: string): StarterFlow {
+const HELP_VERBS =
+  /^(?:apply|ask|book|buy|cancel|change|check|compare|contact|download|explore|find|get|join|learn|log|manage|open|order|pay|renew|report|request|reset|return|see|shop|sign|start|switch|talk|top|track|trade|try|upgrade|view|bundle)\b/i
+
+function lowerLead(choice: string): string {
+  const [first = '', ...rest] = choice.trim().split(/\s+/)
+  const acronym = first.length > 1 && first === first.toUpperCase()
+  return [acronym ? first : first.toLowerCase(), ...rest].join(' ')
+}
+
+/** The fallback line: jobs named as tasks read "I can help you buy a phone", topics read "I can help with plans". */
+export function menuLine(topics: SiteTopic[]): string {
+  const named = topics
+    .filter((topic) => topic.flowName !== 'Talk to a person')
+    .map((topic) => topic.choice.trim())
+    .filter(Boolean)
+  if (named.length === 0) return 'I can pass you to a person on the team.'
+  const list = named.map(lowerLead).join(', ')
+  return named.every((name) => HELP_VERBS.test(name))
+    ? `I can help you ${list}, or talk to a person.`
+    : `I can help with ${list}, or a person on the team.`
+}
+
+const DONE_PHRASES = ['no', 'no thanks', 'no thank you', 'nope', "that's all", 'that is all', 'nothing else', 'all good', "i'm good", 'bye', 'goodbye', 'thanks', 'thank you']
+
+/** Answer, then one question that offers the other topics, like the salon lookups. */
+function answerFlow(topic: SiteTopic, tag: string, others: SiteTopic[] = [], menu?: string): StarterFlow {
   const y = 120
+  const doors = others
+    .filter((other) => other.flowName !== topic.flowName)
+    .map((other) => ({
+      handle: handleFor(other.flowName),
+      flowName: other.flowName,
+      phrases: [...new Set([other.choice.toLowerCase(), ...other.phrases])],
+    }))
+  const nodes: object[] = [
+    { id: 'start', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: topic.flowName, config: {} } },
+    { id: 'say', type: 'flow-node', position: { x: 340, y }, data: { kind: 'send_message', label: 'Answer', config: { text: topic.answer } } },
+  ]
+  const edges: object[] = [{ id: 'e1', source: 'start', target: 'say', sourceHandle: 'out' }]
+  if (doors.length === 0) {
+    nodes.push({ id: 'end', type: 'flow-node', position: { x: 640, y }, data: { kind: 'end_flow', label: 'End', config: {} } })
+    edges.push({ id: 'e2', source: 'say', target: 'end' })
+  } else {
+    nodes.push(
+      { id: 'ask', type: 'flow-node', position: { x: 600, y }, data: { kind: 'ask_question', label: 'Next', config: { question: 'Anything else I can help with?', variable: 'request' } } },
+      { id: 'next', type: 'flow-node', position: { x: 860, y }, data: { kind: 'route_topic', label: 'What next', config: { routes: [...doors.map(({ handle, phrases }) => ({ handle, phrases })), { handle: 'done', phrases: DONE_PHRASES }] } } },
+      { id: 'bye', type: 'flow-node', position: { x: 1120, y: y + 360 }, data: { kind: 'send_message', label: 'Done', config: { text: 'Thanks for chatting. I am here if you need anything else.' } } },
+      { id: 'close', type: 'flow-node', position: { x: 1120, y: y + 240 }, data: { kind: 'send_message', label: 'Offer the menu', config: { text: menu ?? menuLine(others) } } },
+      { id: 'end', type: 'flow-node', position: { x: 1380, y: y + 240 }, data: { kind: 'end_flow', label: 'End', config: {} } },
+    )
+    edges.push(
+      { id: 'e2', source: 'say', target: 'ask' },
+      { id: 'e-ask', source: 'ask', target: 'next' },
+      { id: 'e-next-done', source: 'next', target: 'bye', sourceHandle: 'done' },
+      { id: 'e-bye', source: 'bye', target: 'end' },
+      { id: 'e-next-other', source: 'next', target: 'close', sourceHandle: 'other' },
+      { id: 'e-close', source: 'close', target: 'end' },
+    )
+    doors.forEach((door, index) => {
+      const jumpId = `go-${door.handle}`
+      nodes.push({ id: jumpId, type: 'flow-node', position: { x: 1120, y: y - 120 + index * 80 }, data: { kind: 'execute_flow', label: door.flowName, config: { flowName: door.flowName } } })
+      edges.push({ id: `e-next-${door.handle}`, source: 'next', target: jumpId, sourceHandle: door.handle })
+    })
+  }
   return {
     name: topic.flowName,
-    description: 'Template answer from a public site, with brand names left off. Edit the line to match your business.',
+    description: doors.length > 0
+      ? 'Answers from the public website, then offers the other topics. Edit the line to match your business.'
+      : 'Answers from the public website. Edit the line to match your business.',
     tags: [tag, 'template', 'faq'],
     publish: true,
-    graph: {
-      nodes: [
-        { id: 'start', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: topic.flowName, config: {} } },
-        { id: 'say', type: 'flow-node', position: { x: 340, y }, data: { kind: 'send_message', label: 'Answer', config: { text: topic.answer } } },
-        { id: 'end', type: 'flow-node', position: { x: 640, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
-      ],
-      edges: [
-        { id: 'e1', source: 'start', target: 'say', sourceHandle: 'out' },
-        { id: 'e2', source: 'say', target: 'end' },
-      ],
-    },
+    graph: { nodes, edges },
   }
 }
 
@@ -166,6 +220,8 @@ function chapterFor(
   companyName: string,
   personaName?: string | null,
   salesFlow?: string,
+  others: SiteTopic[] = [],
+  menu?: string,
 ): StarterFlow {
   if (topic.walk === 'email' || topic.flowName === 'Book a demo') {
     return emailFollowUpFlow({
@@ -181,13 +237,13 @@ function chapterFor(
       tag,
       choices: topic.choices,
       salesFlow,
-    }) ?? answerFlow(topic, tag)
+    }) ?? answerFlow(topic, tag, others, menu)
   }
   if (topic.flowName === 'Talk to a person') {
     const found = supportUseCaseFlows().find((flow) => flow.name === 'Talk to a person')
     if (found) return { ...found, publish: true, tags: [...found.tags, tag, 'template'] }
   }
-  return answerFlow(topic, tag)
+  return answerFlow(topic, tag, others, menu)
 }
 
 export function doorsFromTopics(topics: SiteTopic[]): PreviewDoor[] {
@@ -229,7 +285,7 @@ export function siteTemplatePack(input: {
     }),
   }
   const salesFlow = topics.find((topic) => topic.walk === 'email' || /demo/i.test(topic.flowName))?.flowName
-  const flows: StarterFlow[] = [welcome, ...topics.map((topic) => chapterFor(topic, input.tag, input.companyName, input.personaName, salesFlow))]
+  const flows: StarterFlow[] = [welcome, ...topics.map((topic) => chapterFor(topic, input.tag, input.companyName, input.personaName, salesFlow, topics, input.menu))]
   return {
     id: input.id,
     tag: input.tag,
@@ -701,7 +757,7 @@ export function draftClusteredTemplate(input: {
     packTag: clusterId === 'custom' ? 'software' : clusterId,
     greeting,
     followUp: `Hi {{contact.name}}. What do you need help with?`,
-    menu: `I can help with ${topics.filter((topic) => topic.flowName !== 'Talk to a person').map((topic) => topic.choice.toLowerCase()).join(', ')}, or a person on the team.`,
+    menu: menuLine(topics),
     topics,
     sourceUrl,
     sourceHost: host,
@@ -778,7 +834,7 @@ export function learnedSpecFromJobs(input: {
     packTag,
     greeting,
     followUp: `Hi {{contact.name}}. What do you need help with?`,
-    menu: `I can help with ${topics.filter((topic) => topic.flowName !== 'Talk to a person').map((topic) => topic.choice.toLowerCase()).join(', ')}, or a person on the team.`,
+    menu: menuLine(topics),
     topics,
     sourceUrl,
     sourceHost: host,
