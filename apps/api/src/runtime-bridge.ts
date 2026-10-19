@@ -5,6 +5,8 @@
 
 import type { FastifyInstance } from 'fastify'
 import { prisma } from '@ybot/db'
+import { readerMode } from '@ybot/shared'
+import { loadPrivacy } from './lib/privacy.js'
 import { runTurn } from './lib/turn-pipeline.js'
 
 export async function processInboundMessage(
@@ -16,13 +18,17 @@ export async function processInboundMessage(
   try {
     const convo = await prisma.conversation.findFirst({ where: { id: conversationId, tenantId }, select: { botId: true } })
     if (!convo) return
+    const agentsSeeOriginal = readerMode(await loadPrivacy(convo.botId), 'human_agent') === 'original'
     await runTurn({
       conversationId,
       tenantId,
       botId: convo.botId,
       text: incomingText,
       inboundSaved: true,
-      onChunk: (chunk) => app.broadcastToTenant(tenantId, { event: 'message.chunk', data: { conversationId, chunk } }),
+      // A half-written personal detail cannot be masked, so masked bots send the saved reply only.
+      onChunk: agentsSeeOriginal
+        ? (chunk) => app.broadcastToTenant(tenantId, { event: 'message.chunk', data: { conversationId, chunk } })
+        : undefined,
     })
   } catch (err) {
     app.log.error({ err, conversationId }, 'Inbox turn failed')

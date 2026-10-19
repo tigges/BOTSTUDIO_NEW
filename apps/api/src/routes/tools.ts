@@ -27,7 +27,6 @@ import { applyAuthProfile, publicAuthProfile } from '../lib/auth-profiles.js'
 import { sealSecret, secretHint } from '../lib/secrets.js'
 import { assertPublicUrl } from '../lib/public-url.js'
 import { mcpListTools } from '../lib/mcp-client.js'
-import { recordAudit } from '../lib/audit.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -94,7 +93,7 @@ export async function toolsRoutes(app: FastifyInstance) {
   })
 
   app.post('/:botId/tools', async (request, reply) => {
-    const { tenantId, sub } = request.user as JWT
+    const { tenantId } = request.user as JWT
     const { botId } = request.params as { botId: string }
     const parsed = toolBody.safeParse(request.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: parsed.error.flatten() } })
@@ -116,7 +115,6 @@ export async function toolsRoutes(app: FastifyInstance) {
       include: { authProfile: { select: { id: true, name: true } } },
     })
     const after = presentTool(tool)
-    await recordAudit({ tenantId, actorId: sub, action: 'tool.created', targetType: 'tool', targetId: tool.id, after })
     return reply.status(201).send({ data: after })
   })
 
@@ -129,13 +127,12 @@ export async function toolsRoutes(app: FastifyInstance) {
   })
 
   app.patch('/:botId/tools/:id', async (request, reply) => {
-    const { tenantId, sub } = request.user as JWT
+    const { tenantId } = request.user as JWT
     const { botId, id } = request.params as { botId: string; id: string }
     const parsed = toolBody.partial().safeParse(request.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: parsed.error.flatten() } })
     const current = await findTool(tenantId, botId, id)
     if (!current) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'This tool is no longer in the Tools list.' } })
-    const before = presentTool(current)
     const draft: ToolDraft = {
       name: parsed.data.name ?? current.name,
       kind: parsed.data.kind ?? (current.kind as ToolDraft['kind']),
@@ -161,17 +158,15 @@ export async function toolsRoutes(app: FastifyInstance) {
       include: { authProfile: { select: { id: true, name: true } } },
     })
     const after = presentTool(tool)
-    await recordAudit({ tenantId, actorId: sub, action: 'tool.updated', targetType: 'tool', targetId: tool.id, before, after })
     return { data: after }
   })
 
   app.delete('/:botId/tools/:id', async (request, reply) => {
-    const { tenantId, sub } = request.user as JWT
+    const { tenantId } = request.user as JWT
     const { botId, id } = request.params as { botId: string; id: string }
     const current = await findTool(tenantId, botId, id)
     if (!current) return reply.status(204).send()
     await prisma.tool.delete({ where: { id: current.id } })
-    await recordAudit({ tenantId, actorId: sub, action: 'tool.deleted', targetType: 'tool', targetId: current.id, before: presentTool(current) })
     return reply.status(204).send()
   })
 
@@ -219,7 +214,7 @@ export async function toolsRoutes(app: FastifyInstance) {
   })
 
   app.post('/:botId/tools/mcp/import', async (request, reply) => {
-    const { tenantId, sub } = request.user as JWT
+    const { tenantId } = request.user as JWT
     const { botId } = request.params as { botId: string }
     const body = mcpSource.extend({ toolNames: z.array(z.string()).min(1), effect: z.enum(TOOL_EFFECTS).default('read') }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Pick at least one MCP tool to add.' } })
@@ -259,14 +254,13 @@ export async function toolsRoutes(app: FastifyInstance) {
         include: { authProfile: { select: { id: true, name: true } } },
       })
       const after = presentTool(tool)
-      await recordAudit({ tenantId, actorId: sub, action: 'tool.created', targetType: 'tool', targetId: tool.id, after })
       created.push(after)
     }
     return reply.status(201).send({ data: { created, skipped } })
   })
 
   app.post('/:botId/tools/:id/refresh', async (request, reply) => {
-    const { tenantId, sub } = request.user as JWT
+    const { tenantId } = request.user as JWT
     const { botId, id } = request.params as { botId: string; id: string }
     const current = await findTool(tenantId, botId, id)
     if (!current) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'This tool is no longer in the Tools list.' } })
@@ -280,7 +274,6 @@ export async function toolsRoutes(app: FastifyInstance) {
     }
     const found = remote.find((tool) => tool.name === config['toolName'])
     if (!found) return reply.status(409).send({ error: { code: 'MCP_GONE', message: `The server no longer offers ${String(config['toolName'])}. Delete this tool or pick another.` } })
-    const before = presentTool(current)
     const known = new Map((current.parameters as unknown as ToolParameter[]).map((param) => [param.name, param]))
     const parameters = parametersFromJsonSchema(found.inputSchema).map((param) => ({ ...param, description: param.description || known.get(param.name)?.description || param.name }))
     const tool = await prisma.tool.update({
@@ -289,7 +282,6 @@ export async function toolsRoutes(app: FastifyInstance) {
       include: { authProfile: { select: { id: true, name: true } } },
     })
     const after = presentTool(tool)
-    await recordAudit({ tenantId, actorId: sub, action: 'tool.refreshed', targetType: 'tool', targetId: tool.id, before, after })
     return { data: after }
   })
 }
@@ -340,12 +332,11 @@ export async function authProfilesRoutes(app: FastifyInstance) {
       },
     })
     const after = publicAuthProfile(row)
-    await recordAudit({ tenantId, actorId: sub, action: 'auth_profile.created', targetType: 'auth_profile', targetId: row.id, after })
     return reply.status(201).send({ data: after })
   })
 
   app.patch('/:id', async (request, reply) => {
-    const { tenantId, sub } = request.user as JWT
+    const { tenantId } = request.user as JWT
     const { id } = request.params as { id: string }
     const body = profileBody.partial().safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
@@ -368,15 +359,11 @@ export async function authProfilesRoutes(app: FastifyInstance) {
       },
     })
     const after = publicAuthProfile(row)
-    await recordAudit({
-      tenantId, actorId: sub, action: body.data.secret ? 'auth_profile.secret_replaced' : 'auth_profile.updated',
-      targetType: 'auth_profile', targetId: row.id, before: publicAuthProfile(current), after,
-    })
     return { data: after }
   })
 
   app.delete('/:id', async (request, reply) => {
-    const { tenantId, sub } = request.user as JWT
+    const { tenantId } = request.user as JWT
     const { id } = request.params as { id: string }
     const current = await prisma.authProfile.findFirst({ where: { id, tenantId }, include: { _count: { select: { tools: true } } } })
     if (!current) return reply.status(204).send()
@@ -384,7 +371,6 @@ export async function authProfilesRoutes(app: FastifyInstance) {
       return reply.status(409).send({ error: { code: 'PROFILE_IN_USE', message: `${current._count.tools} tool${current._count.tools === 1 ? ' uses' : 's use'} this profile. Choose another profile on ${current._count.tools === 1 ? 'that tool' : 'those tools'} first.` } })
     }
     await prisma.authProfile.delete({ where: { id: current.id } })
-    await recordAudit({ tenantId, actorId: sub, action: 'auth_profile.deleted', targetType: 'auth_profile', targetId: current.id, before: publicAuthProfile(current) })
     return reply.status(204).send()
   })
 }

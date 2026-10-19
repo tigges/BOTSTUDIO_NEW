@@ -1,5 +1,6 @@
 import { prisma } from '@ybot/db'
 import { toolParametersSchema, type ToolParameter } from '@ybot/shared'
+import { loadPrivacy, renderDeepFor } from './privacy.js'
 import { defaultToolDeps, runTool, type ToolDeps, type ToolResult, type ToolRunContext } from './tool-runner.js'
 
 const withProfile = { authProfile: { select: { id: true, name: true, kind: true, settings: true, secretEnc: true } } } as const
@@ -34,6 +35,8 @@ export function presentTool(tool: ToolWithProfile | Omit<ToolWithProfile, 'authP
 /** Runs a tool and records the run. Arguments and output are stored without the profile's secret. */
 export async function runAndRecord(tool: ToolWithProfile, args: Record<string, unknown> | undefined, ctx: ToolRunContext, deps: ToolDeps = defaultToolDeps()): Promise<ToolResult & { runId: string }> {
   const result = await runTool(tool, args, ctx, deps)
+  const privacy = await loadPrivacy(tool.botId)
+  const kept = <T,>(value: T) => renderDeepFor('tool_output', value, privacy, tool.tenantId)
   const row = await prisma.toolRun.create({
     data: {
       tenantId: tool.tenantId,
@@ -45,9 +48,9 @@ export async function runAndRecord(tool: ToolWithProfile, args: Record<string, u
       status: result.status ?? null,
       durationMs: result.durationMs,
       attempts: result.attempts,
-      input: (args ?? {}) as object,
-      output: (result.output ?? null) as object,
-      error: result.error ?? null,
+      input: kept(args ?? {}) as object,
+      output: kept(result.output ?? null) as object,
+      error: result.error ? kept(result.error) : null,
     },
   })
   return { ...result, runId: row.id }

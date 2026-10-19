@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { FlowGraph } from '@ybot/runtime'
+import { DEFAULT_PRIVACY } from '@ybot/shared'
 import { runTestTurn, type TestChatDeps } from './test-chat.js'
 import { defaultToolDeps, runTool, type RunnableTool } from './tool-runner.js'
 
@@ -58,12 +59,13 @@ function deps(calls: string[]): Partial<TestChatDeps> {
     answer: async () => {},
     llm: async () => quietModel as never,
     catalog: async () => undefined,
+    safety: async () => ({ rules: [], privacy: DEFAULT_PRIVACY }),
     db: {},
     now: () => new Date('2026-10-19T12:00:00Z'),
     runTool: async (_tenantId, _botId, toolId, args) => {
       const tool = tools[toolId]
       if (!tool) return { name: 'unknown tool', ok: false, output: null, error: 'This tool is no longer in the Tools list.' }
-      const result = await runTool(tool, args, { source: 'test_chat' }, defaultToolDeps({ fetch, checkUrl: async () => undefined }))
+      const result = await runTool(tool, args, { source: 'test_chat' }, defaultToolDeps({ fetch, checkUrl: async () => undefined, privacy: async () => DEFAULT_PRIVACY }))
       return { name: tool.name, ...result }
     },
   }

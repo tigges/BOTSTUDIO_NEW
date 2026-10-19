@@ -3,13 +3,19 @@
  *
  * Stages, in order:
  *   1. scope    every model call in the turn is attributed to this chat (llm_calls)
- *   2. inbound  save the guest's line, start the SLA clock, fire message rules
+ *   2. inbound  check the guest's line against the bot's guardrails, save it,
+ *               start the SLA clock, fire message rules
  *   3. held     a person holds the chat: the bot stays quiet
- *   4. human    a word on the always-human list hands over before any journey runs
+ *   4. guard    a guardrail that blocks, asks again or escalates answers here
+ *      human    a word on the always-human list hands over before any journey runs
  *   5. journey  the published journey answers (chapters, jumps, handover, outcome)
  *   6. name     a name the guest just gave is thanked
  *   7. answer   no journey line: answer from the knowledge base with the bot's model
- *   8. outbound save the reply, stop the SLA clock, tell the Inbox
+ *   8. outbound check the reply against the guardrails, render personal data for
+ *               the guest, save it, stop the SLA clock, tell the Inbox
+ *
+ * Replies stream as they are written unless a guardrail could change them or the
+ * guest sees personal data in another form; then the checked reply is sent whole.
  *
  * A handover (stage 4 or 5) only happens when the bot has opening hours for people.
  * Without them nobody watches the queue, so the bot says so and keeps helping.
@@ -20,13 +26,28 @@
 
 import { prisma } from '@ybot/db'
 import { createLlmAdapter, createLlmAdapterForModel, type LlmMessage } from '@ybot/llm'
-import { alwaysHumanMatch, alwaysHumanRequest, fillNameTokens, type HandoverContract, type HandoverRequest } from '@ybot/shared'
+import {
+  alwaysHumanMatch,
+  alwaysHumanRequest,
+  BLOCKED_OUTPUT_LINE,
+  evaluateGuardrails,
+  fillNameTokens,
+  guardrailHandoverRequest,
+  holdsReplies,
+  readerMode,
+  type GuardrailHit,
+  type HandoverContract,
+  type HandoverRequest,
+} from '@ybot/shared'
 import { triggerRules } from './automation-engine.js'
 import { keepWithBot, markNoTeam } from './chat-outcome.js'
 import { runFlowIfPublished, type FlowRunResult } from './flow-runner.js'
 import { chatIsHeld, handOverChat, handoverRulesFor, HANDOVER_LINE, type HandoverRules } from './handover.js'
 import { knowledgeBlock, searchKnowledge } from './knowledge-search.js'
+import { turnSafety, type TurnSafety } from './guardrails.js'
 import { conversationScope, withLlmScope } from './llm-ledger.js'
+import { agentViewFor, presentMessages } from './present-chat.js'
+import { renderFor } from './privacy.js'
 import { onInboundCustomerMessage, onOutboundReply } from './sla.js'
 import { finishBotLines, saveContactName, takeNameTurn, type NamePlan, type VisitorName } from './visitor-name.js'
 
@@ -44,6 +65,8 @@ export interface TurnInput {
   inboundSaved?: boolean
   /** Streams reply text as it is produced. Joined chunks always equal the returned text. */
   onChunk?: (chunk: string) => void
+  /** Guardrails the guest's line matched; saved with it. */
+  guardrails?: GuardrailHit[]
 }
 
 export interface TurnResult {
@@ -51,7 +74,7 @@ export interface TurnResult {
   /** The journey reached its end; a waiting question is still open when false. */
   ended: boolean
   /** held: a person has the chat and the bot said nothing. handover: the bot just passed it on. */
-  path: 'journey' | 'name' | 'answer' | 'none' | 'held' | 'handover'
+  path: 'journey' | 'name' | 'answer' | 'none' | 'held' | 'handover' | 'guardrail'
 }
 
 /** A person has the chat, so the guest waits for their reply. */
@@ -64,10 +87,17 @@ export interface AnswerRequest {
   botId: string
   text: string
   history: LlmMessage[]
+  /** Added to the system prompt, e.g. when a reply is written again after a guardrail. */
+  instruction?: string
   onChunk: (chunk: string) => void
 }
 
+export interface SavedLineExtra {
+  guardrails?: GuardrailHit[]
+}
+
 export interface TurnPorts {
+  safety(botId: string): Promise<TurnSafety>
   saveInbound(input: TurnInput): Promise<void>
   held(conversationId: string): Promise<boolean>
   handoverRules(botId: string): Promise<HandoverRules>
@@ -77,7 +107,7 @@ export interface TurnPorts {
   nameTurn(conversationId: string, text: string): Promise<NamePlan & { contact: VisitorName | null }>
   history(conversationId: string, current: string): Promise<LlmMessage[]>
   answer(request: AnswerRequest): Promise<void>
-  saveOutbound(input: TurnInput, text: string): Promise<void>
+  saveOutbound(input: TurnInput, text: string, extra?: SavedLineExtra): Promise<void>
   saveContactName(contactId: string, change: { metadata?: Record<string, unknown> }): Promise<void>
   warn(message: string, err: unknown): void
 }
@@ -85,15 +115,16 @@ export interface TurnPorts {
 /** The stage order, with every side effect behind a port. */
 export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<TurnResult> {
   const emit = (chunk: string) => { if (chunk) input.onChunk?.(chunk) }
-  const reply = async (text: string, result: Omit<TurnResult, 'text'>): Promise<TurnResult> => {
+  const safety = await ports.safety(input.botId)
+  const toGuest = (text: string) => renderFor('end_user', text, safety.privacy, input.tenantId)
+  const blockedLine = (hit: GuardrailHit | undefined) =>
+    safety.rules.find((rule) => rule.id === hit?.ruleId)?.message.trim() || BLOCKED_OUTPUT_LINE
+
+  const send = async (text: string, result: Omit<TurnResult, 'text'>, hits: GuardrailHit[] = []): Promise<TurnResult> => {
     emit(text)
-    await ports.saveOutbound(input, text)
+    await ports.saveOutbound(input, text, hits.length ? { guardrails: hits } : undefined)
     return { text, ...result }
   }
-
-  if (!input.opening && !input.inboundSaved) await ports.saveInbound(input)
-
-  if (await ports.held(input.conversationId)) return { text: '', ended: false, path: 'held' }
 
   let rules: HandoverRules | undefined
   const handOver = async (request: HandoverRequest, source: HandoverContract['source'], lines: string[]): Promise<TurnResult> => {
@@ -101,10 +132,33 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
     const said = lines.filter((line) => line.trim())
     if (!rules.liveAgents) {
       await ports.noTeam(input.conversationId)
-      return reply(keepWithBot(said).join('\n\n'), { ended: false, path: source === 'journey' ? 'journey' : 'none' })
+      return reply(keepWithBot(said).join('\n\n'), { ended: false, path: source === 'journey' ? 'journey' : 'none' }, false)
     }
     await ports.handOver(input, request, source)
-    return reply(said.length ? said.join('\n\n') : HANDOVER_LINE, { ended: false, path: 'handover' })
+    return reply(said.length ? said.join('\n\n') : HANDOVER_LINE, { ended: false, path: 'handover' }, false)
+  }
+
+  /** Every finished bot line goes through the reply guardrails, then is rendered for the guest. */
+  const reply = async (text: string, result: Omit<TurnResult, 'text'>, check = true): Promise<TurnResult> => {
+    if (!check) return send(toGuest(text), result)
+    const decision = evaluateGuardrails(text, 'output', safety.rules, safety.privacy.custom)
+    if (decision.outcome === 'escalate') return handOver(guardrailHandoverRequest(decision.rule!, 'output'), 'guardrail', [])
+    if (decision.outcome === 'block' || decision.outcome === 'reask') {
+      return send(toGuest(blockedLine(decision.rule)), { ...result, path: 'guardrail' }, decision.hits)
+    }
+    return send(toGuest(decision.text), result, decision.hits)
+  }
+
+  const guard = !input.opening && input.text ? evaluateGuardrails(input.text, 'input', safety.rules, safety.privacy.custom) : null
+  if (guard?.hits.length) input = { ...input, text: guard.outcome === 'allow' ? guard.text : input.text, guardrails: guard.hits }
+
+  if (!input.opening && !input.inboundSaved) await ports.saveInbound(input)
+
+  if (await ports.held(input.conversationId)) return { text: '', ended: false, path: 'held' }
+
+  if (guard?.outcome === 'escalate') return handOver(guardrailHandoverRequest(guard.rule!, 'input'), 'guardrail', [])
+  if (guard?.outcome === 'block' || guard?.outcome === 'reask') {
+    return send(toGuest(guard.line!), { ended: false, path: 'guardrail' })
   }
 
   if (!input.opening && input.text) {
@@ -130,39 +184,65 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
   const named = await ports.nameTurn(input.conversationId, input.text)
   if (named.thanks) return reply(named.thanks, { ended: false, path: 'name' })
 
-  let streamed = ''
-  try {
-    const history = await ports.history(input.conversationId, input.text)
-    await ports.answer({
-      tenantId: input.tenantId,
-      botId: input.botId,
-      text: input.text,
-      history,
-      onChunk: (chunk) => {
-        const clean = fillNameTokens(chunk, named.spoken)
-        streamed += clean
-        emit(clean)
-      },
-    })
-  } catch (err) {
-    ports.warn('answer failed', err)
-    if (!streamed) {
-      emit(ANSWER_FAILED)
+  const hold = holdsReplies(safety.rules) || readerMode(safety.privacy, 'end_user') !== 'original'
+  const answerOnce = async (instruction?: string): Promise<string> => {
+    let streamed = ''
+    try {
+      const history = await ports.history(input.conversationId, input.text)
+      await ports.answer({
+        tenantId: input.tenantId,
+        botId: input.botId,
+        text: input.text,
+        history,
+        ...(instruction ? { instruction } : {}),
+        onChunk: (chunk) => {
+          const clean = fillNameTokens(chunk, named.spoken)
+          streamed += clean
+          if (!hold) emit(clean)
+        },
+      })
+    } catch (err) {
+      ports.warn('answer failed', err)
+      if (!streamed) {
+        if (!hold) emit(ANSWER_FAILED)
+        streamed = ANSWER_FAILED
+      }
+    }
+    if (!streamed.trim()) {
+      if (!hold) emit(ANSWER_FAILED)
       streamed = ANSWER_FAILED
     }
-  }
-  if (!streamed.trim()) {
-    emit(ANSWER_FAILED)
-    streamed = ANSWER_FAILED
+    return streamed
   }
 
-  const finished = finishBotLines([streamed], named.contact, named.spoken, { conversationId: input.conversationId })
-  const text = finished.lines.filter((line) => line.trim()).join('\n\n')
-  if (text.startsWith(streamed) && text.length > streamed.length) emit(text.slice(streamed.length))
+  const finish = (streamed: string) => finishBotLines([streamed], named.contact, named.spoken, { conversationId: input.conversationId })
+  const streamed = await answerOnce()
+  let finished = finish(streamed)
+  let text = finished.lines.filter((line) => line.trim()).join('\n\n')
+  let hits: GuardrailHit[] = []
+
+  if (!hold) {
+    if (text.startsWith(streamed) && text.length > streamed.length) emit(text.slice(streamed.length))
+    hits = evaluateGuardrails(text, 'output', safety.rules, safety.privacy.custom).hits
+  } else {
+    let decision = evaluateGuardrails(text, 'output', safety.rules, safety.privacy.custom)
+    if (decision.outcome === 'reask') {
+      const again = await answerOnce(`Your previous answer broke the rule "${decision.rule!.name}". Answer again without it.`)
+      finished = finish(again)
+      text = finished.lines.filter((line) => line.trim()).join('\n\n')
+      const second = evaluateGuardrails(text, 'output', safety.rules, safety.privacy.custom)
+      decision = second.outcome === 'reask' ? { ...second, outcome: 'block' } : second
+    }
+    if (decision.outcome === 'escalate') return handOver(guardrailHandoverRequest(decision.rule!, 'output'), 'guardrail', [])
+    hits = decision.hits
+    text = toGuest(decision.outcome === 'block' ? blockedLine(decision.rule) : decision.text)
+    emit(text)
+  }
+
   if (named.contact?.id && finished.metadata) {
     await ports.saveContactName(named.contact.id, { metadata: finished.metadata }).catch(() => {})
   }
-  await ports.saveOutbound(input, text)
+  await ports.saveOutbound(input, text, hits.length ? { guardrails: hits } : undefined)
   return { text, ended: false, path: 'answer' }
 }
 
@@ -209,7 +289,7 @@ export async function answerFromKnowledge(request: AnswerRequest): Promise<void>
   const adapter = model ? createLlmAdapterForModel(model) : defaultLlm
   await adapter.stream({
     messages: [...request.history, { role: 'user', content: request.text }],
-    systemPrompt: systemPrompt + knowledgeBlock(chunks),
+    systemPrompt: systemPrompt + knowledgeBlock(chunks) + (request.instruction ? `\n\n${request.instruction}` : ''),
     model,
     temperature: cfg?.temperature ?? 0.3,
     maxTokens: cfg?.maxTokens ?? 2048,
@@ -217,12 +297,23 @@ export async function answerFromKnowledge(request: AnswerRequest): Promise<void>
   })
 }
 
+function lineContent(text: string, guardrails: GuardrailHit[] | undefined) {
+  return guardrails?.length ? { text, guardrails: guardrails as object[] } : { text }
+}
+
+async function toInbox(input: TurnInput, saved: { content: unknown } | null): Promise<void> {
+  if (!saved) return
+  const view = await agentViewFor(input.botId, input.tenantId)
+  broadcast(input.tenantId, { event: 'message.created', data: presentMessages([saved], null, view)[0] })
+}
+
 const ports: TurnPorts = {
+  safety: turnSafety,
   async saveInbound(input) {
     const saved = await prisma.message.create({
-      data: { tenantId: input.tenantId, conversationId: input.conversationId, direction: 'inbound', authorKind: 'user', content: { text: input.text } },
+      data: { tenantId: input.tenantId, conversationId: input.conversationId, direction: 'inbound', authorKind: 'user', content: lineContent(input.text, input.guardrails) },
     }).catch(() => null)
-    if (saved) broadcast(input.tenantId, { event: 'message.created', data: saved })
+    await toInbox(input, saved)
     await prisma.conversation.update({ where: { id: input.conversationId }, data: { updatedAt: new Date() } }).catch(() => {})
     await onInboundCustomerMessage({ conversationId: input.conversationId, botId: input.botId }).catch(() => null)
     const count = await prisma.message.count({ where: { conversationId: input.conversationId, direction: 'inbound' } }).catch(() => 0)
@@ -250,14 +341,14 @@ const ports: TurnPorts = {
   nameTurn: takeNameTurn,
   history: chatHistory,
   answer: answerFromKnowledge,
-  async saveOutbound(input, text) {
+  async saveOutbound(input, text, extra) {
     if (!text.trim()) return
     const saved = await prisma.message.create({
-      data: { tenantId: input.tenantId, conversationId: input.conversationId, direction: 'outbound', authorKind: 'bot', content: { text } },
+      data: { tenantId: input.tenantId, conversationId: input.conversationId, direction: 'outbound', authorKind: 'bot', content: lineContent(text, extra?.guardrails) },
     }).catch(() => null)
     await prisma.conversation.update({ where: { id: input.conversationId }, data: { updatedAt: new Date() } }).catch(() => {})
     await onOutboundReply(input.conversationId).catch(() => {})
-    if (saved) broadcast(input.tenantId, { event: 'message.created', data: saved })
+    await toInbox(input, saved)
   },
   saveContactName,
   warn: (message, err) => console.warn(`[turn] ${message}:`, err instanceof Error ? err.message : err),

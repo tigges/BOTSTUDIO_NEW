@@ -8,6 +8,8 @@ import { assertPublicUrl } from './public-url.js'
 import { runFunctionCode } from './function-sandbox.js'
 import { mcpCallTool, type McpTransport } from './mcp-client.js'
 import { scrubValues } from './secrets.js'
+import { loadPrivacy, renderDeepFor } from './privacy.js'
+import type { PrivacySettings } from '@ybot/shared'
 
 /** Where a run came from. Test chats and eval runs do not run tools that change data. */
 export type ToolRunSource = 'bot' | 'inbox' | 'console' | 'test_chat' | 'eval'
@@ -49,6 +51,8 @@ export interface ToolDeps {
   runFunction: typeof runFunctionCode
   sleep: (ms: number) => Promise<void>
   now: () => number
+  /** The bot's privacy settings; arguments reach the tool in its Tool input mode. */
+  privacy: (botId: string) => Promise<PrivacySettings>
 }
 
 const OUTPUT_LIMIT = 20_000
@@ -62,6 +66,7 @@ export function defaultToolDeps(overrides: Partial<ToolDeps> = {}): ToolDeps {
     runFunction: runFunctionCode,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     now: () => Date.now(),
+    privacy: loadPrivacy,
     ...overrides,
   }
 }
@@ -189,7 +194,7 @@ export async function runTool(tool: RunnableTool, rawArgs: Record<string, unknow
 
   const checked = checkToolArgs(parametersOf(tool), rawArgs)
   if (!checked.ok) return done({ ok: false, output: null, error: checked.errors.join(' '), attempts: 0 })
-  const args = checked.value
+  const args = renderDeepFor('tool_input', checked.value, await deps.privacy(tool.botId), tool.tenantId)
 
   if ((ctx.source === 'test_chat' || ctx.source === 'eval') && toolChangesData(tool.effect)) {
     return done({ ok: true, skipped: true, output: { skipped: true, reason: `${tool.name} changes data, so test chats do not run it.` }, attempts: 0 })

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { handoverFromConfig, type HandoverRequest } from '@ybot/shared'
+import { DEFAULT_PRIVACY, handoverFromConfig, newGuardrailRule, type GuardrailRule, type HandoverRequest, type PrivacySettings } from '@ybot/shared'
 import { NO_TEAM_LINE } from './chat-outcome.js'
 import type { FlowRunResult } from './flow-runner.js'
 import { HANDOVER_LINE } from './handover.js'
@@ -22,12 +22,15 @@ function fake(overrides: {
   held?: boolean
   liveAgents?: boolean
   alwaysHuman?: string[]
+  rules?: GuardrailRule[]
+  privacy?: PrivacySettings
 } = {}): Fake {
   const log: string[] = []
   const answers: AnswerRequest[] = []
   const handovers: Fake['handovers'] = []
   const ports: TurnPorts = {
-    async saveInbound(input) { log.push(`in:${input.text}`) },
+    async safety() { return { rules: overrides.rules ?? [], privacy: overrides.privacy ?? DEFAULT_PRIVACY } },
+    async saveInbound(input) { log.push(`in:${input.text}${input.guardrails?.length ? ` [${input.guardrails.map((hit) => hit.action).join(',')}]` : ''}`) },
     async held() { return overrides.held ?? false },
     async handoverRules() { return { liveAgents: overrides.liveAgents ?? true, alwaysHuman: overrides.alwaysHuman ?? [] } },
     async handOver(_input, request, source) {
@@ -51,7 +54,7 @@ function fake(overrides: {
       if (overrides.answer instanceof Error) throw overrides.answer
       for (const chunk of overrides.answer ?? []) request.onChunk(chunk)
     },
-    async saveOutbound(_input, text) { log.push(`out:${text}`) },
+    async saveOutbound(_input, text, extra) { log.push(`out:${text}${extra?.guardrails?.length ? ` [${extra.guardrails.map((hit) => hit.action).join(',')}]` : ''}`) },
     async saveContactName() { log.push('contact') },
     warn(message) { log.push(`warn:${message}`) },
   }
@@ -191,4 +194,92 @@ test('without opening hours for people the bot keeps the chat and says so', asyn
     assert.equal(result.text, NO_TEAM_LINE)
     assert.equal(withPerson(result), false)
   }
+})
+
+const rule = (partial: Partial<GuardrailRule>): GuardrailRule => newGuardrailRule({ id: partial.name ?? 'r', name: 'Rule', ...partial })
+
+test('a blocked guest message is saved, flagged and answered with the rule line; nothing else runs', async () => {
+  const f = fake({ rules: [rule({ name: 'Competitors', check: { kind: 'words', words: ['Acme Salon'] }, action: 'block', message: 'I can only talk about our own salon.' })] })
+  const turn = input({ text: 'Is Acme Salon cheaper?' })
+  const result = await runTurnWith(f.ports, turn)
+  assert.deepEqual(f.log, ['in:Is Acme Salon cheaper? [block]', 'out:I can only talk about our own salon.'])
+  assert.equal(result.path, 'guardrail')
+  assert.deepEqual(turn.chunks, ['I can only talk about our own salon.'])
+})
+
+test('new rules warn: the guest line goes through and is flagged', async () => {
+  const f = fake({ rules: [rule({ name: 'Refund', check: { kind: 'words', words: ['refund'] } })], journey: { handled: true, messages: ['Sure.'] } })
+  await runTurnWith(f.ports, input({ text: 'I want a refund' }))
+  assert.deepEqual(f.log, ['in:I want a refund [warn]', 'journey', 'out:Sure.'])
+})
+
+test('redact on guest messages changes what is saved and what the journey sees', async () => {
+  const seen: string[] = []
+  const f = fake({ rules: [rule({ name: 'Swearing', check: { kind: 'words', words: ['damn'] }, action: 'redact' })], journey: { handled: true, messages: ['OK.'] } })
+  const runJourney = f.ports.runJourney
+  f.ports.runJourney = async (turn) => { seen.push(turn.text); return runJourney(turn) }
+  await runTurnWith(f.ports, input({ text: 'damn this booking' }))
+  assert.equal(seen[0], '[redacted] this booking')
+  assert.equal(f.log[0], 'in:[redacted] this booking [redact]')
+})
+
+test('escalate on a guest message hands over with the guardrail as the reason', async () => {
+  const f = fake({ rules: [rule({ name: 'Legal threat', check: { kind: 'words', words: ['lawyer'] }, action: 'escalate' })] })
+  const result = await runTurnWith(f.ports, input({ text: 'My lawyer will call you' }))
+  assert.equal(result.path, 'handover')
+  assert.equal(f.handovers[0]?.source, 'guardrail')
+  assert.match(f.handovers[0]!.request.reason, /Legal threat/)
+  assert.ok(!f.log.includes('journey'))
+})
+
+test('reask on a guest message asks them to rephrase', async () => {
+  const f = fake({ rules: [rule({ name: 'Shouting', check: { kind: 'pattern', pattern: '^[A-Z !]{8,}$' }, action: 'reask' })] })
+  const result = await runTurnWith(f.ports, input({ text: 'WHERE IS MY ORDER' }))
+  assert.equal(result.text, 'Could you put that another way?')
+  assert.equal(result.path, 'guardrail')
+})
+
+test('a reply rule that can change replies holds the answer back until it is checked', async () => {
+  const f = fake({
+    rules: [rule({ name: 'No prices', side: 'output', check: { kind: 'pattern', pattern: '£\\d+' }, action: 'block', message: 'Prices are on our website.' })],
+    answer: ['It costs ', '£40.'],
+  })
+  const turn = input()
+  const result = await runTurnWith(f.ports, turn)
+  assert.deepEqual(turn.chunks, ['Prices are on our website.'])
+  assert.equal(result.text, 'Prices are on our website.')
+  assert.equal(f.log.at(-1), 'out:Prices are on our website. [block]')
+})
+
+test('reask on a reply writes it again once with an instruction, then blocks', async () => {
+  const f = fake({ rules: [rule({ name: 'No prices', side: 'output', check: { kind: 'pattern', pattern: '£\\d+' }, action: 'reask' })], answer: ['£40.'] })
+  const result = await runTurnWith(f.ports, input())
+  assert.equal(f.answers.length, 2)
+  assert.match(f.answers[1]!.instruction ?? '', /No prices/)
+  assert.equal(result.text, 'I can’t share that. Is there something else I can help with?')
+})
+
+test('warn-only reply rules keep streaming and flag the saved reply', async () => {
+  const f = fake({ rules: [rule({ name: 'Mentions price', side: 'output', check: { kind: 'pattern', pattern: '£\\d+' } })], answer: ['It is ', '£40.'] })
+  const turn = input()
+  await runTurnWith(f.ports, turn)
+  assert.deepEqual(turn.chunks, ['It is ', '£40.'])
+  assert.equal(f.log.at(-1), 'out:It is £40. [warn]')
+})
+
+test('a journey line that breaks a block rule is replaced', async () => {
+  const f = fake({
+    rules: [rule({ name: 'No internal', side: 'output', check: { kind: 'words', words: ['internal'] }, action: 'block' })],
+    journey: { handled: true, messages: ['See the internal wiki.'] },
+  })
+  const result = await runTurnWith(f.ports, input())
+  assert.equal(result.text, 'I can’t share that. Is there something else I can help with?')
+})
+
+test('the guest sees personal data in their reader mode; masking holds the stream', async () => {
+  const f = fake({ privacy: { ...DEFAULT_PRIVACY, render: { ...DEFAULT_PRIVACY.render, end_user: 'mask' } }, answer: ['We will email ', 'jane@example.com.'] })
+  const turn = input()
+  const result = await runTurnWith(f.ports, turn)
+  assert.equal(result.text, 'We will email j•••@e•••.com.')
+  assert.deepEqual(turn.chunks, ['We will email j•••@e•••.com.'])
 })

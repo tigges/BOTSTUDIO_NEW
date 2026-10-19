@@ -12,6 +12,7 @@
 import { prisma } from '@ybot/db'
 import { handoverSummary, type HandoverContract, type StudioCatalog } from '@ybot/shared'
 import type { FlowGraph, ToolCallResult } from '@ybot/runtime'
+import { turnSafety, type TurnSafety } from './guardrails.js'
 import { handoverRulesFor, type HandoverRules } from './handover.js'
 import { botCatalog, botLlm, runJourney, type JourneyLlm, type JourneyStore, type SavedSession, type VersionRow } from './flow-runner.js'
 import { withLlmScope } from './llm-ledger.js'
@@ -87,6 +88,8 @@ export interface TestChatDeps {
   db: unknown
   now: () => Date
   runTool: (tenantId: string, botId: string, toolId: string, args: Record<string, unknown>) => Promise<ToolCallResult & { name: string }>
+  /** The bot's active guardrails and privacy settings, the same ones live chats use. */
+  safety: (botId: string) => Promise<TurnSafety>
 }
 
 async function runTestTool(tenantId: string, botId: string, toolId: string, args: Record<string, unknown>): Promise<ToolCallResult & { name: string }> {
@@ -104,6 +107,7 @@ const liveDeps: TestChatDeps = {
   db: prisma,
   now: () => new Date(),
   runTool: runTestTool,
+  safety: turnSafety,
 }
 
 const calls = new WeakMap<TestChatDeps, TestToolCall[]>()
@@ -226,6 +230,7 @@ export function testJourneyStore(input: TestTurnInput, state: TestChatState, dep
 function testPorts(input: TestTurnInput, state: TestChatState, deps: TestChatDeps): TurnPorts {
   const store = testJourneyStore(input, state, deps)
   return {
+    safety: deps.safety,
     async saveInbound(turn) {
       remember(state, { role: 'user', content: turn.text })
     },

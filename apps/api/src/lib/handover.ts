@@ -18,6 +18,7 @@ import { dispatchWebhookEvent } from '../queues.js'
 import { triggerRules } from './automation-engine.js'
 import { hasLiveAgentHours } from './chat-outcome.js'
 import { sendChannelReply } from './channel-outbound.js'
+import { loadPrivacy, renderDeepFor, renderFor } from './privacy.js'
 import { parseInboxPolicy } from './sla.js'
 
 export const HANDOVER_LINE = 'I am passing this chat to the team. Someone will continue here.'
@@ -114,11 +115,12 @@ export async function handOverChat(opts: {
     conversationStatus: 'escalated',
     messageCount: guestLines.length,
   }).catch(() => {})
+  const privacy = await loadPrivacy(opts.botId)
   dispatchWebhookEvent(opts.tenantId, 'conversation.escalated', {
     conversationId: opts.conversationId,
     botId: opts.botId,
-    handover: contract,
-    ...(contract.context === 'full_transcript' ? { transcript } : {}),
+    handover: renderDeepFor('human_agent', contract, privacy, opts.tenantId),
+    ...(contract.context === 'full_transcript' ? { transcript: renderDeepFor('human_agent', transcript, privacy, opts.tenantId) } : {}),
   }).catch(() => {})
   return contract
 }
@@ -156,13 +158,15 @@ export async function returnChat(opts: {
 
   let ticketId: string | undefined
   if (opts.outcome === 'needs_follow_up') {
-    const reason = previous.reason ?? 'Follow up with the guest'
+    const privacy = await loadPrivacy(chat.botId)
+    const forAgents = (text: string) => renderFor('human_agent', text, privacy, opts.tenantId)
+    const reason = forAgents(previous.reason ?? 'Follow up with the guest')
     const ticket = await prisma.ticket.create({
       data: {
         tenantId: opts.tenantId,
         conversationId: chat.id,
         subject: `Follow up: ${reason}`.slice(0, 180),
-        description: [previous.summary, note].filter(Boolean).join('\n\n').slice(0, 2000) || reason,
+        description: forAgents([previous.summary, note].filter(Boolean).join('\n\n')).slice(0, 2000) || reason,
         status: 'open',
         priority: ticketPriority(previous.priority),
       },
