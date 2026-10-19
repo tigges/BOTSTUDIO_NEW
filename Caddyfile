@@ -20,6 +20,13 @@
         reverse_proxy ybot-api:3001
     }
 
+    # CI deploy trigger. Watchtower checks the bearer token; without
+    # WATCHTOWER_HTTP_API_UPDATE on the NAS this returns 502.
+    handle /deploy/watchtower {
+        rewrite * /v1/update
+        reverse_proxy ybot-watchtower:8080
+    }
+
     # API proxy — all /api/* requests go to the backend
     handle /api/* {
         reverse_proxy ybot-api:3001

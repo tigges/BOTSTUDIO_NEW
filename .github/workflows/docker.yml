@@ -105,6 +105,32 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
 
+  # Asks Watchtower on the NAS to pull :latest now. Without the
+  # WATCHTOWER_HTTP_API_TOKEN secret this is skipped and Watchtower's
+  # 5-minute poll deploys instead; a failed call falls back the same way.
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Watchtower
+        env:
+          TOKEN: ${{ secrets.WATCHTOWER_HTTP_API_TOKEN }}
+          DEPLOY_URL: ${{ vars.WATCHTOWER_DEPLOY_URL || 'https://app.botstudio.uk/deploy/watchtower' }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::notice::WATCHTOWER_HTTP_API_TOKEN is not set. Watchtower deploys on its next 5-minute poll."
+            exit 0
+          fi
+          status="$(curl -sS -o /tmp/watchtower.out -w '%{http_code}' -m 300 \
+            -H "Authorization: Bearer ${TOKEN}" "$DEPLOY_URL" || true)"
+          if [ "$status" = "200" ]; then
+            echo "Watchtower pulled the new images."
+          else
+            echo "::warning::Watchtower trigger returned HTTP ${status:-none}. It deploys on its next 5-minute poll."
+            cat /tmp/watchtower.out 2>/dev/null || true
+          fi
+
   # Watchtower on the NAS polls GHCR and deploys :latest. Requires the
   # SLACK_DEPLOY_WEBHOOK secret (Slack incoming-webhook URL or any POST
   # endpoint); a no-op when the secret is absent.
