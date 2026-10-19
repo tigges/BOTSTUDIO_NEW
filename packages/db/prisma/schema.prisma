@@ -17,39 +17,39 @@ datasource db {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Tenant {
-  id          String     @id @default(cuid())
-  name        String
-  slug        String     @unique
-  dataRegion  String     @default("us")
-  plan        String     @default("free")
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id         String   @id @default(cuid())
+  name       String
+  slug       String   @unique
+  dataRegion String   @default("us")
+  plan       String   @default("free")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  users              User[]
-  memberships        Membership[]
-  bots               Bot[]
-  apiKeys            ApiKey[]
-  webhooks           Webhook[]
-  cannedReplies      CannedReply[]
-  dataTables         DataTable[]
-  integrations       IntegrationConnection[]
-  startTemplates     StartTemplate[]
-  authProfiles       AuthProfile[]
+  users          User[]
+  memberships    Membership[]
+  bots           Bot[]
+  apiKeys        ApiKey[]
+  webhooks       Webhook[]
+  cannedReplies  CannedReply[]
+  dataTables     DataTable[]
+  integrations   IntegrationConnection[]
+  startTemplates StartTemplate[]
+  authProfiles   AuthProfile[]
 
   @@map("tenants")
 }
 
 model StartTemplate {
-  id          String   @id @default(cuid())
-  tenantId    String
-  clusterId   String
-  title       String
-  body        String
-  sourceUrl   String?
-  sourceHost  String?
-  spec        Json
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  tenantId   String
+  clusterId  String
+  title      String
+  body       String
+  sourceUrl  String?
+  sourceHost String?
+  spec       Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -57,19 +57,19 @@ model StartTemplate {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  tenantId      String
-  email         String
-  displayName   String
-  avatarUrl     String?
-  passwordHash  String?
-  locale        String    @default("en")
-  timezone      String    @default("UTC")
-  lastSeenAt    DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  tenantId     String
+  email        String
+  displayName  String
+  avatarUrl    String?
+  passwordHash String?
+  locale       String    @default("en")
+  timezone     String    @default("UTC")
+  lastSeenAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   memberships   Membership[]
   oauthAccounts OAuthAccount[]
   sessions      UserSession[]
@@ -121,13 +121,13 @@ model Membership {
 }
 
 model ApiKey {
-  id          String    @id @default(cuid())
-  tenantId    String
-  name        String
-  keyHash     String    @unique
-  lastUsedAt  DateTime?
-  expiresAt   DateTime?
-  createdAt   DateTime  @default(now())
+  id         String    @id @default(cuid())
+  tenantId   String
+  name       String
+  keyHash    String    @unique
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -149,25 +149,27 @@ model Bot {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  environments Environment[]
-  flows        Flow[]
-  intents      Intent[]
-  entities     Entity[]
-  faqs         Faq[]
-  knowledgeSources KnowledgeSource[]
-  channels     Channel[]
-  conversations Conversation[]
-  campaigns    Campaign[]
-  templates    Template[]
-  dashboards   Dashboard[]
-  reports      Report[]
-  config       BotConfig?
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  environments          Environment[]
+  flows                 Flow[]
+  intents               Intent[]
+  entities              Entity[]
+  faqs                  Faq[]
+  knowledgeSources      KnowledgeSource[]
+  channels              Channel[]
+  conversations         Conversation[]
+  campaigns             Campaign[]
+  templates             Template[]
+  dashboards            Dashboard[]
+  reports               Report[]
+  config                BotConfig?
   conversationTemplates ConversationTemplate[]
   templateOptimizations TemplateOptimization[]
-  automationRules AutomationRule[]
-  tools        Tool[]
-  guardrailPolicies GuardrailPolicy[]
+  automationRules       AutomationRule[]
+  tools                 Tool[]
+  guardrailPolicies     GuardrailPolicy[]
+  evalSuites            EvalSuite[]
+  releases              BotRelease[]
 
   @@map("bots")
 }
@@ -191,16 +193,18 @@ model BotConfig {
 }
 
 model Environment {
-  id          String   @id @default(cuid())
-  tenantId    String
-  botId       String
-  kind        String   @default("sandbox")
-  name        String
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  tenantId      String
+  botId         String
+  kind          String   @default("sandbox")
+  name          String
+  isActive      Boolean  @default(true)
+  /// The release guests hear. Null: the working copy (newest saved chart per chapter).
+  liveReleaseId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  bot           Bot             @relation(fields: [botId], references: [id], onDelete: Cascade)
+  bot           Bot            @relation(fields: [botId], references: [id], onDelete: Cascade)
   flowVersions  FlowVersion[]
   conversations Conversation[]
   channels      Channel[]
@@ -231,17 +235,17 @@ model Flow {
 }
 
 model FlowVersion {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   tenantId      String
   flowId        String
   environmentId String?
   version       Int
-  status        String   @default("draft")
+  status        String    @default("draft")
   graph         Json
-  variables     Json     @default("[]")
+  variables     Json      @default("[]")
   publishedAt   DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   flow        Flow         @relation(fields: [flowId], references: [id], onDelete: Cascade)
   environment Environment? @relation(fields: [environmentId], references: [id])
@@ -304,15 +308,15 @@ model Faq {
 }
 
 model KnowledgeSource {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   tenantId   String
   botId      String
   name       String
   kind       String
-  config     Json     @default("{}")
+  config     Json      @default("{}")
   lastSyncAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   bot       Bot        @relation(fields: [botId], references: [id], onDelete: Cascade)
   documents Document[]
@@ -321,15 +325,15 @@ model KnowledgeSource {
 }
 
 model Document {
-  id               String   @id @default(cuid())
-  tenantId         String
+  id                String   @id @default(cuid())
+  tenantId          String
   knowledgeSourceId String
-  title            String
-  content          String
-  status           String   @default("processing")
-  metadata         Json     @default("{}")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  title             String
+  content           String
+  status            String   @default("processing")
+  metadata          Json     @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   knowledgeSource KnowledgeSource @relation(fields: [knowledgeSourceId], references: [id], onDelete: Cascade)
   chunks          DocumentChunk[]
@@ -338,7 +342,7 @@ model Document {
 }
 
 model DocumentChunk {
-  id         String                  @id @default(cuid())
+  id         String                 @id @default(cuid())
   tenantId   String
   documentId String
   content    String
@@ -356,20 +360,20 @@ model DocumentChunk {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Channel {
-  id            String   @id @default(cuid())
-  tenantId      String
-  botId         String
-  environmentId String
-  name          String
-  kind          String
-  config        Json     @default("{}")
-  isActive      Boolean  @default(true)
+  id             String   @id @default(cuid())
+  tenantId       String
+  botId          String
+  environmentId  String
+  name           String
+  kind           String
+  config         Json     @default("{}")
+  isActive       Boolean  @default(true)
   allowedDomains String[] @default([])
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  bot         Bot         @relation(fields: [botId], references: [id], onDelete: Cascade)
-  environment Environment @relation(fields: [environmentId], references: [id])
+  bot           Bot            @relation(fields: [botId], references: [id], onDelete: Cascade)
+  environment   Environment    @relation(fields: [environmentId], references: [id])
   conversations Conversation[]
 
   @@map("channels")
@@ -380,37 +384,41 @@ model Channel {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Conversation {
-  id            String    @id @default(cuid())
-  tenantId      String
-  botId         String
-  environmentId String
-  channelId     String?
-  contactId     String?
-  status        String    @default("active")
-  assignedTo    String?
-  teamId        String?
-  subject       String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  resolvedAt    DateTime?
+  id                   String    @id @default(cuid())
+  tenantId             String
+  botId                String
+  environmentId        String
+  channelId            String?
+  contactId            String?
+  status               String    @default("active")
+  assignedTo           String?
+  teamId               String?
+  subject              String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  resolvedAt           DateTime?
   firstResponseDueAt   DateTime?
   resolutionDueAt      DateTime?
   firstRespondedAt     DateTime?
   afterHoursNotifiedAt DateTime?
   slaBreachedAt        DateTime?
-  /** contained_resolved | contained_partial | contained_unresolved | escalated | abandoned; null while open. */
+  /**
+   * contained_resolved | contained_partial | contained_unresolved | escalated | abandoned; null while open.
+   */
   outcome              String?
-  /** The handover contract (reason, priority, tags, summary, variables, routing, context) and how it came back. */
+  /**
+   * The handover contract (reason, priority, tags, summary, variables, routing, context) and how it came back.
+   */
   handover             Json?
 
-  bot         Bot          @relation(fields: [botId], references: [id], onDelete: Cascade)
-  environment Environment  @relation(fields: [environmentId], references: [id])
-  channel     Channel?     @relation(fields: [channelId], references: [id])
-  contact     Contact?     @relation(fields: [contactId], references: [id])
-  messages    Message[]
-  tickets     Ticket[]
-  stepLogs    StepLog[]
-  labels      ConversationLabel[]
+  bot           Bot                 @relation(fields: [botId], references: [id], onDelete: Cascade)
+  environment   Environment         @relation(fields: [environmentId], references: [id])
+  channel       Channel?            @relation(fields: [channelId], references: [id])
+  contact       Contact?            @relation(fields: [contactId], references: [id])
+  messages      Message[]
+  tickets       Ticket[]
+  stepLogs      StepLog[]
+  labels        ConversationLabel[]
   csatResponses CsatResponse[]
 
   @@map("conversations")
@@ -451,14 +459,18 @@ model StepLog {
   @@map("step_logs")
 }
 
-/** One row per LLM provider call: chat, retrieval, summaries, evals and imports. No foreign keys, so costs outlive deleted chats. */
+/**
+ * One row per LLM provider call: chat, retrieval, summaries, evals and imports. No foreign keys, so costs outlive deleted chats.
+ */
 model LlmCall {
   id               String   @id @default(cuid())
   tenantId         String?
   botId            String?
   conversationId   String?
   traceId          String
-  /** runtime | retrieval | guardrail | eval | summarisation | authoring */
+  /**
+   * runtime | retrieval | guardrail | eval | summarisation | authoring
+   */
   source           String
   environment      String?
   provider         String
@@ -502,10 +514,10 @@ model Ticket {
 }
 
 model Label {
-  id        String @id @default(cuid())
-  tenantId  String
-  name      String
-  color     String @default("#94a3b8")
+  id       String @id @default(cuid())
+  tenantId String
+  name     String
+  color    String @default("#94a3b8")
 
   conversations ConversationLabel[]
 
@@ -525,11 +537,11 @@ model ConversationLabel {
 }
 
 model AgentProfile {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   tenantId    String
-  userId      String @unique
+  userId      String  @unique
   displayName String
-  status      String @default("offline")
+  status      String  @default("offline")
   teamId      String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -538,7 +550,7 @@ model AgentProfile {
 }
 
 model Team {
-  id       String @id @default(cuid())
+  id       String  @id @default(cuid())
   tenantId String
   name     String
   botId    String?
@@ -551,7 +563,7 @@ model Team {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Contact {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   tenantId    String
   externalId  String?
   channelId   String?
@@ -559,10 +571,10 @@ model Contact {
   email       String?
   phone       String?
   avatarUrl   String?
-  tags        String[]  @default([])
-  metadata    Json      @default("{}")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  tags        String[] @default([])
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   conversations Conversation[]
 
@@ -583,29 +595,29 @@ model Campaign {
   status      String    @default("draft")
   subject     String?
   body        String?
-  filters     Json      @default("{}")  // { hasEmail, hasPhone, channel, tags }
+  filters     Json      @default("{}") // { hasEmail, hasPhone, channel, tags }
   scheduledAt DateTime?
   sentAt      DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  bot       Bot                @relation(fields: [botId], references: [id], onDelete: Cascade)
+  bot        Bot                @relation(fields: [botId], references: [id], onDelete: Cascade)
   deliveries CampaignDelivery[]
 
   @@map("campaigns")
 }
 
 model CampaignDelivery {
-  id           String    @id @default(cuid())
-  tenantId     String
-  campaignId   String
-  contactId    String
-  email        String?
-  status       String    @default("pending")
-  sentAt       DateTime?
-  error        String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id         String    @id @default(cuid())
+  tenantId   String
+  campaignId String
+  contactId  String
+  email      String?
+  status     String    @default("pending")
+  sentAt     DateTime?
+  error      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
@@ -665,15 +677,15 @@ model Widget {
 }
 
 model Report {
-  id          String   @id @default(cuid())
-  tenantId    String
-  botId       String
-  name        String
-  query       Json
-  schedule    String?
-  lastRunAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String    @id @default(cuid())
+  tenantId  String
+  botId     String
+  name      String
+  query     Json
+  schedule  String?
+  lastRunAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
 
@@ -694,7 +706,7 @@ model Webhook {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   deliveries WebhookDelivery[]
 
   @@map("webhooks")
@@ -776,14 +788,14 @@ model IntegrationConnection {
 }
 
 model Activity {
-  id        String   @id @default(cuid())
-  tenantId  String
-  userId    String?
-  action    String
-  resource  String?
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String?
+  action     String
+  resource   String?
   resourceId String?
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now())
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id])
 
@@ -799,7 +811,7 @@ model CsatResponse {
   tenantId       String
   conversationId String
   messageId      String?
-  rating         Int      // 1 = positive, -1 = negative
+  rating         Int // 1 = positive, -1 = negative
   comment        String?
   createdAt      DateTime @default(now())
 
@@ -809,18 +821,18 @@ model CsatResponse {
 }
 
 model ConversationTemplate {
-  id                     String   @id @default(cuid())
-  tenantId               String
-  botId                  String
-  name                   String
-  description            String?
-  sampleConversationId   String?
-  clusterKeywords        String[]
-  avgQualityScore        Float    @default(0)
-  useCount               Int      @default(0)
-  status                 String   @default("active")
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  tenantId             String
+  botId                String
+  name                 String
+  description          String?
+  sampleConversationId String?
+  clusterKeywords      String[]
+  avgQualityScore      Float    @default(0)
+  useCount             Int      @default(0)
+  status               String   @default("active")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   bot           Bot                    @relation(fields: [botId], references: [id], onDelete: Cascade)
   optimizations TemplateOptimization[]
@@ -833,7 +845,7 @@ model TemplateOptimization {
   tenantId        String
   botId           String
   templateId      String?
-  kind            String    // system_prompt | knowledge_boost | flow_hint
+  kind            String // system_prompt | knowledge_boost | flow_hint
   title           String
   description     String
   currentValue    String?
@@ -856,19 +868,19 @@ model TemplateOptimization {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model AutomationRule {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   tenantId    String
   botId       String
   name        String
   description String?
-  trigger     String   // conversation.resolved | message.received | contact.created | ticket.created | schedule | intent_matched | sla.breached
-  conditions  String   @default("")
-  actions     Json     @default("[]")  // array of action strings
-  status      String   @default("draft") // active | paused | draft
-  runCount    Int      @default(0)
+  trigger     String // conversation.resolved | message.received | contact.created | ticket.created | schedule | intent_matched | sla.breached
+  conditions  String    @default("")
+  actions     Json      @default("[]") // array of action strings
+  status      String    @default("draft") // active | paused | draft
+  runCount    Int       @default(0)
   lastRunAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
 
@@ -902,9 +914,13 @@ model AuthProfile {
   id         String   @id @default(cuid())
   tenantId   String
   name       String
-  /** api_key | bearer | basic | custom_header */
+  /**
+   * api_key | bearer | basic | custom_header
+   */
   kind       String
-  /** Non-secret settings: header name, query parameter name, username. */
+  /**
+   * Non-secret settings: header name, query parameter name, username.
+   */
   settings   Json     @default("{}")
   secretEnc  String?
   secretHint String?
@@ -925,12 +941,16 @@ model Tool {
   tenantId      String
   botId         String
   name          String
-  /** http | function | mcp | knowledge | workflow */
+  /**
+   * http | function | mcp | knowledge | workflow
+   */
   kind          String
   description   String
   parameters    Json     @default("[]")
   returns       Json     @default("{}")
-  /** read | write | side_effect */
+  /**
+   * read | write | side_effect
+   */
   effect        String   @default("read")
   config        Json     @default("{}")
   authProfileId String?
@@ -951,7 +971,9 @@ model ToolRun {
   tenantId       String
   toolId         String
   conversationId String?
-  /** bot | inbox | test */
+  /**
+   * bot | inbox | test
+   */
   source         String
   actorId        String?
   ok             Boolean
@@ -986,4 +1008,72 @@ model GuardrailPolicy {
 
   @@index([botId, active])
   @@map("guardrail_policies")
+}
+
+/// Scripted test chats that must pass before a release reaches guests.
+model EvalSuite {
+  id        String   @id @default(cuid())
+  tenantId  String
+  botId     String
+  name      String
+  /// Failing this suite blocks publishing.
+  gate      Boolean  @default(true)
+  /// EvalScenario[] (see @ybot/shared evals.ts)
+  scenarios Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bot  Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
+  runs EvalRun[]
+
+  @@index([botId])
+  @@map("eval_suites")
+}
+
+model EvalRun {
+  id         String   @id @default(cuid())
+  tenantId   String
+  botId      String
+  suiteId    String
+  /// manual | publish
+  trigger    String   @default("manual")
+  /// passed | failed | error
+  status     String
+  passed     Int      @default(0)
+  failed     Int      @default(0)
+  /// EvalScenarioResult[]
+  results    Json     @default("[]")
+  costUsd    Float?
+  durationMs Int      @default(0)
+  /// What was tested: "working copy" or the release candidate's chapter versions.
+  target     Json     @default("{}")
+  createdBy  String?
+  createdAt  DateTime @default(now())
+
+  suite EvalSuite @relation(fields: [suiteId], references: [id], onDelete: Cascade)
+
+  @@index([suiteId, createdAt])
+  @@map("eval_runs")
+}
+
+/// A frozen copy of the whole journey. Rows are never updated (a database trigger refuses it).
+model BotRelease {
+  id            String   @id @default(cuid())
+  tenantId      String
+  botId         String
+  environmentId String
+  number        Int
+  /// ReleaseChapter[]: flowId, flowVersionId, version, name, tags, graph
+  chapters      Json
+  entry         String?
+  note          String?
+  evalRunIds    String[]
+  createdBy     String?
+  createdAt     DateTime @default(now())
+
+  bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@unique([botId, environmentId, number])
+  @@index([botId, environmentId])
+  @@map("bot_releases")
 }
