@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { handoverFromConfig, type HandoverRequest } from '@ybot/shared'
+import { NO_TEAM_LINE } from './chat-outcome.js'
 import type { FlowRunResult } from './flow-runner.js'
-import { ANSWER_FAILED, NO_LINE, runTurnWith, type AnswerRequest, type TurnInput, type TurnPorts } from './turn-pipeline.js'
+import { HANDOVER_LINE } from './handover.js'
+import { ANSWER_FAILED, NO_LINE, runTurnWith, withPerson, type AnswerRequest, type TurnInput, type TurnPorts } from './turn-pipeline.js'
 
 interface Fake {
   ports: TurnPorts
   log: string[]
   answers: AnswerRequest[]
+  handovers: Array<{ request: HandoverRequest; source: string }>
 }
 
 function fake(overrides: {
@@ -15,11 +19,22 @@ function fake(overrides: {
   spoken?: string
   answer?: string[] | Error
   nameQuestion?: boolean
+  held?: boolean
+  liveAgents?: boolean
+  alwaysHuman?: string[]
 } = {}): Fake {
   const log: string[] = []
   const answers: AnswerRequest[] = []
+  const handovers: Fake['handovers'] = []
   const ports: TurnPorts = {
     async saveInbound(input) { log.push(`in:${input.text}`) },
+    async held() { return overrides.held ?? false },
+    async handoverRules() { return { liveAgents: overrides.liveAgents ?? true, alwaysHuman: overrides.alwaysHuman ?? [] } },
+    async handOver(_input, request, source) {
+      log.push(`handover:${source}`)
+      handovers.push({ request, source })
+    },
+    async noTeam() { log.push('no-team') },
     async runJourney() {
       log.push('journey')
       if (overrides.journey instanceof Error) throw overrides.journey
@@ -40,7 +55,7 @@ function fake(overrides: {
     async saveContactName() { log.push('contact') },
     warn(message) { log.push(`warn:${message}`) },
   }
-  return { ports, log, answers }
+  return { ports, log, answers, handovers }
 }
 
 const input = (extra: Partial<TurnInput> = {}): TurnInput & { chunks: string[] } => {
@@ -123,4 +138,57 @@ test('name tokens in a streamed answer are filled before the guest sees them', a
   const result = await runTurnWith(f.ports, turn)
   assert.equal(turn.chunks.join(''), 'Hi Ana, we open at 9.')
   assert.equal(result.text, turn.chunks.join(''))
+})
+
+test('while a person holds the chat the guest line is saved and the bot says nothing', async () => {
+  const f = fake({ held: true, journey: { handled: true, messages: ['What day suits you?'] } })
+  const turn = input({ text: 'Are you still there?' })
+  const result = await runTurnWith(f.ports, turn)
+  assert.deepEqual(f.log, ['in:Are you still there?'])
+  assert.deepEqual(turn.chunks, [])
+  assert.deepEqual(result, { text: '', ended: false, path: 'held' })
+  assert.equal(withPerson(result), true)
+})
+
+test('a word on the always-human list hands over before the journey runs', async () => {
+  const f = fake({ alwaysHuman: ['complaint', 'speak to a manager'], journey: { handled: true, messages: ['Which service?'] } })
+  const turn = input({ text: 'I want to make a Complaint about my colour' })
+  const result = await runTurnWith(f.ports, turn)
+  assert.ok(!f.log.includes('journey'))
+  assert.equal(f.handovers[0]!.source, 'always_human')
+  assert.equal(f.handovers[0]!.request.priority, 'high')
+  assert.deepEqual(f.handovers[0]!.request.tags, ['always-human'])
+  assert.match(f.handovers[0]!.request.reason, /complaint/)
+  assert.deepEqual(result, { text: HANDOVER_LINE, ended: false, path: 'handover' })
+  assert.deepEqual(turn.chunks, [HANDOVER_LINE])
+})
+
+test('the always-human list matches whole words only', async () => {
+  const f = fake({ alwaysHuman: ['manager'], journey: { handled: true, messages: ['Sure.'] } })
+  await runTurnWith(f.ports, input({ text: 'Is the management team in today?' }))
+  assert.equal(f.handovers.length, 0)
+  assert.ok(f.log.includes('journey'))
+})
+
+test('a journey handover passes the step contract on and keeps the journey line', async () => {
+  const request = handoverFromConfig({ reason: 'Colour correction', priority: 'critical', tags: 'colour, vip', queue: 'stylists', skills: 'colour' })
+  const f = fake({ journey: { handled: true, messages: ['I am passing this chat to the studio.'], handover: request } })
+  const result = await runTurnWith(f.ports, input())
+  assert.deepEqual(f.handovers, [{ request, source: 'journey' }])
+  assert.equal(result.text, 'I am passing this chat to the studio.')
+  assert.equal(result.path, 'handover')
+})
+
+test('without opening hours for people the bot keeps the chat and says so', async () => {
+  const request = handoverFromConfig({ team: 'support' })
+  for (const f of [
+    fake({ liveAgents: false, journey: { handled: true, messages: ['I am passing this chat to the team. Someone will continue here.'], handover: request } }),
+    fake({ liveAgents: false, alwaysHuman: ['refund'] }),
+  ]) {
+    const result = await runTurnWith(f.ports, input({ text: 'I want a refund' }))
+    assert.equal(f.handovers.length, 0)
+    assert.ok(f.log.includes('no-team'))
+    assert.equal(result.text, NO_TEAM_LINE)
+    assert.equal(withPerson(result), false)
+  }
 })

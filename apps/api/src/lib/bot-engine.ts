@@ -7,7 +7,10 @@ import { prisma } from '@ybot/db'
 import { withLlmScope } from './llm-ledger.js'
 import { runTurn } from './turn-pipeline.js'
 
-/** A message within this many hours of the last one continues the same chat on a channel, unless a person holds it. */
+/**
+ * A message within this many hours of the last one continues the same chat on a channel,
+ * including one a person holds. A chat a person already closed is not reopened.
+ */
 export const CHANNEL_CHAT_HOURS = 24
 
 export interface BotReplyParams {
@@ -63,8 +66,10 @@ async function replyFor(params: BotReplyParams): Promise<BotReplyResult> {
           tenantId,
           channelId,
           contactId: contact.id,
-          assignedTo: null,
-          status: { not: 'escalated' },
+          OR: [
+            { status: { in: ['active', 'escalated'] } },
+            { status: { in: ['resolved', 'closed'] }, outcome: { not: 'escalated' } },
+          ],
           updatedAt: { gte: new Date(Date.now() - CHANNEL_CHAT_HOURS * 60 * 60 * 1000) },
         },
         orderBy: { updatedAt: 'desc' },

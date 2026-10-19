@@ -11,19 +11,20 @@ import { randomUUID } from 'node:crypto'
 import { SessionMachine, copyJumpVariables, missingChapterLine, hearChapter, offerOnMap, isSmallTalk, isTopicSwitch, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn } from '@ybot/runtime'
 import type { Session, SessionVariables, FlowGraph } from '@ybot/runtime'
 import { prisma } from '@ybot/db'
-import { CATALOG_ENTITY, catalogFromValues } from '@ybot/shared'
+import { CATALOG_ENTITY, catalogFromValues, type HandoverRequest } from '@ybot/shared'
 import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
 import { newestByFlow, pickWorkingCopy } from './entry-flow.js'
 import { runFlowTurn } from './flow-turn.js'
 import { finishBotLines, nameThanksEndsTurn, saveContactName, takeNameTurn } from './visitor-name.js'
-import { escalateChat, keepWithBot, liveAgentsFor, markNoTeam, reopenForBot, resolveByBot } from './chat-outcome.js'
+import { reopenForBot, resolveByBot } from './chat-outcome.js'
 
 const defaultLlm = createLlmAdapter()
 
 export interface FlowRunResult {
   handled: boolean
   messages: string[]
-  handover?: { team?: string; priority?: string; note?: string }
+  /** The journey asked for a person. The turn pipeline decides whether anyone is there. */
+  handover?: HandoverRequest
   ticket?: { subject: string; description?: string }
   waitingFor?: Session['waitingFor']
   /** The published flow reached its end. A waiting question is still open. */
@@ -345,13 +346,7 @@ export async function runFlowIfPublished(opts: {
     },
   })
 
-  if (outcome.handover && !(await liveAgentsFor(botId))) {
-    outcome = { ...outcome, handover: undefined, messages: keepWithBot(outcome.messages) }
-    await markNoTeam(conversationId)
-  }
-  if (outcome.handover) {
-    await escalateChat(conversationId)
-  } else if (outcome.session.status === 'completed') {
+  if (!outcome.handover && outcome.session.status === 'completed') {
     await resolveByBot(conversationId)
   }
   if (outcome.ticket) {

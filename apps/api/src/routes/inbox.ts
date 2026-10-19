@@ -8,6 +8,8 @@ import { attachSlaLabels, onOutboundReply } from '../lib/sla.js'
 import { presentConversation, presentMessages } from '../lib/present-chat.js'
 import { outcomeAfterStatus } from '../lib/chat-outcome.js'
 import { costByConversation } from '../lib/llm-ledger.js'
+import { deliverAgentReply, returnChat } from '../lib/handover.js'
+import { RETURN_OUTCOMES } from '@ybot/shared'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -198,8 +200,19 @@ export async function conversationsRoutes(app: FastifyInstance) {
       },
     })
     await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } })
+    let delivery: 'sent' | 'widget' | 'none' | 'failed' | undefined
     if (direction === 'outbound' && !body.data.isInternalNote) {
       await onOutboundReply(id).catch(() => {})
+    }
+    if (direction === 'outbound' && body.data.authorKind === 'agent' && !body.data.isInternalNote) {
+      await prisma.conversation.updateMany({
+        where: { id, tenantId, assignedTo: null, status: { in: ['active', 'escalated'] } },
+        data: { assignedTo: userId },
+      }).catch(() => {})
+      delivery = await deliverAgentReply(id, body.data.content.text).catch((err) => {
+        request.log.warn({ err, conversationId: id }, 'agent reply was not delivered to the channel')
+        return 'failed' as const
+      })
     }
 
     // Trigger bot engine for inbound user messages
@@ -208,7 +221,23 @@ export async function conversationsRoutes(app: FastifyInstance) {
       setImmediate(() => processInboundMessage(app, id, tenantId, body.data.content.text).catch(() => {}))
     }
 
-    return reply.status(201).send({ data: msg })
+    return reply.status(201).send({ data: msg, ...(delivery ? { delivery } : {}) })
+  })
+
+  // POST /conversations/:id/return — a person hands the chat back: resolved, back to the bot, or needs follow-up
+  app.post('/:id/return', async (request, reply) => {
+    const { tenantId, sub: userId } = request.user as JWT
+    const { id } = request.params as { id: string }
+    const body = z.object({
+      outcome: z.enum(RETURN_OUTCOMES),
+      note: z.string().max(1000).optional(),
+    }).safeParse(request.body)
+    if (!body.success) {
+      return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Pick resolved, needs_bot or needs_follow_up as the outcome.', details: body.error.flatten() } })
+    }
+    const result = await returnChat({ conversationId: id, tenantId, outcome: body.data.outcome, note: body.data.note, userId })
+    if (!result) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Conversation not found.' } })
+    return { data: result }
   })
 
   // POST /conversations/:id/labels

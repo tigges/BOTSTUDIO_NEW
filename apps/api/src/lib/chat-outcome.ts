@@ -37,18 +37,22 @@ export function keepWithBot(lines: string[]): string[] {
   return [...kept, NO_TEAM_LINE]
 }
 
-export async function liveAgentsFor(botId: string): Promise<boolean> {
-  const cfg = await prisma.botConfig.findUnique({ where: { botId }, select: { inboxConfig: true } }).catch(() => null)
-  return hasLiveAgentHours(cfg?.inboxConfig)
-}
-
-/** The bot reached the end of the journey. Only an open chat nobody holds is closed. */
+/**
+ * The bot reached the end of the journey. Only an open chat nobody holds is closed.
+ * A chat a person handed back to the bot stays recorded as escalated.
+ */
 export async function resolveByBot(conversationId: string, at = new Date()): Promise<boolean> {
-  const result = await prisma.conversation.updateMany({
-    where: { id: conversationId, status: 'active', assignedTo: null },
+  const open = { id: conversationId, status: 'active', assignedTo: null }
+  const contained = await prisma.conversation.updateMany({
+    where: { ...open, OR: [{ outcome: null }, { outcome: { not: 'escalated' } }] },
     data: { status: 'resolved', resolvedAt: at, outcome: 'contained_resolved' },
   }).catch(() => ({ count: 0 }))
-  return result.count === 1
+  if (contained.count === 1) return true
+  const escalated = await prisma.conversation.updateMany({
+    where: { ...open, outcome: 'escalated' },
+    data: { status: 'resolved', resolvedAt: at },
+  }).catch(() => ({ count: 0 }))
+  return escalated.count === 1
 }
 
 /**
@@ -67,14 +71,6 @@ export function outcomeAfterStatus(
     return (current as ChatOutcome | null) ?? 'contained_resolved'
   }
   return undefined
-}
-
-/** The bot handed the chat to a person. */
-export async function escalateChat(conversationId: string): Promise<void> {
-  await prisma.conversation.update({
-    where: { id: conversationId },
-    data: { status: 'escalated', outcome: 'escalated', updatedAt: new Date() },
-  }).catch(() => {})
 }
 
 /** The guest asked for a person and nobody is on chat. Kept unless the bot later finishes the journey. */
