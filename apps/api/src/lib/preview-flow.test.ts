@@ -27,14 +27,15 @@ test('the booking chart asks once, including a mistyped cut', async () => {
   const graph = hairStudioPack('Bella Hair Studio').flows.find((flow) => flow.name === 'Book an appointment')!.graph as FlowGraph
   const hello = await runCanvasPreview({ graph, message: 'hi' })
   assert.equal(hello.handled, true)
-  assert.match(hello.text, /I can book that/)
-  assert.match(hello.text, /What's your name\?/)
+  assert.match(hello.text, /What would you like done\?/)
+  assert.equal(hello.text.includes('I can book that'), false)
   assert.equal((hello.text.match(/\?/g) ?? []).length, 1)
   assert.equal(hello.text.includes('stylist'), false)
 
   const cut = await runCanvasPreview({ graph, message: 'wnat a cut', session: hello.session })
   assert.equal((cut.text.match(/\?/g) ?? []).length, 1)
-  assert.match(cut.text, /been to us before/)
+  assert.match(cut.text, /What's your name\?/)
+  assert.equal(cut.session?.variables.flow['route'], 'cut')
   assert.equal(cut.text.includes('preferred time'), false)
   assert.equal(cut.text.includes('stylist'), false)
   assert.equal(cut.session?.variables.flow['guest_name'], undefined)
@@ -42,7 +43,8 @@ test('the booking chart asks once, including a mistyped cut', async () => {
 
   const slipped = await runCanvasPreview({ graph, message: 'wnat a ctu', session: hello.session })
   assert.equal((slipped.text.match(/\?/g) ?? []).length, 1)
-  assert.match(slipped.text, /been to us before/)
+  assert.match(slipped.text, /What's your name\?/)
+  assert.equal(slipped.session?.variables.flow['route'], 'cut')
   assert.equal(slipped.session?.variables.flow['guest_name'], undefined)
   assert.equal(slipped.session?.variables.contact['name'], 'there')
 

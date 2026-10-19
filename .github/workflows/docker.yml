@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   workflow_dispatch:
     inputs:
       image_tag:
@@ -16,16 +19,11 @@ env:
   WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/yai/ybot-web
 
 jobs:
-  build:
+  tag:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Set image tag
         id: tag
         run: |
@@ -35,7 +33,53 @@ jobs:
           elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+            echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+  # API and web build side by side; each keeps its own layer cache scope.
+  build:
+    needs: tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [api, web]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Image name and build args
+        id: meta
+        env:
+          VERSION: 1.1.${{ github.run_number }}
+          BUILD: ${{ github.run_number }}
+          SHA: ${{ github.sha }}
+          DATE: ${{ github.event.head_commit.timestamp }}
+        run: |
+          if [ "${{ matrix.app }}" = "api" ]; then
+            echo "image=${API_IMAGE}" >> "$GITHUB_OUTPUT"
+            {
+              echo "args<<EOF"
+              echo "APP_VERSION=${VERSION}"
+              echo "APP_BUILD_NUMBER=${BUILD}"
+              echo "APP_GIT_SHA=${SHA}"
+              echo "APP_BUILD_DATE=${DATE}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "image=${WEB_IMAGE}" >> "$GITHUB_OUTPUT"
+            {
+              echo "args<<EOF"
+              echo "VITE_API_URL=/api/v1"
+              echo "VITE_APP_VERSION=${VERSION}"
+              echo "VITE_BUILD_NUMBER=${BUILD}"
+              echo "VITE_GIT_SHA=${SHA}"
+              echo "VITE_BUILD_DATE=${DATE}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Log in to GHCR
@@ -48,104 +92,36 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── API image ────────────────────────────────────────────────────────────
-      - name: Build & push API
+      - name: Build & push ${{ matrix.app }}
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: apps/api/Dockerfile
+          file: apps/${{ matrix.app }}/Dockerfile
           push: true
           tags: |
-            ${{ env.API_IMAGE }}:${{ steps.tag.outputs.tag }}
-            ${{ env.API_IMAGE }}:latest
-          build-args: |
-            APP_VERSION=1.1.${{ github.run_number }}
-            APP_BUILD_NUMBER=${{ github.run_number }}
-            APP_GIT_SHA=${{ github.sha }}
-            APP_BUILD_DATE=${{ github.event.head_commit.timestamp }}
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
+            ${{ steps.meta.outputs.image }}:${{ needs.tag.outputs.tag }}
+            ${{ steps.meta.outputs.image }}:latest
+          build-args: ${{ steps.meta.outputs.args }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
 
-      # ── Web image ────────────────────────────────────────────────────────────
-      - name: Build & push Web
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/web/Dockerfile
-          push: true
-          build-args: |
-            VITE_API_URL=/api/v1
-            VITE_APP_VERSION=1.1.${{ github.run_number }}
-            VITE_BUILD_NUMBER=${{ github.run_number }}
-            VITE_GIT_SHA=${{ github.sha }}
-            VITE_BUILD_DATE=${{ github.event.head_commit.timestamp }}
-          tags: |
-            ${{ env.WEB_IMAGE }}:${{ steps.tag.outputs.tag }}
-            ${{ env.WEB_IMAGE }}:latest
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=web
-
-      # ── Optional: SSH deploy to AVIORI ─────────────────────────────────────
-      # Add these secrets in Settings → Secrets → Actions to enable auto-deploy:
-      #   AVIORI_HOST  — NAS IP or hostname
-      #   AVIORI_USER  — SSH user (e.g. admin)
-      #   AVIORI_KEY   — private SSH key (contents of ~/.ssh/id_ed25519)
-      #   AVIORI_PATH  — path to compose files, e.g. /volume1/docker/ybot/src
-      # When secrets are absent the step is skipped (continue-on-error keeps
-      # the build green while AVIORI is not yet configured).
-      # ── Optional: SSH deploy to AVIORI ─────────────────────────────────────
-      # NOTE: AVIORI is on a private LAN (192.168.x.x) — GitHub Actions runners
-      # cannot reach it directly.  This step is kept for when a VPN/tunnel is
-      # configured.  Until then, Watchtower on the NAS auto-deploys via GHCR.
-      #
-      # Secrets required (Settings → Secrets → Actions):
-      #   AVIORI_HOST  — NAS hostname or IP reachable from GitHub Actions
-      #   AVIORI_USER  — SSH user (e.g. ct)
-      #   AVIORI_KEY   — private SSH key
-      # AVIORI_PATH is hardcoded to /volume1/docker/ybot (confirmed path).
-      - name: Deploy to AVIORI
-        if: github.ref == 'refs/heads/main'
-        continue-on-error: true
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.AVIORI_HOST }}
-          username: ${{ secrets.AVIORI_USER }}
-          key: ${{ secrets.AVIORI_KEY }}
-          script: |
-            set -euo pipefail
-            cd /volume1/docker/ybot
-            echo "Pulling images for tag ${{ steps.tag.outputs.tag }}..."
-            sudo IMAGE_TAG=${{ steps.tag.outputs.tag }} \
-              docker compose \
-                -f docker-compose.yml \
-                -f docker-compose.synology.yml \
-                --env-file .env.production \
-              pull api web
-            echo "Restarting services..."
-            sudo IMAGE_TAG=${{ steps.tag.outputs.tag }} \
-              docker compose \
-                -f docker-compose.yml \
-                -f docker-compose.synology.yml \
-                --env-file .env.production \
-              up -d api web caddy
-            echo "Deploy complete."
-
-      # ── Notify: images published to GHCR ───────────────────────────────────
-      # Fires every time images are successfully pushed, regardless of whether
-      # the AVIORI SSH deploy ran.  Requires the SLACK_DEPLOY_WEBHOOK secret to
-      # be set in Settings → Secrets → Actions (Slack incoming-webhook URL or
-      # any generic POST endpoint).  Step is a no-op when the secret is absent.
+  # Watchtower on the NAS polls GHCR and deploys :latest. Requires the
+  # SLACK_DEPLOY_WEBHOOK secret (Slack incoming-webhook URL or any POST
+  # endpoint); a no-op when the secret is absent.
+  notify:
+    needs: [tag, build]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
       - name: Notify images published
-        if: success()
         continue-on-error: true
         env:
           HOOK_URL: ${{ secrets.SLACK_DEPLOY_WEBHOOK }}
-          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+          IMAGE_TAG: ${{ needs.tag.outputs.tag }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           [ -z "$HOOK_URL" ] && exit 0
-          SHORT_SHA="${{ github.sha }}"
-          SHORT_SHA="${SHORT_SHA:0:7}"
+          SHORT_SHA="${GITHUB_SHA::7}"
           curl -s -o /dev/null -X POST "$HOOK_URL" \
             -H "Content-Type: application/json" \
-            -d "{\"text\":\"📦 *YBot images pushed to GHCR* — tag \`${IMAGE_TAG}\` · build #${{ github.run_number }} · \`${SHORT_SHA}\`\n• API: \`${{ env.API_IMAGE }}:${IMAGE_TAG}\`\n• Web: \`${{ env.WEB_IMAGE }}:${IMAGE_TAG}\`\n• <${RUN_URL}|View CI run> — Watchtower will deploy to AVIORI within 5 min\"}"
+            -d "{\"text\":\"📦 *YBot images pushed to GHCR* — tag \`${IMAGE_TAG}\` · build #${{ github.run_number }} · \`${SHORT_SHA}\`\n• API: \`${API_IMAGE}:${IMAGE_TAG}\`\n• Web: \`${WEB_IMAGE}:${IMAGE_TAG}\`\n• <${RUN_URL}|View CI run> — Watchtower will deploy to AVIORI within 5 min\"}"

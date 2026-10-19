@@ -2,9 +2,21 @@
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
   "tasks": {
+    "generate": {
+      "cache": false,
+      "passThroughEnv": ["DATABASE_URL"]
+    },
+    "@ybot/db#build": {
+      "dependsOn": ["generate"],
+      "outputs": ["dist/**"]
+    },
+    "@ybot/db#typecheck": {
+      "dependsOn": ["generate"]
+    },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**"],
+      "env": ["VITE_*"]
     },
     "dev": {
       "cache": false,
@@ -18,7 +30,7 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": []
     }
   }
 }
