@@ -184,7 +184,7 @@ test('classify shows the model what each category means when the caller says', a
   const adapter = new LlmAdapter({
     complete: async (params) => {
       prompts.push(params.systemPrompt ?? '')
-      return { content: '{"category":"book","confidence":0.9}', model: 'fake' }
+      return { content: '{"category":"book","confidence":0.9}', model: 'fake', inputTokens: 1, outputTokens: 1 }
     },
     embed: async () => ({ embeddings: [], model: 'fake' }),
   })
