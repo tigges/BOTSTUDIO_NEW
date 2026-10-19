@@ -49,6 +49,8 @@ export interface LlmEmbedResult {
 export interface LlmClassifyParams {
   categories: string[]
   examples?: Array<{ text: string; category: string }>
+  /** What each category means, shown to the model next to its name. */
+  descriptions?: Record<string, string>
 }
 
 export interface LlmClassifyResult {
@@ -95,7 +97,7 @@ export class LlmAdapter {
   async classify(text: string, params: LlmClassifyParams): Promise<LlmClassifyResult> {
     const systemPrompt = [
       'Classify the user\'s message into exactly one of these categories:',
-      params.categories.map((c) => `- ${c}`).join('\n'),
+      params.categories.map((c) => (params.descriptions?.[c] ? `- ${c}: ${params.descriptions[c]}` : `- ${c}`)).join('\n'),
       'Respond with JSON: { "category": "<category>", "confidence": <0.0-1.0> }',
       'Do not output anything else.',
     ].join('\n')
