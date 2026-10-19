@@ -10,20 +10,41 @@ const WS_OPEN = 1
 // Tenant → set of open sockets
 const clients = new Map<string, Set<WsClient>>()
 
-/** Broadcast a JSON-serialisable event to every WS client for a given tenant. */
+/** Broadcast a JSON-serialisable event to every WS client for a given tenant. Never throws. */
 export function broadcastToTenant(tenantId: string, event: object): void {
-  const payload = JSON.stringify(event)
+  let payload: string
+  try { payload = JSON.stringify(event) } catch { return }
   for (const ws of clients.get(tenantId) ?? []) {
-    if (ws.readyState === WS_OPEN) {
-      try { ws.send(payload) } catch { /* ignore dead socket */ }
-    }
+    try {
+      if (ws?.readyState === WS_OPEN) ws.send(payload)
+    } catch { /* ignore dead socket */ }
   }
+}
+
+/** Open sockets for a tenant. */
+export function tenantSocketCount(tenantId: string): number {
+  return clients.get(tenantId)?.size ?? 0
+}
+
+function isSocket(value: unknown): value is WsClient {
+  return Boolean(value) && typeof (value as WsClient).send === 'function' && typeof (value as WsClient).on === 'function'
+}
+
+/** @fastify/websocket 11 passes the socket itself; older versions wrapped it as { socket }. */
+function socketOf(connection: unknown): WsClient | null {
+  if (isSocket(connection)) return connection
+  const wrapped = (connection as { socket?: unknown } | null)?.socket
+  return isSocket(wrapped) ? wrapped : null
 }
 
 export async function wsRoutes(app: FastifyInstance) {
   // @ts-ignore — websocket handler type provided by @fastify/websocket
-  app.get('/ws', { websocket: true }, (connection: { socket: WsClient }, request: FastifyRequest) => {
-    const socket = connection.socket
+  app.get('/ws', { websocket: true }, (connection: unknown, request: FastifyRequest) => {
+    const socket = socketOf(connection)
+    if (!socket) {
+      request.log.error('websocket handler got no socket')
+      return
+    }
     const token = (request.query as Record<string, string>)['token']
     let tenantId = ''
 
