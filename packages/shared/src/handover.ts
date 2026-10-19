@@ -44,14 +44,14 @@ export interface HandoverReturn {
 export interface HandoverContract extends HandoverRequest {
   at: string
   /** The step or rule that asked for a person. */
-  source: 'journey' | 'always_human'
+  source: 'journey' | 'always_human' | 'guardrail'
   returned?: HandoverReturn
 }
 
 export const DEFAULT_HANDOVER_REASON = 'The guest asked for a person.'
 export const DEFAULT_QUEUE = 'support'
 
-const ROUTING_PRIORITY: Record<HandoverPriority, number> = { low: 1, medium: 2, high: 3, critical: 4 }
+export const ROUTING_PRIORITY: Record<HandoverPriority, number> = { low: 1, medium: 2, high: 3, critical: 4 }
 
 const LEGACY_PRIORITY: Record<string, HandoverPriority> = {
   normal: 'medium',

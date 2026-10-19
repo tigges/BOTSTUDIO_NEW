@@ -4,6 +4,7 @@ import { OpenAIProvider } from './providers/openai.js'
 import { AnthropicProvider } from './providers/anthropic.js'
 import { GroqProvider, OllamaProvider } from './providers/ollama.js'
 import { RecordingProvider } from './ledger.js'
+import { PrivacyProvider } from './privacy.js'
 
 export type LlmProviderName = 'gemini' | 'anthropic' | 'openai' | 'groq' | 'ollama'
 
@@ -100,7 +101,7 @@ export interface LlmLink {
 }
 
 function providerFor(name: LlmProviderName, env: Env): LlmProvider {
-  return new RecordingProvider(name, bareProvider(name, env))
+  return new PrivacyProvider(new RecordingProvider(name, bareProvider(name, env)))
 }
 
 function bareProvider(name: LlmProviderName, env: Env): LlmProvider {
