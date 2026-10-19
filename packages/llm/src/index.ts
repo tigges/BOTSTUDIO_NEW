@@ -5,7 +5,7 @@ export type {
   LlmClassifyParams, LlmClassifyResult,
 } from './types.js'
 export { OpenAIProvider } from './providers/openai.js'
-export { AnthropicProvider } from './providers/anthropic.js'
+export { AnthropicProvider, anthropicRequest } from './providers/anthropic.js'
 export { OllamaProvider, GroqProvider } from './providers/ollama.js'
 export {
   DEFAULT_MODELS,
