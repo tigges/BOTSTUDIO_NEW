@@ -297,10 +297,23 @@ export function planSiteImport(input: {
   }
 }
 
-function clip(value: string, max = 280): string {
-  const tidy = abstractBrand(value.replace(/\s+/g, ' ').trim())
+const DANGLING_WORD =
+  /\s+(?:a|an|the|and|or|but|of|to|in|on|at|for|from|with|without|by|as|is|are|your|our|no|not|up|via|plus)$/i
+
+/** Cut at the last full sentence that fits; otherwise at a word, without a dangling joiner, ending in an ellipsis. */
+function clipAtSentence(value: string, max = 280): string {
+  const tidy = value.replace(/\s+/g, ' ').trim()
   if (tidy.length <= max) return tidy
-  return `${tidy.slice(0, max - 1).replace(/\s+\S*$/, '')}.`
+  const head = tidy.slice(0, max)
+  const stop = Math.max(head.lastIndexOf('. '), head.lastIndexOf('! '), head.lastIndexOf('? '))
+  if (stop >= Math.min(24, max / 3)) return head.slice(0, stop + 1)
+  let cut = tidy.slice(0, max - 1).replace(/\s+\S*$/, '')
+  for (let i = 0; i < 3 && DANGLING_WORD.test(cut); i++) cut = cut.replace(DANGLING_WORD, '')
+  return `${cut.replace(/[\s,;:–—-]+$/, '')}…`
+}
+
+function clip(value: string, max = 280): string {
+  return clipAtSentence(abstractBrand(value.replace(/\s+/g, ' ').trim()), max)
 }
 
 function hostOf(url: string): string {
@@ -696,9 +709,7 @@ export function draftClusteredTemplate(input: {
 }
 
 function clipKept(value: string, max = 280): string {
-  const tidy = value.replace(/\s+/g, ' ').trim()
-  if (tidy.length <= max) return tidy
-  return `${tidy.slice(0, max - 1).replace(/\s+\S*$/, '')}.`
+  return clipAtSentence(value, max)
 }
 
 function isJunkJobName(name: string): boolean {

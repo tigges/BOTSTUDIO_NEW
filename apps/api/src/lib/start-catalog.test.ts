@@ -267,3 +267,36 @@ test('jobs from a model skip 404 names and still offer a person', () => {
   assert.ok(spec.topics.some((topic) => topic.flowName === 'Talk to a person'))
   assert.match(spec.greeting, /Voda at Vodafone/)
 })
+
+test('model topic blurbs end on a sentence or an ellipsis, never a cut word and a full stop', () => {
+  const page = pageFromHtml(
+    'https://www.vodafone.co.uk/',
+    `<html><head><title>Vodafone</title></head><body><p>Phones, SIM only and broadband from Vodafone.</p></body></html>`,
+  )
+  const topic = (flowName: string, answer: string) => ({
+    flowName,
+    choice: flowName,
+    phrases: [flowName.toLowerCase()],
+    question: `What about ${flowName.toLowerCase()}?`,
+    answer,
+    blurb: answer.slice(0, 80),
+  })
+  const spec = learnedSpecFromJobs({
+    pages: [page],
+    companyName: 'Vodafone',
+    keepBrand: true,
+    topics: [
+      topic(
+        'Buy a phone',
+        'Vodafone offers pay monthly contract phones and pay as you go phones. Pay monthly lets you spread the cost.',
+      ),
+      topic(
+        'Get SIM only deal',
+        'Vodafone offers SIM only plans with minutes, texts and mobile data without a contract tie-in on rolling plans.',
+      ),
+    ],
+  })
+  const blurb = (name: string) => spec.topics.find((item) => item.flowName === name)?.blurb ?? ''
+  assert.equal(blurb('Buy a phone'), 'Vodafone offers pay monthly contract phones and pay as you go phones.')
+  assert.equal(blurb('Get SIM only deal'), 'Vodafone offers SIM only plans with minutes, texts and mobile data…')
+})
