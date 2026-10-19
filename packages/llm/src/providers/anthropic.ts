@@ -13,7 +13,7 @@ export class AnthropicProvider implements LlmProvider {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: params.model ?? 'claude-sonnet-4-5',
+        model: params.model ?? 'claude-sonnet-5-5',
         messages: params.messages.filter((m) => m.role !== 'system'),
         system: params.systemPrompt ?? params.messages.find((m) => m.role === 'system')?.content,
         max_tokens: params.maxTokens ?? 2048,
@@ -43,7 +43,7 @@ export class AnthropicProvider implements LlmProvider {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: params.model ?? 'claude-sonnet-4-5',
+        model: params.model ?? 'claude-sonnet-5-5',
         messages: params.messages.filter((m) => m.role !== 'system'),
         system: params.systemPrompt ?? params.messages.find((m) => m.role === 'system')?.content,
         max_tokens: params.maxTokens ?? 2048,
@@ -58,7 +58,7 @@ export class AnthropicProvider implements LlmProvider {
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let fullText = ''
-    let modelName = params.model ?? 'claude-sonnet-4-5'
+    let modelName = params.model ?? 'claude-sonnet-5-5'
     let inputTokens = 0
     let outputTokens = 0
 

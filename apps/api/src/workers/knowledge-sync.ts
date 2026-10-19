@@ -11,9 +11,9 @@
  */
 
 import { prisma } from '@ybot/db'
-import { createLlmAdapter } from '@ybot/llm'
+import { createEmbeddingAdapter } from '@ybot/llm'
 
-const llm = createLlmAdapter()
+const embedder = createEmbeddingAdapter()
 
 const CHUNK_SIZE = 400
 const CHUNK_OVERLAP = 80
@@ -121,7 +121,7 @@ export async function ingestKnowledgeSource(jobData: {
     const chunks = splitIntoChunks(page.text)
     for (const [idx, chunk] of chunks.entries()) {
       try {
-        const embedResult = await llm.embed({ texts: [chunk] })
+        const embedResult = await embedder.embed({ texts: [chunk] })
         const embedding = embedResult.embeddings[0] ?? []
         await prisma.$executeRawUnsafe(
           `INSERT INTO "document_chunks" (id, "tenantId", "documentId", content, embedding, metadata, "createdAt")
