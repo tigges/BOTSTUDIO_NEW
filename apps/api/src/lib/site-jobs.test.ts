@@ -222,7 +222,7 @@ test('the draft says whether the model drafted it, and why not', async () => {
   assert.deepEqual(reasons.map((reason) => reason.by), ['model', 'pages', 'pages', 'pages', 'pages', 'pages'])
   assert.match(reasons[0]!.why, /drafted 1 topic from/)
   assert.match(reasons[1]!.why, /rate limited \(HTTP 429\)/)
-  assert.match(reasons[2]!.why, /longer than 20 seconds/)
+  assert.match(reasons[2]!.why, /longer than 45 seconds/)
   assert.match(reasons[3]!.why, /without any topics/)
   assert.match(reasons[4]!.why, /none matched what the pages state/)
   assert.match(reasons[5]!.why, /salon map/)
