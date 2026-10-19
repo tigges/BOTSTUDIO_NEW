@@ -140,7 +140,12 @@ function companyLabel(companyName: string): string {
 }
 
 const HELP_VERBS =
-  /^(?:apply|ask|book|buy|cancel|change|check|compare|contact|download|explore|find|get|join|learn|log|manage|open|order|pay|renew|report|request|reset|return|see|shop|sign|start|switch|talk|top|track|trade|try|upgrade|view|bundle)\b/i
+  /^(?:apply|ask|book|buy|call|cancel|change|check|choose|claim|compare|contact|donate|download|explore|find|fix|get|give|hire|join|learn|listen|log|make|manage|open|order|pay|plan|read|register|renew|rent|report|request|reset|return|save|see|sell|send|set|shop|sign|start|switch|talk|top|track|trade|try|understand|update|upgrade|view|visit|watch|bundle)\b/i
+
+function asTask(choice: string): string {
+  if (HELP_VERBS.test(choice)) return lowerLead(choice)
+  return /\b(?:help|support|advice)$/i.test(choice) ? `get ${lowerLead(choice)}` : `get help with ${lowerLead(choice)}`
+}
 
 function lowerLead(choice: string): string {
   const [first = '', ...rest] = choice.trim().split(/\s+/)
@@ -148,17 +153,16 @@ function lowerLead(choice: string): string {
   return [acronym ? first : first.toLowerCase(), ...rest].join(' ')
 }
 
-/** The fallback line: jobs named as tasks read "I can help you buy a phone", topics read "I can help with plans". */
+/** The fallback line: jobs named as tasks read "I can help you buy a phone", topics read "I can help with plans"; a mix reads as tasks. */
 export function menuLine(topics: SiteTopic[]): string {
   const named = topics
     .filter((topic) => topic.flowName !== 'Talk to a person')
     .map((topic) => topic.choice.trim())
     .filter(Boolean)
   if (named.length === 0) return 'I can pass you to a person on the team.'
-  const list = named.map(lowerLead).join(', ')
-  return named.every((name) => HELP_VERBS.test(name))
-    ? `I can help you ${list}, or talk to a person.`
-    : `I can help with ${list}, or a person on the team.`
+  return named.some((name) => HELP_VERBS.test(name))
+    ? `I can help you ${named.map(asTask).join(', ')}, or talk to a person.`
+    : `I can help with ${named.map(lowerLead).join(', ')}, or a person on the team.`
 }
 
 const DONE_PHRASES = ['no', 'no thanks', 'no thank you', 'nope', "that's all", 'that is all', 'nothing else', 'all good', "i'm good", 'bye', 'goodbye', 'thanks', 'thank you']
