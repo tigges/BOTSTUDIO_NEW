@@ -239,7 +239,7 @@ test('a failing Gemini model hands the import to Claude, and Groq waits behind b
       return new Response('{"error":{"message":"The model does not exist","code":"model_not_found"}}', { status: 404 })
     }
     return new Response(JSON.stringify({
-      content: [{ text: '{"jobs":[{"name":"Plans","phrases":["plans"],"answer":"Unlimited data and EU roaming just £26 a month on a SIM only plan."}]}' }],
+      content: [{ type: 'text', text: '{"jobs":[{"name":"Plans","phrases":["plans"],"answer":"Unlimited data and EU roaming just £26 a month on a SIM only plan."}]}' }],
       model: body.model,
       usage: { input_tokens: 1, output_tokens: 1 },
     }), { status: 200 })
