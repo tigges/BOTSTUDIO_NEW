@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { hairStudioPack, journeyLayout, journeyTrail } from '@ybot/shared'
-import { tallyJourneyChats } from './journey-traffic.js'
+import { logChapterEntry, tallyJourneyChats } from './journey-traffic.js'
 
 function input(flow: { name: string; tags?: string[]; graph: unknown }, index: number, published = true) {
   return { id: `f${index}`, name: flow.name, tags: flow.tags ?? [], published, graph: flow.graph }
@@ -127,4 +127,24 @@ test('a jump back to an earlier chapter does not loop the map', () => {
   assert.equal(layout.roots[0]?.children[0]?.name, 'Returns')
   assert.equal(layout.roots[0]?.children[0]?.children.length, 0)
   assert.deepEqual(layout.roots[0]?.children[0]?.jumps, ['Welcome & Routing'])
+})
+
+test('a chat logged into a named chapter counts there, and a missing chapter writes nothing', async () => {
+  const written: Array<{ conversationId: string; flowVersionId: string }> = []
+  const db = {
+    flowVersion: {
+      findFirst: async (args: { where: { flow: { name: string } } }) => (args.where.flow.name === 'Salon hours' ? { id: 'v-hours' } : null),
+    },
+    stepLog: {
+      create: async (args: { data: { conversationId: string; flowVersionId: string } }) => {
+        written.push({ conversationId: args.data.conversationId, flowVersionId: args.data.flowVersionId })
+        return args.data
+      },
+    },
+  } as unknown as Parameters<typeof logChapterEntry>[0]
+  const at = new Date('2026-10-19T12:00:00Z')
+  assert.equal(await logChapterEntry(db, { tenantId: 't', botId: 'b', conversationId: 'c1', chapter: 'Salon hours', at }), true)
+  assert.equal(await logChapterEntry(db, { tenantId: 't', botId: 'b', conversationId: 'c2', chapter: 'Gone chapter', at }), false)
+  assert.deepEqual(written, [{ conversationId: 'c1', flowVersionId: 'v-hours' }])
+  assert.deepEqual(tallyJourneyChats(written.map((row) => ({ flowId: 'hours', conversationId: row.conversationId }))), { hours: 1 })
 })

@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '@ybot/db'
+import { logChapterEntry } from './journey-traffic.js'
 
 export const TRAFFIC_PREFIX = 'traffic-'
 export const TRAFFIC_KEEP = 48
@@ -239,6 +240,13 @@ async function insertChat(target: DemoTarget, template: ChatTemplate, slot: stri
       },
     })
   }
+  await logChapterEntry(prisma, {
+    tenantId: target.tenantId,
+    botId: target.botId,
+    conversationId: id,
+    chapter: template.chapter,
+    at: createdAt,
+  })
   return { chats: 1, tickets: 0 }
 }
 

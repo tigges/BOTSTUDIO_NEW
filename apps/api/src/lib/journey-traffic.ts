@@ -56,3 +56,27 @@ export async function journeyChatCounts(
     return flowId ? [{ flowId, conversationId: log.conversationId }] : []
   }))
 }
+
+/** Marks a chat as having entered a named chapter, so the Traffic tab can count it. Reads flows, never writes them. */
+export async function logChapterEntry(
+  db: typeof import('@ybot/db').prisma,
+  input: { tenantId: string; botId: string; conversationId: string; chapter: string; at: Date },
+): Promise<boolean> {
+  const version = await db.flowVersion.findFirst({
+    where: { flow: { botId: input.botId, tenantId: input.tenantId, name: input.chapter } },
+    select: { id: true },
+    orderBy: { version: 'desc' },
+  })
+  if (!version) return false
+  await db.stepLog.create({
+    data: {
+      tenantId: input.tenantId,
+      conversationId: input.conversationId,
+      flowVersionId: version.id,
+      nodeId: 'start',
+      nodeKind: 'trigger_start',
+      createdAt: input.at,
+    },
+  })
+  return true
+}

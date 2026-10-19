@@ -446,6 +446,17 @@ async function runVersion(opts: {
   }
 
   const result = await runFlowTurn(opts.machine, session, graph, startId, opts.userText)
+  if (!opts.fsRecord) {
+    await prisma.stepLog.create({
+      data: {
+        tenantId: opts.tenantId,
+        conversationId: opts.conversationId,
+        flowVersionId: opts.version.id,
+        nodeId: startId,
+        nodeKind: 'trigger_start',
+      },
+    }).catch(() => {})
+  }
   return {
     session: result.session,
     messages: result.newMessages.map((message) => message.content.text),
