@@ -227,6 +227,7 @@ async function insertChat(target: DemoTarget, template: ChatTemplate, slot: stri
       channelId: target.channelId,
       contactId,
       status: trafficStatus(template),
+      outcome: trafficStatus(template) === 'escalated' ? 'escalated' : null,
       subject: template.subject,
       createdAt,
     },

@@ -10,6 +10,18 @@ function thinkingOff(model: string): { type: string } | undefined {
   return undefined
 }
 
+interface AnthropicUsage {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens?: number
+  cache_creation_input_tokens?: number
+}
+
+/** Anthropic counts cached and cache-writing tokens apart from input_tokens. */
+function totalInput(usage: AnthropicUsage): number {
+  return usage.input_tokens + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0)
+}
+
 export function anthropicRequest(params: LlmCompleteParams): Record<string, unknown> {
   const model = params.model ?? 'claude-sonnet-5-5'
   const thinking = thinkingOff(model)
@@ -40,14 +52,15 @@ export class AnthropicProvider implements LlmProvider {
 
     if (!res.ok) throw new Error(`Anthropic error ${res.status}: ${await res.text()}`)
 
-    const data = await res.json() as { content: Array<{ type: string; text?: string }>; model: string; usage: { input_tokens: number; output_tokens: number } }
+    const data = await res.json() as { content: Array<{ type: string; text?: string }>; model: string; usage: AnthropicUsage }
     const content = data.content.filter((block) => block.type === 'text').map((block) => block.text ?? '').join('')
     if (!content.trim()) throw new Error(`Anthropic error: ${data.model} returned no text`)
     return {
       content,
       model: data.model,
-      inputTokens: data.usage.input_tokens,
+      inputTokens: totalInput(data.usage),
       outputTokens: data.usage.output_tokens,
+      cachedTokens: data.usage.cache_read_input_tokens ?? 0,
       durationMs: Date.now() - start,
     }
   }
@@ -73,6 +86,7 @@ export class AnthropicProvider implements LlmProvider {
     let modelName = params.model ?? 'claude-sonnet-5-5'
     let inputTokens = 0
     let outputTokens = 0
+    let cachedTokens = 0
 
     let buffer = ''
     while (true) {
@@ -93,12 +107,13 @@ export class AnthropicProvider implements LlmProvider {
             type: string
             index?: number
             delta?: { type: string; text?: string }
-            message?: { model: string; usage: { input_tokens: number } }
+            message?: { model: string; usage: AnthropicUsage }
             usage?: { output_tokens: number }
           }
           if (evt.type === 'message_start' && evt.message) {
             modelName = evt.message.model
-            inputTokens = evt.message.usage.input_tokens
+            inputTokens = totalInput(evt.message.usage)
+            cachedTokens = evt.message.usage.cache_read_input_tokens ?? 0
           } else if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta' && evt.delta.text) {
             fullText += evt.delta.text
             params.onChunk(evt.delta.text)
@@ -111,6 +126,7 @@ export class AnthropicProvider implements LlmProvider {
 
     return {
       content: fullText,
+      cachedTokens,
       model: modelName,
       inputTokens,
       outputTokens,

@@ -755,6 +755,7 @@ async function ensureChats(opts: {
         channelId: opts.channelId,
         contactId: contact.id,
         status,
+        outcome: status === 'escalated' ? 'escalated' : status === 'resolved' ? 'contained_resolved' : null,
         subject: template.subject,
         createdAt,
         updatedAt: resolvedAt ?? createdAt,

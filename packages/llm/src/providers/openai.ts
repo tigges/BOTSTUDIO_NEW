@@ -22,12 +22,14 @@ export class OpenAIProvider implements LlmProvider {
 
     if (!res.ok) throw new Error(`OpenAI error ${res.status}: ${await res.text()}`)
 
-    const data = await res.json() as { choices: Array<{ message: { content: string } }>; model: string; usage: { prompt_tokens: number; completion_tokens: number } }
+    const data = await res.json() as { choices: Array<{ message: { content: string } }>; model: string; usage: { prompt_tokens: number; completion_tokens: number; prompt_tokens_details?: { cached_tokens?: number }; completion_tokens_details?: { reasoning_tokens?: number } } }
     return {
       content: data.choices[0]?.message.content ?? '',
       model: data.model,
       inputTokens: data.usage.prompt_tokens,
       outputTokens: data.usage.completion_tokens,
+      cachedTokens: data.usage.prompt_tokens_details?.cached_tokens,
+      reasoningTokens: data.usage.completion_tokens_details?.reasoning_tokens,
       durationMs: Date.now() - start,
     }
   }
@@ -60,6 +62,8 @@ export class OpenAIProvider implements LlmProvider {
     let modelName = params.model ?? 'gpt-4o'
     let inputTokens = 0
     let outputTokens = 0
+    let cachedTokens: number | undefined
+    let reasoningTokens: number | undefined
     let buffer = ''
 
     while (true) {
@@ -77,7 +81,7 @@ export class OpenAIProvider implements LlmProvider {
           const evt = JSON.parse(jsonStr) as {
             model?: string
             choices?: Array<{ delta?: { content?: string }; finish_reason?: string }>
-            usage?: { prompt_tokens: number; completion_tokens: number }
+            usage?: { prompt_tokens: number; completion_tokens: number; prompt_tokens_details?: { cached_tokens?: number }; completion_tokens_details?: { reasoning_tokens?: number } }
           }
           if (evt.model) modelName = evt.model
           const delta = evt.choices?.[0]?.delta?.content
@@ -88,12 +92,14 @@ export class OpenAIProvider implements LlmProvider {
           if (evt.usage) {
             inputTokens = evt.usage.prompt_tokens
             outputTokens = evt.usage.completion_tokens
+            cachedTokens = evt.usage.prompt_tokens_details?.cached_tokens
+            reasoningTokens = evt.usage.completion_tokens_details?.reasoning_tokens
           }
         } catch { /* skip */ }
       }
     }
 
-    return { content: fullText, model: modelName, inputTokens, outputTokens, durationMs: Date.now() - start }
+    return { content: fullText, model: modelName, inputTokens, outputTokens, cachedTokens, reasoningTokens, durationMs: Date.now() - start }
   }
 
   async embed(params: LlmEmbedParams): Promise<LlmEmbedResult> {
@@ -103,7 +109,7 @@ export class OpenAIProvider implements LlmProvider {
       body: JSON.stringify({ model: params.model ?? 'text-embedding-3-small', input: params.texts }),
     })
     if (!res.ok) throw new Error(`OpenAI embed error ${res.status}: ${await res.text()}`)
-    const data = await res.json() as { data: Array<{ embedding: number[] }>; model: string }
-    return { embeddings: data.data.map((d) => d.embedding), model: data.model }
+    const data = await res.json() as { data: Array<{ embedding: number[] }>; model: string; usage?: { prompt_tokens?: number } }
+    return { embeddings: data.data.map((d) => d.embedding), model: data.model || (params.model ?? 'text-embedding-3-small'), inputTokens: data.usage?.prompt_tokens }
   }
 }

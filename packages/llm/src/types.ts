@@ -28,6 +28,10 @@ export interface LlmCompleteResult {
   model: string
   inputTokens: number
   outputTokens: number
+  /** Part of inputTokens served from the provider's prompt cache. */
+  cachedTokens?: number
+  /** Part of outputTokens spent on hidden reasoning. */
+  reasoningTokens?: number
   durationMs: number
 }
 
@@ -39,6 +43,7 @@ export interface LlmEmbedParams {
 export interface LlmEmbedResult {
   embeddings: number[][]
   model: string
+  inputTokens?: number
 }
 
 export interface LlmClassifyParams {

@@ -18,7 +18,8 @@ import { createLlmAdapter, createEmbeddingAdapter } from '@ybot/llm'
 import type { LlmMessage } from '@ybot/llm'
 import { fillNameTokens } from '@ybot/shared'
 import { finishBotLines, saveContactName, takeNameTurn, type NamePlan, type VisitorName } from './lib/visitor-name.js'
-import { keepWithBot, liveAgentsFor, reopenForBot, resolveByBot } from './lib/chat-outcome.js'
+import { escalateChat, keepWithBot, liveAgentsFor, markNoTeam, reopenForBot, resolveByBot } from './lib/chat-outcome.js'
+import { conversationScope, withLlmScope } from './lib/llm-ledger.js'
 
 const llm = createLlmAdapter()
 const embedAdapter = createEmbeddingAdapter()
@@ -203,6 +204,16 @@ export async function processInboundMessage(
   tenantId: string,
   incomingText: string,
 ): Promise<void> {
+  const scope = await conversationScope(conversationId)
+  return withLlmScope(scope, () => runInbound(app, conversationId, tenantId, incomingText))
+}
+
+async function runInbound(
+  app: FastifyInstance,
+  conversationId: string,
+  tenantId: string,
+  incomingText: string,
+): Promise<void> {
   try {
     const convo = await prisma.conversation.findFirst({
       where: { id: conversationId, tenantId },
@@ -291,8 +302,9 @@ export async function processInboundMessage(
       app.broadcastToTenant(tenantId, { event: 'message.created', data: saved })
     }
 
+    if (keep) await markNoTeam(conversationId)
     if (result.handover && !keep) {
-      await prisma.conversation.update({ where: { id: conversationId }, data: { status: 'escalated', updatedAt: new Date() } })
+      await escalateChat(conversationId)
     } else if (result.completed) {
       await resolveByBot(conversationId)
     }

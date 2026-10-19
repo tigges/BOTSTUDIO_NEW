@@ -23,6 +23,7 @@ import { visitorTurn } from '../lib/widget-open.js'
 import { loadPublicChannel } from '../lib/web-channels.js'
 import { streamDoneEvent } from '../lib/widget-rating.js'
 import { onInboundCustomerMessage, onOutboundReply } from '../lib/sla.js'
+import { conversationScope, enterLlmScope, withLlmScope } from '../lib/llm-ledger.js'
 import { fileURLToPath } from 'node:url'
 
 /** Derive the public-facing origin robustly when running behind a reverse proxy.
@@ -490,8 +491,11 @@ export async function widgetRoutes(app: FastifyInstance) {
       }).catch(() => {})
     }
 
+    if (conversationId) enterLlmScope(await conversationScope(conversationId))
+    else enterLlmScope({ source: 'runtime', tenantId, botId })
+
     if (textMightStartDraft(userText)) {
-      void proposeDraftFlows(botId).catch(() => {})
+      void withLlmScope({ source: 'authoring', tenantId, botId }, () => proposeDraftFlows(botId)).catch(() => {})
     }
 
     // ── SSE helpers (shared by both flow and RAG paths) ───────────────────

@@ -6,6 +6,8 @@ import { enqueueConversationAnalysis } from '../queues.js'
 import { triggerRules } from '../lib/automation-engine.js'
 import { attachSlaLabels, onOutboundReply } from '../lib/sla.js'
 import { presentConversation, presentMessages } from '../lib/present-chat.js'
+import { outcomeAfterStatus } from '../lib/chat-outcome.js'
+import { costByConversation } from '../lib/llm-ledger.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -96,7 +98,8 @@ export async function conversationsRoutes(app: FastifyInstance) {
       skip: parseInt(q['offset'] ?? '0'),
     })
     const data = await attachSlaLabels(conversations).catch(() => conversations.map((c) => ({ ...c, sla: null as string | null })))
-    return { data: data.map((conversation) => presentConversation(conversation)) }
+    const costs = await costByConversation(data.map((c) => c.id)).catch(() => new Map())
+    return { data: data.map((conversation) => ({ ...presentConversation(conversation), llm: costs.get(conversation.id) ?? null })) }
   })
 
   // GET /conversations/:id
@@ -109,7 +112,8 @@ export async function conversationsRoutes(app: FastifyInstance) {
     })
     if (!convo) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
     const [labeled] = await attachSlaLabels([convo]).catch(() => [{ ...convo, sla: null as string | null }])
-    return { data: labeled ? presentConversation(labeled) : convo }
+    const costs = await costByConversation([convo.id]).catch(() => new Map())
+    return { data: { ...(labeled ? presentConversation(labeled) : convo), llm: costs.get(convo.id) ?? null } }
   })
 
   // PATCH /conversations/:id  (assign, resolve, escalate, etc.)
@@ -121,7 +125,18 @@ export async function conversationsRoutes(app: FastifyInstance) {
       assignedTo: z.string().nullable().optional(),
     }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
-    const convo = await prisma.conversation.updateMany({ where: { id, tenantId }, data: { ...body.data, ...(body.data.status === 'resolved' ? { resolvedAt: new Date() } : {}) } })
+    const before = await prisma.conversation.findFirst({ where: { id, tenantId }, select: { assignedTo: true, outcome: true } })
+    const outcome = before
+      ? outcomeAfterStatus(body.data.status, body.data.assignedTo !== undefined ? body.data.assignedTo : before.assignedTo, before.outcome)
+      : undefined
+    const convo = await prisma.conversation.updateMany({
+      where: { id, tenantId },
+      data: {
+        ...body.data,
+        ...(body.data.status === 'resolved' ? { resolvedAt: new Date() } : {}),
+        ...(outcome !== undefined ? { outcome } : {}),
+      },
+    })
 
     // Trigger quality analysis for resolved conversations
     if (body.data.status === 'resolved') {

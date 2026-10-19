@@ -522,7 +522,9 @@ export interface Entity { id: string; name: string; kind: string; values: object
 export interface Faq { id: string; question: string; answer: string; tags: string[] }
 export interface KnowledgeSource { id: string; name: string; kind: string; config: Record<string, unknown>; lastSyncAt?: string; documents: Array<{ id: string; status: string }> }
 export interface LlmConfig { model: string; temperature: number; maxTokens: number; systemPrompt: string }
-export interface Conversation { id: string; status: string; assignedTo?: string; contact?: Contact; channel?: { id: string; name: string; kind: string }; messages: Message[]; labels: Array<{ label: Label }>; updatedAt: string; sla?: string | null }
+export interface Conversation { id: string; status: string; assignedTo?: string; contact?: Contact; channel?: { id: string; name: string; kind: string }; messages: Message[]; labels: Array<{ label: Label }>; updatedAt: string; sla?: string | null; outcome?: string | null; llm?: ConversationLlmCost | null }
+/** Model calls made for one chat. costUsd is null when a model had no known price. */
+export interface ConversationLlmCost { costUsd: number | null; calls: number }
 export interface Message { id: string; direction: string; authorKind: string; content: { text: string; internal?: boolean }; createdAt: string }
 export interface Ticket { id: string; subject: string; description?: string | null; status: string; priority: string; assignedTo?: string; tags: string[]; createdAt: string; conversation?: { contact?: Contact } }
 export interface Contact { id: string; displayName?: string; email?: string; phone?: string; metadata: Record<string, unknown>; createdAt: string }
@@ -539,7 +541,14 @@ export interface DataTable { id: string; name: string; columns: DataColumn[]; ro
 export interface IntegrationConnection { id: string; name: string; description: string; category: string; status: 'connected' | 'available' | 'coming_soon'; connectedAt?: string | null; hasKey?: boolean }
 export interface Label { id: string; name: string; color: string }
 export interface TeamMember { id: string; displayName: string; email: string; memberships: Array<{ role: string }>; agentProfile?: { status: string } }
-export interface AnalyticsOverview { totalConversations: number; resolvedConversations: number; resolutionRate: number; escalationRate: number; totalContacts: number; csatScore: number; avgResponseTimeMs: number | null; botHandledPct: number }
+export interface AnalyticsOverview { totalConversations: number; resolvedConversations: number; resolutionRate: number; escalationRate: number; totalContacts: number; csatScore: number; avgResponseTimeMs: number | null; botHandledPct: number; outcomes?: OutcomeSummary; llm?: { days: number; calls: number; costUsd: number | null } | null }
+export interface OutcomeSummary {
+  finished: number
+  open: number
+  counts: Record<'contained_resolved' | 'contained_partial' | 'contained_unresolved' | 'escalated' | 'abandoned', number>
+  buckets: { contained: number; escalated: number; abandoned: number }
+  rates: { contained: number | null; resolvedByBot: number | null; escalated: number | null; abandoned: number | null }
+}
 export interface ConversationTrend { date: string; conversations: number; resolved: number; escalated: number }
 export interface AgentStat { agentId: string; name: string; total: number; resolved: number; escalated: number; resolutionRate: number }
 export interface ChannelStat { channelId: string; name: string; total: number }

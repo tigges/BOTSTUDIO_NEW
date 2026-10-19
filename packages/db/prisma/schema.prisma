@@ -393,6 +393,8 @@ model Conversation {
   firstRespondedAt     DateTime?
   afterHoursNotifiedAt DateTime?
   slaBreachedAt        DateTime?
+  /** contained_resolved | contained_partial | contained_unresolved | escalated | abandoned; null while open. */
+  outcome              String?
 
   bot         Bot          @relation(fields: [botId], references: [id], onDelete: Cascade)
   environment Environment  @relation(fields: [environmentId], references: [id])
@@ -440,6 +442,36 @@ model StepLog {
   flowVersion  FlowVersion  @relation(fields: [flowVersionId], references: [id])
 
   @@map("step_logs")
+}
+
+/** One row per LLM provider call: chat, retrieval, summaries, evals and imports. No foreign keys, so costs outlive deleted chats. */
+model LlmCall {
+  id               String   @id @default(cuid())
+  tenantId         String?
+  botId            String?
+  conversationId   String?
+  traceId          String
+  /** runtime | retrieval | guardrail | eval | summarisation | authoring */
+  source           String
+  environment      String?
+  provider         String
+  model            String
+  operation        String
+  inputTokens      Int      @default(0)
+  cachedTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  reasoningTokens  Int      @default(0)
+  outputTokens     Int      @default(0)
+  latencyMs        Int      @default(0)
+  ttftMs           Int?
+  costUsd          Float?
+  ok               Boolean  @default(true)
+  error            String?
+  createdAt        DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([conversationId])
+  @@map("llm_calls")
 }
 
 model Ticket {
