@@ -25,6 +25,8 @@ export interface ScannedPage {
   title: string
   text: string
   links: ScannedLink[]
+  /** The page's own summary from its meta description, when it has one. */
+  description?: string
 }
 
 export interface ScanDoor {
@@ -176,7 +178,21 @@ export function pageFromHtml(url: string, html: string): ScannedPage {
     const text = visibleText(match[2] ?? '').slice(0, 160)
     links.push({ href: raw, text })
   }
-  return { url, title, text: pageText(html), links }
+  const description = metaDescription(html)
+  return description ? { url, title, text: pageText(html), links, description } : { url, title, text: pageText(html), links }
+}
+
+function metaDescription(html: string): string {
+  for (const name of ['description', 'og:description']) {
+    for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
+      const key = tag.match(/\b(?:name|property)\s*=\s*["']([^"']+)["']/i)?.[1]?.toLowerCase()
+      if (key !== name) continue
+      const content = tag.match(/\bcontent\s*=\s*"([^"]*)"|\bcontent\s*=\s*'([^']*)'/i)
+      const text = decodeHtml(content?.[1] ?? content?.[2] ?? '').replace(/\s+/g, ' ').trim()
+      if (text) return text
+    }
+  }
+  return ''
 }
 
 function companyLabel(companyName: string): string {
