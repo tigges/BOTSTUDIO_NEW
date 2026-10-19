@@ -49,3 +49,42 @@ jobs:
 
       - name: Typecheck and test
         run: pnpm exec turbo run typecheck test --ui=stream --cache-dir=.turbo/cache
+
+  migrations:
+    name: Migrations match schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: pg
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Fails when schema.prisma changed without a migration. Create one with
+      # `pnpm db:migrate --name <change>` against a local database.
+      - name: Compare migrations with schema.prisma
+        working-directory: packages/db
+        run: >-
+          node_modules/.bin/prisma migrate diff
+          --from-migrations prisma/migrations
+          --to-schema-datamodel prisma/schema.prisma
+          --shadow-database-url postgresql://postgres:pg@localhost:5432/postgres
+          --exit-code
