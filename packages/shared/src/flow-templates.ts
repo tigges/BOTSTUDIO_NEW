@@ -119,7 +119,7 @@ function welcomeGraph(companyName: string): { nodes: object[]; edges: object[] }
   ]
   return greetingWelcomeGraph({
     greeting: assistantGreeting(companyName),
-    followUp: 'Hi {{contact.name}}. What do you need help with?',
+    followUp: 'What do you need help with?',
     routes,
     menu: 'I can help with an order, a return, billing, a cancellation, a delivery address, or a person on the team.',
     choices: routes.map((route) => route.flowName),
@@ -233,7 +233,7 @@ export function starterFlows(companyName: string): StarterFlow[] {
           { id: 'l4', type: 'flow-node', position: { x: 680, y }, data: { kind: 'ask_question', label: 'Email', config: { question: 'What is your work email?', variable: 'email', validate: 'email' } } },
           { id: 'l5', type: 'flow-node', position: { x: 880, y }, data: { kind: 'ask_question', label: 'Team size', config: { question: 'How large is your team?', variable: 'team_size', choices: ['1-10', '11-50', '51-200', '200+'] } } },
           { id: 'l6', type: 'flow-node', position: { x: 1080, y }, data: { kind: 'http_request', label: 'Push to CRM', config: { method: 'POST', url: '', body: { email: '{{email}}', company: '{{company}}', team_size: '{{team_size}}' } } } },
-          { id: 'l7', type: 'flow-node', position: { x: 1280, y }, data: { kind: 'send_message', label: 'Confirm', config: { text: 'Thanks {{contact.name}}. Someone from the team will be in touch within 24 hours.' } } },
+          { id: 'l7', type: 'flow-node', position: { x: 1280, y }, data: { kind: 'send_message', label: 'Confirm', config: { text: 'Thanks. Someone from the team will be in touch within 24 hours.' } } },
           { id: 'l8', type: 'flow-node', position: { x: 1480, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
         ],
         edges: [

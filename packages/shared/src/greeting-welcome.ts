@@ -1,11 +1,9 @@
 /**
  * Opening shape shared by the welcomes.
- * The first line is a greeting and it waits. A later "hi" asks one question:
- * the visitor's name when we do not know it, or the pack's next question when we do.
+ * The first line is a greeting and it waits. A later "hi" asks the pack's next question.
+ * No name question: nothing after the welcome uses the name, so asking it only costs a turn.
  * A first message that is already a request is greeted and handed to that flow.
  */
-
-import { NAME_QUESTION } from './contact-speech.js'
 
 export function assistantGreeting(companyName: string): string {
   const company = companyName.trim() || 'the team'
@@ -27,35 +25,26 @@ export function greetingWelcomeGraph(input: {
   choices?: string[]
 }): { nodes: object[]; edges: object[] } {
   const y = 80
+  const low = y + Math.max(input.routes.length, 1) * 72 + 120
   const followConfig: Record<string, unknown> = { question: input.followUp, variable: 'request' }
   if (input.choices && input.choices.length > 0) followConfig['choices'] = input.choices
   const nodes: object[] = [
     { id: 'start', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Start', config: {} } },
     { id: 'save', type: 'flow-node', position: { x: 300, y }, data: { kind: 'set_variable', label: 'Keep the request', config: { variable: 'topic', value: '{{_last_user_message}}' } } },
     { id: 'route', type: 'flow-node', position: { x: 540, y }, data: { kind: 'route_topic', label: 'Route the opening', config: { routes: input.routes.map(routeConfig) } } },
-    { id: 'named', type: 'flow-node', position: { x: 820, y: 280 }, data: { kind: 'condition', label: 'Name known?', config: { conditions: [{ field: 'contact.name', operator: 'equals', value: 'there' }] } } },
-    ask('greet', 1080, 160, 'Hello', input.greeting, 'greeting_reply'),
-    ask('greet-known', 1080, 400, 'Hello by name', 'Hi {{contact.name}}.', 'greeting_reply'),
-    { id: 'route2', type: 'flow-node', position: { x: 1340, y: 280 }, data: { kind: 'route_topic', label: 'Route the reply', config: { routes: input.routes.map(routeConfig) } } },
-    { id: 'named2', type: 'flow-node', position: { x: 1600, y: 480 }, data: { kind: 'condition', label: 'Still unnamed?', config: { conditions: [{ field: 'contact.name', operator: 'equals', value: 'there' }] } } },
-    ask('name', 1840, 360, 'Name', NAME_QUESTION, 'guest_name'),
-    { id: 'follow', type: 'flow-node', position: { x: 2080, y: 520 }, data: { kind: 'ask_question', label: 'Ask', config: followConfig } },
-    { id: 'route3', type: 'flow-node', position: { x: 2340, y: 520 }, data: { kind: 'route_topic', label: 'Route what they want', config: { routes: input.routes.map(routeConfig) } } },
-    { id: 'menu', type: 'flow-node', position: { x: 2600, y: 680 }, data: { kind: 'send_message', label: 'Offer a next step', config: { text: input.menu } } },
-    { id: 'end', type: 'flow-node', position: { x: 2860, y: 680 }, data: { kind: 'end_flow', label: 'End', config: {} } },
+    ask('greet', 820, low, 'Hello', input.greeting, 'greeting_reply'),
+    { id: 'route2', type: 'flow-node', position: { x: 1080, y: low }, data: { kind: 'route_topic', label: 'Route the reply', config: { routes: input.routes.map(routeConfig) } } },
+    { id: 'follow', type: 'flow-node', position: { x: 1340, y: low }, data: { kind: 'ask_question', label: 'Ask', config: followConfig } },
+    { id: 'route3', type: 'flow-node', position: { x: 1600, y: low }, data: { kind: 'route_topic', label: 'Route what they want', config: { routes: input.routes.map(routeConfig) } } },
+    { id: 'menu', type: 'flow-node', position: { x: 1860, y: low + 160 }, data: { kind: 'send_message', label: 'Offer a next step', config: { text: input.menu } } },
+    { id: 'end', type: 'flow-node', position: { x: 2120, y: low + 160 }, data: { kind: 'end_flow', label: 'End', config: {} } },
   ]
   const edges: object[] = [
     { id: 'e-start', source: 'start', target: 'save' },
     { id: 'e-save', source: 'save', target: 'route' },
-    { id: 'e-other', source: 'route', target: 'named', sourceHandle: 'other' },
-    { id: 'e-named-yes', source: 'named', target: 'greet', sourceHandle: 'yes' },
-    { id: 'e-named-no', source: 'named', target: 'greet-known', sourceHandle: 'no' },
+    { id: 'e-other', source: 'route', target: 'greet', sourceHandle: 'other' },
     { id: 'e-greet', source: 'greet', target: 'route2' },
-    { id: 'e-greet-known', source: 'greet-known', target: 'route2' },
-    { id: 'e-other-2', source: 'route2', target: 'named2', sourceHandle: 'other' },
-    { id: 'e-named2-yes', source: 'named2', target: 'name', sourceHandle: 'yes' },
-    { id: 'e-named2-no', source: 'named2', target: 'follow', sourceHandle: 'no' },
-    { id: 'e-name', source: 'name', target: 'follow' },
+    { id: 'e-other-2', source: 'route2', target: 'follow', sourceHandle: 'other' },
     { id: 'e-follow', source: 'follow', target: 'route3' },
     { id: 'e-other-3', source: 'route3', target: 'menu', sourceHandle: 'other' },
     { id: 'e-end', source: 'menu', target: 'end' },

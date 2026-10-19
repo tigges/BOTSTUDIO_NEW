@@ -219,7 +219,7 @@ function welcomeFlow(companyName: string, topics: Topic[], personaName?: string)
     publish: true,
     graph: greetingWelcomeGraph({
       greeting: voice ? `Hi, I'm ${voice} at ${company}.` : assistantGreeting(company),
-      followUp: 'Hi {{contact.name}}. What do you need help with?',
+      followUp: 'What do you need help with?',
       routes,
       menu: 'I can help with opening hours, shipping, a return, order tracking, payments, a password, plans, or a person on the team. Tell me which one you need.',
       choices: topics.map((topic) => topic.choice),
