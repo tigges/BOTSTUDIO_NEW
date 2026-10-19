@@ -27,6 +27,8 @@ const IMPORT_TIMEOUT_MS = 20_000
 const FETCH_TIMEOUT_MS = 8_000
 const PAGE_CHARS = 1_800
 const MAX_JOBS = 8
+const SHINGLE = 8
+const CHROME_WORDS = 4_000
 const PAGE_POOL = 24
 const SHOP_POOL = 6
 
@@ -71,15 +73,53 @@ export function importLlmComplete(): CompleteFn | null {
   return cloudLlmComplete(IMPORT_TIMEOUT_MS)
 }
 
+/**
+ * Menus and footers repeat on every page and fill the first PAGE_CHARS of each.
+ * Runs of SHINGLE words seen on two or more pages move behind the homepage's own copy
+ * and drop from the other pages, so the model reads what each page says.
+ */
+export function pageTextsWithoutChrome(pages: ScannedPage[]): string[] {
+  const words = pages.map((page) => page.text.replace(/\s+/g, ' ').trim().split(' ').slice(0, CHROME_WORDS))
+  if (pages.length < 2) return words.map((list) => list.join(' '))
+  const pagesWith = new Map<string, number>()
+  const keysOf = words.map((list) => {
+    const keys: string[] = []
+    for (let i = 0; i + SHINGLE <= list.length; i += 1) keys.push(list.slice(i, i + SHINGLE).join(' ').toLowerCase())
+    for (const key of new Set(keys)) pagesWith.set(key, (pagesWith.get(key) ?? 0) + 1)
+    return keys
+  })
+  return words.map((list, index) => {
+    const shared = new Uint8Array(list.length)
+    keysOf[index]!.forEach((key, at) => {
+      if ((pagesWith.get(key) ?? 0) >= 2) shared.fill(1, at, at + SHINGLE)
+    })
+    const own = list.filter((_, at) => !shared[at]).join(' ')
+    if (own.length < 40) return list.join(' ')
+    if (index > 0) return own
+    return `${own} ${list.filter((_, at) => shared[at]).join(' ')}`.trim()
+  })
+}
+
 function pagesPrompt(pages: ScannedPage[]): string {
-  return pages
+  const usable = pages
     .filter((page) => !isMissingPage(page) && page.text.trim().length > 40)
     .slice(0, 10)
-    .map((page) => {
-      const text = page.text.replace(/\s+/g, ' ').trim().slice(0, PAGE_CHARS)
-      return `## ${page.title || page.url}\nURL: ${page.url}\n${text}`
-    })
+  const texts = pageTextsWithoutChrome(usable)
+  return usable
+    .map((page, index) => `## ${page.title || page.url}\nURL: ${page.url}\n${texts[index]!.slice(0, PAGE_CHARS)}`)
     .join('\n\n')
+}
+
+function hostOf(pages: ScannedPage[]): string {
+  try {
+    return new URL(pages[0]?.url ?? '').host
+  } catch {
+    return 'unknown site'
+  }
+}
+
+function warnImport(pages: ScannedPage[], reason: string): void {
+  console.warn(`[site-jobs] ${hostOf(pages)}: ${reason}. Using the page compiler.`)
 }
 
 function parseJobsPayload(raw: string): Array<{ name?: string; phrases?: unknown; answer?: string }> {
@@ -132,25 +172,45 @@ export async function jobsFromModelPages(
   complete: CompleteFn,
 ): Promise<SiteTopic[] | null> {
   const usable = pages.filter((page) => !isMissingPage(page) && page.text.trim().length > 40)
-  if (usable.length === 0) return null
+  if (usable.length === 0) {
+    warnImport(pages, 'no readable pages for the model')
+    return null
+  }
   const user = `Pages:\n${pagesPrompt(usable)}\n\nJSON:`
   let raw = ''
   try {
     raw = await complete({ system: SYSTEM, user })
-  } catch {
+  } catch (err) {
+    warnImport(pages, `the model call failed (${String((err as Error)?.message ?? err).slice(0, 200)})`)
     return null
   }
   const blob = pageBlob(usable)
+  const rows = parseJobsPayload(raw)
   const topics: SiteTopic[] = []
-  for (const row of parseJobsPayload(raw)) {
+  let junk = 0
+  let ungrounded = 0
+  for (const row of rows) {
     const topic = asTopic(row)
-    if (!topic) continue
-    if (isJunkAnswer(topic.answer) || isJunkAnswer(topic.flowName)) continue
-    if (!answerGrounded(topic.answer, blob)) continue
+    if (!topic) {
+      junk += 1
+      continue
+    }
+    if (isJunkAnswer(topic.answer) || isJunkAnswer(topic.flowName)) {
+      junk += 1
+      continue
+    }
+    if (!answerGrounded(topic.answer, blob)) {
+      ungrounded += 1
+      continue
+    }
     topics.push(topic)
     if (topics.length >= MAX_JOBS) break
   }
-  return topics.length > 0 ? topics : null
+  if (topics.length > 0) return topics
+  warnImport(pages, rows.length === 0
+    ? `the model reply held no jobs (${raw.length} chars)`
+    : `the model listed ${rows.length} jobs; ${junk} were empty or junk and ${ungrounded} were not stated on the pages`)
+  return null
 }
 
 const PAGE_PICK_SYSTEM = [
@@ -281,7 +341,10 @@ export async function draftWebsiteChatWithModel(input: {
   const cluster = suggestCluster(`${input.pages.map((page) => `${page.text} ${page.url}`).join('\n')}`)
   if (cluster === 'hair') return fallback()
   const complete = input.complete === undefined ? importLlmComplete() : input.complete
-  if (!complete) return fallback()
+  if (!complete) {
+    if (input.complete === undefined) warnImport(input.pages, 'no Gemini, Groq, OpenAI or Anthropic key is set')
+    return fallback()
+  }
   const jobs = await jobsFromModelPages(input.pages, complete)
   if (!jobs) return fallback()
   const spec = learnedSpecFromJobs({
@@ -316,7 +379,10 @@ export async function draftSiteSpecWithModel(input: {
   const cluster = suggestCluster(`${input.pages.map((page) => `${page.text} ${page.url}`).join('\n')}`)
   if (cluster === 'hair') return fallback()
   const complete = input.complete === undefined ? importLlmComplete() : input.complete
-  if (!complete) return fallback()
+  if (!complete) {
+    if (input.complete === undefined) warnImport(input.pages, 'no Gemini, Groq, OpenAI or Anthropic key is set')
+    return fallback()
+  }
   const jobs = await jobsFromModelPages(input.pages, complete)
   if (!jobs) return fallback()
   return learnedSpecFromJobs({
