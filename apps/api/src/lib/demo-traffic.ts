@@ -116,6 +116,11 @@ export const ACME_TRAFFIC_TICKETS: TicketTemplate[] = [
 const BELLA_GUESTS = ['Maya Chen', 'Luca Rossi', 'Priya Shah', 'Owen Blake', 'Hannah Cole', 'Yusuf Ali']
 const ACME_GUESTS = ['Riley Adams', 'Jordan Lee', 'Casey Ng', 'Samira Holt', 'Noah Price', 'Eden Ward']
 
+/** A handover chat waits for the team; the rest stay open until the quiet-chat sweep closes them for the bot. */
+export function trafficStatus(template: ChatTemplate): 'escalated' | 'active' {
+  return template.chapter === 'Talk to a person' ? 'escalated' : 'active'
+}
+
 export function trafficSlot(at = new Date()): string {
   const iso = at.toISOString()
   return `${iso.slice(0, 10)}-${iso.slice(11, 13)}`
@@ -221,7 +226,7 @@ async function insertChat(target: DemoTarget, template: ChatTemplate, slot: stri
       environmentId: target.environmentId,
       channelId: target.channelId,
       contactId,
-      status: 'active',
+      status: trafficStatus(template),
       subject: template.subject,
       createdAt,
     },

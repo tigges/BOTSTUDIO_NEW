@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { hairStudioPack, journeyLayout, journeyTrail } from '@ybot/shared'
-import { logChapterEntry, tallyJourneyChats } from './journey-traffic.js'
+import { journeyTraffic, logChapterEntry, tallyJourneyChats } from './journey-traffic.js'
 
 function input(flow: { name: string; tags?: string[]; graph: unknown }, index: number, published = true) {
   return { id: `f${index}`, name: flow.name, tags: flow.tags ?? [], published, graph: flow.graph }
@@ -147,4 +147,35 @@ test('a chat logged into a named chapter counts there, and a missing chapter wri
   assert.equal(await logChapterEntry(db, { tenantId: 't', botId: 'b', conversationId: 'c2', chapter: 'Gone chapter', at }), false)
   assert.deepEqual(written, [{ conversationId: 'c1', flowVersionId: 'v-hours' }])
   assert.deepEqual(tallyJourneyChats(written.map((row) => ({ flowId: 'hours', conversationId: row.conversationId }))), { hours: 1 })
+})
+
+test('each chapter reports how its chats ended, on the chosen environment only', async () => {
+  const db = {
+    flowVersion: { findMany: async () => [{ id: 'v-book', flowId: 'book' }, { id: 'v-person', flowId: 'person' }] },
+    stepLog: {
+      findMany: async () => [
+        { conversationId: 'c1', flowVersionId: 'v-book' },
+        { conversationId: 'c2', flowVersionId: 'v-book' },
+        { conversationId: 'c3', flowVersionId: 'v-book' },
+        { conversationId: 'c3', flowVersionId: 'v-person' },
+        { conversationId: 'c4', flowVersionId: 'v-book' },
+        { conversationId: 'sandbox', flowVersionId: 'v-book' },
+      ],
+    },
+    conversation: {
+      findMany: async () => [
+        { id: 'c1', status: 'resolved', assignedTo: null, environmentId: 'prod' },
+        { id: 'c2', status: 'active', assignedTo: null, environmentId: 'prod' },
+        { id: 'c3', status: 'escalated', assignedTo: null, environmentId: 'prod' },
+        { id: 'c4', status: 'resolved', assignedTo: 'agent-1', environmentId: 'prod' },
+        { id: 'sandbox', status: 'resolved', assignedTo: null, environmentId: 'sand' },
+      ],
+    },
+  } as unknown as Parameters<typeof journeyTraffic>[0]
+  const traffic = await journeyTraffic(db, 't', 'b', new Date(0), 'prod')
+  assert.deepEqual(traffic.chats, { book: 4, person: 1 })
+  assert.deepEqual(traffic.outcomes['book'], { chats: 4, bot: 1, person: 2, open: 1 })
+  assert.deepEqual(traffic.outcomes['person'], { chats: 1, bot: 0, person: 1, open: 0 })
+  assert.deepEqual(traffic.total, { chats: 4, bot: 1, person: 2, open: 1 })
+  assert.deepEqual((await journeyTraffic(db, 't', 'b', new Date(0))).total, { chats: 5, bot: 2, person: 2, open: 1 })
 })

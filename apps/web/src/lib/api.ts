@@ -117,8 +117,22 @@ export const flows = {
     apiFetch<{ data: unknown }>(`/bots/${botId}/flows/${flowId}/versions/${version}/canvas`, { method: 'PUT', body: JSON.stringify({ graph }) }),
   publish: (botId: string, flowId: string, environmentId: string, version?: number) =>
     apiFetch<{ data: FlowVersion }>(`/bots/${botId}/flows/${flowId}/publish`, { method: 'POST', body: JSON.stringify({ environmentId, ...(version ? { version } : {}) }) }),
-  traffic: (botId: string) =>
-    apiFetch<{ data: { days: number; chats: Record<string, number> } }>(`/bots/${botId}/journey-traffic`),
+  traffic: (botId: string, environmentId?: string) =>
+    apiFetch<{ data: JourneyTraffic }>(`/bots/${botId}/journey-traffic${environmentId ? `?environmentId=${encodeURIComponent(environmentId)}` : ''}`),
+}
+
+export interface ChapterOutcome {
+  chats: number
+  bot: number
+  person: number
+  open: number
+}
+
+export interface JourneyTraffic {
+  days: number
+  chats: Record<string, number>
+  outcomes?: Record<string, ChapterOutcome>
+  total?: ChapterOutcome
 }
 
 export interface LearnedSiteDoor {

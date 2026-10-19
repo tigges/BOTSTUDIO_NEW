@@ -3,7 +3,7 @@ import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { z } from 'zod'
 import { attachDestination } from '../lib/welcome-routes.js'
-import { journeyChatCounts } from '../lib/journey-traffic.js'
+import { journeyTraffic } from '../lib/journey-traffic.js'
 import { inspectFlowGraph, versionsForEnvironmentList } from '@ybot/shared'
 import { LearnError, dismissLearningDraft, learnFromRated, learnFromSamples, learnSnapshot, publishLearningDraft } from '../lib/learn-store.js'
 
@@ -34,9 +34,10 @@ export async function flowsRoutes(app: FastifyInstance) {
   app.get('/:botId/journey-traffic', async (request) => {
     const { tenantId } = request.user as JWT
     const { botId } = request.params as { botId: string }
+    const { environmentId } = request.query as { environmentId?: string }
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    const chats = await journeyChatCounts(prisma, tenantId, botId, since)
-    return { data: { days: 30, chats } }
+    const traffic = await journeyTraffic(prisma, tenantId, botId, since, environmentId || undefined)
+    return { data: { days: 30, ...traffic } }
   })
 
   // POST /bots/:botId/flows

@@ -18,6 +18,7 @@ import { createLlmAdapter, createEmbeddingAdapter } from '@ybot/llm'
 import type { LlmMessage } from '@ybot/llm'
 import { fillNameTokens } from '@ybot/shared'
 import { finishBotLines, saveContactName, takeNameTurn, type NamePlan, type VisitorName } from './lib/visitor-name.js'
+import { keepWithBot, liveAgentsFor, reopenForBot, resolveByBot } from './lib/chat-outcome.js'
 
 const llm = createLlmAdapter()
 const embedAdapter = createEmbeddingAdapter()
@@ -268,10 +269,13 @@ export async function processInboundMessage(
     const flowStreamChunk = (chunk: string) => {
       app.broadcastToTenant(tenantId, { event: 'message.chunk', data: { conversationId, chunk } })
     }
+    await reopenForBot(conversationId)
     const result = await machine.run(session, graph, incomingText, flowStreamChunk)
+    const keep = Boolean(result.handover) && !(await liveAgentsFor(botId))
+    const spoken = result.newMessages.map((msg) => msg.content.text)
 
     const finished = finishBotLines(
-      result.newMessages.map((msg) => msg.content.text),
+      keep ? keepWithBot(spoken) : spoken,
       named.contact,
       named.spoken,
       { waiting: result.session.status === 'waiting_input', conversationId },
@@ -287,11 +291,10 @@ export async function processInboundMessage(
       app.broadcastToTenant(tenantId, { event: 'message.created', data: saved })
     }
 
-    if (result.handover) {
+    if (result.handover && !keep) {
       await prisma.conversation.update({ where: { id: conversationId }, data: { status: 'escalated', updatedAt: new Date() } })
-    }
-    if (result.completed) {
-      await prisma.conversation.update({ where: { id: conversationId }, data: { status: 'resolved', updatedAt: new Date() } })
+    } else if (result.completed) {
+      await resolveByBot(conversationId)
     }
 
     await saveSession(result.session)

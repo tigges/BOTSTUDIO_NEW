@@ -8,6 +8,7 @@ import {
   BELLA_TRAFFIC_TICKETS,
   trafficConversationId,
   trafficSlot,
+  trafficStatus,
   trafficTicketId,
 } from './demo-traffic.js'
 
@@ -26,6 +27,11 @@ test('Bella traffic follows the colour booking walk, not a promotion', () => {
 test('Acme traffic stays on the named support chapters', () => {
   const chapters = ACME_TRAFFIC_CHATS.map((chat) => chat.chapter)
   assert.deepEqual(chapters, ['Order Status', 'Return Request', 'Billing', 'Talk to a person'])
+})
+
+test('only the handover demo chat waits for the team; the bot closes the rest', () => {
+  assert.deepEqual(ACME_TRAFFIC_CHATS.map(trafficStatus), ['active', 'active', 'active', 'escalated'])
+  assert.equal(BELLA_TRAFFIC_CHATS.every((chat) => trafficStatus(chat) === 'active'), true)
 })
 
 test('traffic ids are stable for the same hour so a rerun does not duplicate', () => {
