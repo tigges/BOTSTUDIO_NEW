@@ -5,7 +5,7 @@
  * the model fails, or the site is a hair studio (authored salon walk).
  */
 
-import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
+import { createLlmAdapter } from '@ybot/llm'
 import {
   chooseShopHomes,
   chooseSitePages,
@@ -49,50 +49,108 @@ export interface ImportReport {
   why: string
 }
 
-export function importProviderName(env: Record<string, string | undefined> = process.env): string | null {
-  if (env['GEMINI_API_KEY']) return 'Gemini'
-  if (env['GROQ_API_KEY']) return 'Groq'
-  if (env['OPENAI_API_KEY']) return 'OpenAI'
-  if (env['ANTHROPIC_API_KEY']) return 'Anthropic'
-  return null
+interface ImportProvider {
+  name: string
+  model: string
+  env: Record<string, string | undefined>
 }
 
-function failureWords(err: unknown): string {
+/** Every cloud key the API has, in the same order as chat, each on the model the API is set to use. */
+export function importProviders(env: Record<string, string | undefined> = process.env): ImportProvider[] {
+  const providers: ImportProvider[] = []
+  if (env['GEMINI_API_KEY']) {
+    const model = env['GEMINI_MODEL'] || 'gemini-2.0-flash'
+    providers.push({ name: 'Gemini', model, env: { GEMINI_API_KEY: env['GEMINI_API_KEY'], GEMINI_MODEL: model } })
+  }
+  if (env['GROQ_API_KEY']) {
+    const model = env['GROQ_MODEL'] || 'llama-3.3-70b-versatile'
+    providers.push({ name: 'Groq', model, env: { GROQ_API_KEY: env['GROQ_API_KEY'], GROQ_MODEL: model } })
+  }
+  if (env['OPENAI_API_KEY']) {
+    const model = env['OPENAI_MODEL'] || 'gpt-4o'
+    providers.push({ name: 'OpenAI', model, env: { OPENAI_API_KEY: env['OPENAI_API_KEY'], OPENAI_MODEL: model } })
+  }
+  if (env['ANTHROPIC_API_KEY']) {
+    const model = env['ANTHROPIC_MODEL'] || 'claude-sonnet-4-5'
+    providers.push({ name: 'Anthropic', model, env: { ANTHROPIC_API_KEY: env['ANTHROPIC_API_KEY'], ANTHROPIC_MODEL: model } })
+  }
+  return providers
+}
+
+export function importProviderName(env: Record<string, string | undefined> = process.env): string | null {
+  return importProviders(env)[0]?.name ?? null
+}
+
+/** Each provider that was tried and why it gave nothing. */
+export class ImportModelError extends Error {
+  constructor(readonly failures: Array<{ name: string; model: string; error: unknown }>) {
+    super(failures.map((failure) => `${failure.name} (${failure.model}): ${String((failure.error as Error)?.message ?? failure.error).slice(0, 200)}`).join('; '))
+  }
+}
+
+const ENV_FOR: Record<string, string> = { Gemini: 'GEMINI_MODEL', Groq: 'GROQ_MODEL', OpenAI: 'OPENAI_MODEL', Anthropic: 'ANTHROPIC_MODEL' }
+
+function failureWords(err: unknown, name?: string, model?: string): string {
   const message = String((err as Error)?.message ?? err)
   if (/timed out/i.test(message)) return `took longer than ${IMPORT_TIMEOUT_MS / 1000} seconds`
   const status = message.match(/\b([45]\d\d)\b/)?.[1]
   if (status === '429') return 'is rate limited (HTTP 429)'
   if (status === '401' || status === '403') return `rejected the key (HTTP ${status})`
+  if (status === '404' && model) {
+    return `has no model called ${model} (HTTP 404). Set ${name ? ENV_FOR[name] ?? 'the model' : 'the model'} on the API to a current model`
+  }
   return status ? `did not answer (HTTP ${status})` : 'did not answer'
 }
 
-export function cloudLlmComplete(timeoutMs = IMPORT_TIMEOUT_MS): CompleteFn | null {
-  const env = process.env
-  const adapter = env['GEMINI_API_KEY']
-    ? createLlmAdapterForModel('gemini-2.0-flash', env)
-    : env['GROQ_API_KEY']
-      ? createLlmAdapterForModel('groq/llama-3.3-70b-versatile', env)
-      : env['OPENAI_API_KEY'] || env['ANTHROPIC_API_KEY']
-        ? createLlmAdapter(env)
-        : null
-  if (!adapter) return null
-  return async ({ system, user }) => {
-    const result = await Promise.race([
-      adapter.complete({
-        messages: [{ role: 'user', content: user }],
-        systemPrompt: system,
-        temperature: 0,
-        maxTokens: 2048,
-      }),
-      new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('import model timed out')), timeoutMs)
-      }),
-    ])
-    return result.content
+export function modelFailureWhy(err: unknown, fallbackName: string): string {
+  if (err instanceof ImportModelError) {
+    return err.failures.map((failure) => `${failure.name} ${failureWords(failure.error, failure.name, failure.model)}.`).join(' ')
   }
+  return `${fallbackName} ${failureWords(err)}.`
 }
 
-export function importLlmComplete(): CompleteFn | null {
+export type ChainedComplete = CompleteFn & { answeredBy?: string }
+
+/** Tries each provider in turn inside one time budget, so one retired model does not end the import. */
+export function cloudLlmComplete(timeoutMs = IMPORT_TIMEOUT_MS, env: Record<string, string | undefined> = process.env): ChainedComplete | null {
+  const providers = importProviders(env)
+  if (providers.length === 0) return null
+  const complete: ChainedComplete = async ({ system, user }) => {
+    const deadline = Date.now() + timeoutMs
+    const failures: Array<{ name: string; model: string; error: unknown }> = []
+    for (const provider of providers) {
+      const left = deadline - Date.now()
+      if (left <= 0) {
+        failures.push({ name: provider.name, model: provider.model, error: new Error('import model timed out') })
+        break
+      }
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        const result = await Promise.race([
+          createLlmAdapter(provider.env).complete({
+            messages: [{ role: 'user', content: user }],
+            systemPrompt: system,
+            temperature: 0,
+            maxTokens: 2048,
+          }),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('import model timed out')), left)
+          }),
+        ])
+        complete.answeredBy = provider.name
+        return result.content
+      } catch (error) {
+        failures.push({ name: provider.name, model: provider.model, error })
+      } finally {
+        clearTimeout(timer)
+      }
+    }
+    throw new ImportModelError(failures)
+  }
+  return complete
+}
+
+export function importLlmComplete(): ChainedComplete | null {
   return cloudLlmComplete(IMPORT_TIMEOUT_MS)
 }
 
@@ -195,7 +253,7 @@ export async function jobsFromModelPages(
   complete: CompleteFn,
   onMiss?: (why: string) => void,
 ): Promise<SiteTopic[] | null> {
-  const model = importProviderName() ?? 'The AI model'
+  const fallbackName = importProviderName() ?? 'The AI model'
   const usable = pages.filter((page) => !isMissingPage(page) && page.text.trim().length > 40)
   if (usable.length === 0) {
     warnImport(pages, 'no readable pages for the model')
@@ -208,9 +266,10 @@ export async function jobsFromModelPages(
     raw = await complete({ system: SYSTEM, user })
   } catch (err) {
     warnImport(pages, `the model call failed (${String((err as Error)?.message ?? err).slice(0, 200)})`)
-    onMiss?.(`${model} ${failureWords(err)}.`)
+    onMiss?.(modelFailureWhy(err, fallbackName))
     return null
   }
+  const model = (complete as ChainedComplete).answeredBy ?? fallbackName
   const blob = pageBlob(usable)
   const rows = parseJobsPayload(raw)
   const topics: SiteTopic[] = []
@@ -382,7 +441,8 @@ export async function draftWebsiteChatWithModel(input: {
   let miss = 'The AI model gave no usable topics.'
   const jobs = await jobsFromModelPages(input.pages, complete, (why) => { miss = why })
   if (!jobs) return fallback(miss)
-  input.report?.({ by: 'model', why: `${importProviderName() ?? 'The AI model'} drafted ${jobs.length} ${jobs.length === 1 ? 'topic' : 'topics'} from the pages.` })
+  const answeredBy = (complete as ChainedComplete).answeredBy ?? importProviderName() ?? 'The AI model'
+  input.report?.({ by: 'model', why: `${answeredBy} drafted ${jobs.length} ${jobs.length === 1 ? 'topic' : 'topics'} from the pages.` })
   const spec = learnedSpecFromJobs({
     pages: input.pages,
     companyName: input.companyName,
