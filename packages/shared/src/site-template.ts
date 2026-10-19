@@ -376,7 +376,7 @@ function looksLikePlanCopy(page: ScannedPage): boolean {
   return PLAN_COPY.test(`${page.title} ${page.text.slice(0, 800)}`)
 }
 
-function planAnswer(page: ScannedPage): string | null {
+function planAnswer(page: ScannedPage, shared?: Set<string>): string | null {
   const parts = splitCopy(page.text)
   const hit = parts.find((part) => {
     if (part.length < 32 || part.length > 280) return false
@@ -384,7 +384,7 @@ function planAnswer(page: ScannedPage): string | null {
     return PLAN_COPY.test(part) || /\b(?:plan|sim|tariff|a month)\b/i.test(part)
   })
   if (hit) return clip(hit)
-  return leadFromPage(page)
+  return leadFromPage(page, shared)
 }
 
 function hasPlanTopic(topics: SiteTopic[]): boolean {
@@ -509,12 +509,40 @@ function titleFromPage(page: ScannedPage): string {
   return 'About'
 }
 
-function leadFromPage(page: ScannedPage): string | null {
+/** Headings set with a space between letters ("T h e  P l a t f o r m") read as noise in a chat. */
+function isLetterSpaced(text: string): boolean {
+  const tokens = text.split(/\s+/).filter(Boolean)
+  return tokens.length >= 6 && tokens.filter((token) => token.length === 1).length / tokens.length > 0.5
+}
+
+/** Lines printed on two or more pages are menus and footers, not what a page says. */
+function sharedLines(pages: ScannedPage[]): Set<string> {
+  const seen = new Map<string, number>()
+  for (const page of pages) {
+    for (const line of new Set(splitCopy(page.text).map((part) => part.toLowerCase()))) {
+      seen.set(line, (seen.get(line) ?? 0) + 1)
+    }
+  }
+  return new Set([...seen].filter(([, count]) => count >= 2).map(([line]) => line))
+}
+
+/**
+ * The line that answers a page's door. On the homepage that door is "What we do": the site's own
+ * meta description says it best, and a price line (a plan or a price-rise footnote) waits for Plans.
+ */
+function leadFromPage(page: ScannedPage, shared?: Set<string>): string | null {
+  const home = isHomePage(page)
+  const summary = page.description?.trim() ?? ''
+  if (home && summary.length >= 32 && summary.length <= 280 && !isJunkAnswer(summary) && !isLetterSpaced(summary)) {
+    return clip(summary)
+  }
   let best: { text: string; score: number } | null = null
   for (const part of splitCopy(page.text)) {
     if (part.length < 32 || part.length > 280) continue
-    if (isJunkAnswer(part)) continue
+    if (isJunkAnswer(part) || isLetterSpaced(part)) continue
     let score = 8
+    if (home && /[£$€]\s?\d/.test(part)) score -= 4
+    if (shared?.has(part.toLowerCase())) score -= 6
     if (/[.!?]$/.test(part)) score += 3
     if (part.length >= 48 && part.length <= 160) score += 2
     if (part.length > 180) score -= 2
@@ -561,6 +589,7 @@ export function draftClusteredTemplate(input: {
     ...page,
     title: abstractBrand(page.title),
     text: abstractBrand(page.text),
+    ...(page.description ? { description: abstractBrand(page.description) } : {}),
   }))
   const working = input.keepBrand ? pages : branded
   const clusterId = input.clusterId && input.clusterId !== 'custom'
@@ -581,6 +610,7 @@ export function draftClusteredTemplate(input: {
   const topics: SiteTopic[] = []
   const used = new Set<string>()
   const rest = working.filter((page) => !isHomePage(page))
+  const shared = sharedLines(working)
   const ordered = [
     ...working.filter((page) => isHomePage(page)),
     ...rest.filter((page) => isPricingPage(page)).sort((a, b) => planPageScore(b) - planPageScore(a)),
@@ -589,7 +619,7 @@ export function draftClusteredTemplate(input: {
   for (const page of ordered) {
     if (isJunkSitePage(page)) continue
     if (isPricingPage(page) && tiers.length >= 2) continue
-    const found = isPricingPage(page) ? (planAnswer(page) ?? leadFromPage(page)) : leadFromPage(page)
+    const found = isPricingPage(page) ? (planAnswer(page, shared) ?? leadFromPage(page, shared)) : leadFromPage(page, shared)
     if (!found) continue
     const name = uniqueFlowName(titleFromPage(page), used)
     if (!name) continue

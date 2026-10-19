@@ -92,6 +92,32 @@ test('crawled brand names come off so the map can sit as a template', () => {
   )
 })
 
+test('what we do is said in the site voice, not a price footnote, a spaced heading, or a footer', () => {
+  const footer = 'Read about our approach to external linking and cookies.'
+  const home = pageFromHtml('https://www.northwind.co.uk/', `<html><head><title>Northwind</title></head><body>
+    <p>Increases to £44 on 1 April 2027 and £49 on 1 April 2028.</p>
+    <h1>T h e   F a s t e s t   N e t w o r k   i n   T o w n</h1>
+    <p>We connect homes and businesses across the UK with fibre and mobile.</p>
+    <p>${footer}</p>
+  </body></html>`)
+  const help = pageFromHtml('https://www.northwind.co.uk/help', `<html><head><title>Help</title></head><body>
+    <p>${footer}</p>
+    <p>Find answers about bills, coverage and moving home in one place.</p>
+  </body></html>`)
+  const spec = draftClusteredTemplate({ pages: [home, help], companyName: 'Northwind', keepBrand: true })
+  const what = spec.topics.find((topic) => topic.flowName === 'What we do')
+  assert.equal(what?.answer, 'We connect homes and businesses across the UK with fibre and mobile.')
+  assert.equal(spec.topics.find((topic) => topic.flowName === 'Help')?.answer, 'Find answers about bills, coverage and moving home in one place.')
+
+  const described = pageFromHtml('https://www.northwind.co.uk/', `<html><head><title>Northwind</title>
+    <meta name="description" content="Northwind sells phones, SIM only plans and full fibre broadband across the UK." /></head>
+    <body><p>Increases to £44 on 1 April 2027 and £49 on 1 April 2028.</p></body></html>`)
+  assert.equal(described.description, 'Northwind sells phones, SIM only plans and full fibre broadband across the UK.')
+  const fromSummary = draftClusteredTemplate({ pages: [described], companyName: 'Acme' })
+  assert.equal(fromSummary.topics[0]?.flowName, 'What we do')
+  assert.match(fromSummary.topics[0]!.answer, /sells phones, SIM only plans and full fibre broadband/)
+})
+
 test('the software pack from cevro.ai answers without brand names', async () => {
   const pack = bakedPack('product-support', 'Northwind')
   assert.ok(pack)
