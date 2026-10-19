@@ -1,5 +1,28 @@
 import type { LlmProvider, LlmCompleteParams, LlmCompleteResult, LlmEmbedParams, LlmEmbedResult, LlmStreamParams } from '../types.js'
 
+// Claude 3, Sonnet/Opus 4.0-4.6 and Haiku 4.5 take sampling settings; newer models answer HTTP 400 to any non-default value.
+const TAKES_TEMPERATURE = /^claude-(?:3|(?:sonnet|opus)-4(?:-[0-6])?(?:-\d{8})?$|haiku-4-5)/
+
+// Sonnet 5.x think adaptively when `thinking` is left out; 5.5 switches it off with `between_tools`, 5.0 with `disabled`.
+function thinkingOff(model: string): { type: string } | undefined {
+  if (/^claude-sonnet-5-5(?:$|-)/.test(model)) return { type: 'between_tools' }
+  if (/^claude-sonnet-5(?:$|-\d{8}$)/.test(model)) return { type: 'disabled' }
+  return undefined
+}
+
+export function anthropicRequest(params: LlmCompleteParams): Record<string, unknown> {
+  const model = params.model ?? 'claude-sonnet-5-5'
+  const thinking = thinkingOff(model)
+  return {
+    model,
+    messages: params.messages.filter((m) => m.role !== 'system'),
+    system: params.systemPrompt ?? params.messages.find((m) => m.role === 'system')?.content,
+    max_tokens: params.maxTokens ?? 2048,
+    ...(TAKES_TEMPERATURE.test(model) ? { temperature: params.temperature ?? 0.7 } : {}),
+    ...(thinking ? { thinking } : {}),
+  }
+}
+
 export class AnthropicProvider implements LlmProvider {
   constructor(private apiKey: string) {}
 
@@ -12,20 +35,16 @@ export class AnthropicProvider implements LlmProvider {
         'x-api-key': this.apiKey,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify({
-        model: params.model ?? 'claude-sonnet-5-5',
-        messages: params.messages.filter((m) => m.role !== 'system'),
-        system: params.systemPrompt ?? params.messages.find((m) => m.role === 'system')?.content,
-        max_tokens: params.maxTokens ?? 2048,
-        temperature: params.temperature ?? 0.7,
-      }),
+      body: JSON.stringify(anthropicRequest(params)),
     })
 
     if (!res.ok) throw new Error(`Anthropic error ${res.status}: ${await res.text()}`)
 
-    const data = await res.json() as { content: Array<{ text: string }>; model: string; usage: { input_tokens: number; output_tokens: number } }
+    const data = await res.json() as { content: Array<{ type: string; text?: string }>; model: string; usage: { input_tokens: number; output_tokens: number } }
+    const content = data.content.filter((block) => block.type === 'text').map((block) => block.text ?? '').join('')
+    if (!content.trim()) throw new Error(`Anthropic error: ${data.model} returned no text`)
     return {
-      content: data.content[0]?.text ?? '',
+      content,
       model: data.model,
       inputTokens: data.usage.input_tokens,
       outputTokens: data.usage.output_tokens,
@@ -42,14 +61,7 @@ export class AnthropicProvider implements LlmProvider {
         'x-api-key': this.apiKey,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify({
-        model: params.model ?? 'claude-sonnet-5-5',
-        messages: params.messages.filter((m) => m.role !== 'system'),
-        system: params.systemPrompt ?? params.messages.find((m) => m.role === 'system')?.content,
-        max_tokens: params.maxTokens ?? 2048,
-        temperature: params.temperature ?? 0.7,
-        stream: true,
-      }),
+      body: JSON.stringify({ ...anthropicRequest(params), stream: true }),
     })
 
     if (!res.ok) throw new Error(`Anthropic stream error ${res.status}: ${await res.text()}`)

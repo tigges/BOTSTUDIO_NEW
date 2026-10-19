@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  AnthropicProvider,
+  anthropicRequest,
   chooseLlmProvider,
   createLlmAdapter,
   createLlmAdapterForModel,
@@ -23,7 +25,7 @@ function withFetch(handler: (host: string, body: Record<string, unknown>) => Res
 }
 
 const claudeReply = (text: string, model: unknown) => new Response(JSON.stringify({
-  content: [{ text }],
+  content: [{ type: 'text', text }],
   model,
   usage: { input_tokens: 1, output_tokens: 1 },
 }), { status: 200 })
@@ -138,5 +140,40 @@ test('a leftover provider/apiKey bag still reads GEMINI_API_KEY from the process
   } finally {
     if (previous === undefined) delete process.env['GEMINI_API_KEY']
     else process.env['GEMINI_API_KEY'] = previous
+  }
+})
+
+test('Claude models that refuse sampling settings get none, and Sonnet 5.x skip thinking', () => {
+  const ask = (model: string) => anthropicRequest({ messages: [{ role: 'user', content: 'hi' }], model, temperature: 0 })
+  assert.equal('temperature' in ask('claude-sonnet-5-5'), false)
+  assert.deepEqual(ask('claude-sonnet-5-5')['thinking'], { type: 'between_tools' })
+  assert.deepEqual(ask('claude-sonnet-5')['thinking'], { type: 'disabled' })
+  assert.equal('temperature' in ask('claude-haiku-5-5'), false)
+  assert.equal('thinking' in ask('claude-haiku-5-5'), false)
+  assert.equal('temperature' in ask('claude-opus-4-7'), false)
+  assert.equal(ask('claude-sonnet-4-6')['temperature'], 0)
+  assert.equal(ask('claude-opus-4-1-20250805')['temperature'], 0)
+  assert.equal(ask('claude-haiku-4-5-20251001')['temperature'], 0)
+  assert.equal(ask('claude-3-5-sonnet-latest')['temperature'], 0)
+  assert.equal('thinking' in ask('claude-sonnet-4-6'), false)
+  assert.equal(anthropicRequest({ messages: [] })['model'], 'claude-sonnet-5-5')
+})
+
+test('a Claude reply reads only its text blocks, and an empty one counts as a failure', async () => {
+  const reply = (content: unknown[]) => withFetch(() => new Response(JSON.stringify({
+    content, model: 'claude-sonnet-5-5', usage: { input_tokens: 1, output_tokens: 1 },
+  }), { status: 200 }))
+  const claude = new AnthropicProvider('a')
+  let fetch = reply([{ type: 'thinking', thinking: 'hmm' }, { type: 'text', text: 'Hello' }, { type: 'text', text: ' there' }])
+  try {
+    assert.equal((await claude.complete({ messages: [{ role: 'user', content: 'hi' }] })).content, 'Hello there')
+  } finally {
+    fetch.restore()
+  }
+  fetch = reply([{ type: 'thinking', thinking: 'hmm' }])
+  try {
+    await assert.rejects(claude.complete({ messages: [{ role: 'user', content: 'hi' }] }), /returned no text/)
+  } finally {
+    fetch.restore()
   }
 })
