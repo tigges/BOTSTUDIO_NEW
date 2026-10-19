@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Clock, Save, ToggleLeft, ToggleRight, Loader2, Users, Zap, MessageSquare } from 'lucide-react'
+import { Clock, Save, ToggleLeft, ToggleRight, Loader2, Users, Zap, MessageSquare, Hand } from 'lucide-react'
 import { Button, Card } from '@ybot/ui'
 import { PlannedBadge } from '../../components/PlannedFeature'
 import { useInboxConfig, useSaveInboxConfig } from '../../lib/hooks'
@@ -38,6 +38,10 @@ const DEFAULTS = {
   showTypingIndicator: true, allowContactMerge: true,
 }
 
+function alwaysHumanWords(text: string): string[] {
+  return [...new Set(text.split('\n').map((line) => line.trim()).filter(Boolean))]
+}
+
 const DEFAULT_AWAY = "Thanks for your message. We're currently outside our working hours and will reply when the team is back."
 
 export function InboxSettingsPage() {
@@ -49,6 +53,7 @@ export function InboxSettingsPage() {
   const [limitQueue, setLimitQueue] = useState(false)
   const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '18:00', timezone: 'Europe/London' })
   const [awayMessage, setAwayMessage] = useState(DEFAULT_AWAY)
+  const [alwaysHuman, setAlwaysHuman] = useState('')
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
@@ -67,6 +72,7 @@ export function InboxSettingsPage() {
       })
       if (hours.awayMessage) setAwayMessage(hours.awayMessage)
     }
+    if (Array.isArray(cfg['alwaysHuman'])) setAlwaysHuman((cfg['alwaysHuman'] as unknown[]).map(String).join('\n'))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedConfig])
 
@@ -81,6 +87,7 @@ export function InboxSettingsPage() {
       workingHours: limitQueue
         ? { enabled: true, ...workingHours, awayMessage }
         : { enabled: false, awayMessage },
+      alwaysHuman: alwaysHumanWords(alwaysHuman),
     })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
@@ -191,6 +198,32 @@ export function InboxSettingsPage() {
                 />
               </div>
               </>
+              )}
+            </Card>
+          </section>
+
+          {/* Always-human list */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Hand size={15} className="text-[var(--accent)]" />
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">Always send to a person</h2>
+            </div>
+            <Card>
+              <p className="text-xs text-[var(--text-muted)] mb-3">
+                When a guest writes one of these words or phrases, the chat goes to the team before any journey runs.
+                This needs working hours turned on. Without them nobody is on chat, so the bot says so and keeps helping.
+              </p>
+              <label htmlFor="always-human" className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">One word or phrase per line</label>
+              <textarea
+                id="always-human"
+                rows={4}
+                value={alwaysHuman}
+                onChange={(e) => setAlwaysHuman(e.target.value)}
+                placeholder={'complaint\nspeak to a manager\nrefund'}
+                className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+              />
+              {!limitQueue && alwaysHumanWords(alwaysHuman).length > 0 && (
+                <p className="text-[11px] text-[var(--warning,#fbbf24)] mt-1">Working hours are off, so these words do not hand over yet. Turn on “Limit the queue to working hours” above.</p>
               )}
             </Card>
           </section>

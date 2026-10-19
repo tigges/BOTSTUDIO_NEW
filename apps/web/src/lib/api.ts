@@ -1,3 +1,4 @@
+import type { HandoverContract, ReturnOutcome } from '@ybot/shared'
 import { messageForStatus } from './api-error'
 
 const BASE = import.meta.env.VITE_API_URL ?? '/api/v1'
@@ -259,6 +260,8 @@ export const conversations = {
     apiFetch<{ data: Conversation }>('/conversations', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: string, body: { status?: string; assignedTo?: string | null }) =>
     apiFetch<{ data: unknown }>(`/conversations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  handBack: (id: string, body: { outcome: ReturnOutcome; note?: string }) =>
+    apiFetch<{ data: { handover: Partial<HandoverContract>; ticketId?: string } }>(`/conversations/${id}/return`, { method: 'POST', body: JSON.stringify(body) }),
   messages: {
     list: (id: string) => apiFetch<{ data: Message[] }>(`/conversations/${id}/messages`),
     send: (id: string, content: { text: string }, authorKind = 'agent', isInternalNote = false) =>
@@ -522,7 +525,7 @@ export interface Entity { id: string; name: string; kind: string; values: object
 export interface Faq { id: string; question: string; answer: string; tags: string[] }
 export interface KnowledgeSource { id: string; name: string; kind: string; config: Record<string, unknown>; lastSyncAt?: string; documents: Array<{ id: string; status: string }> }
 export interface LlmConfig { model: string; temperature: number; maxTokens: number; systemPrompt: string }
-export interface Conversation { id: string; status: string; assignedTo?: string; contact?: Contact; channel?: { id: string; name: string; kind: string }; messages: Message[]; labels: Array<{ label: Label }>; updatedAt: string; sla?: string | null; outcome?: string | null; llm?: ConversationLlmCost | null }
+export interface Conversation { id: string; status: string; assignedTo?: string; contact?: Contact; channel?: { id: string; name: string; kind: string }; messages: Message[]; labels: Array<{ label: Label }>; updatedAt: string; sla?: string | null; outcome?: string | null; llm?: ConversationLlmCost | null; handover?: Partial<HandoverContract> | null }
 /** Model calls made for one chat. costUsd is null when a model had no known price. */
 export interface ConversationLlmCost { costUsd: number | null; calls: number }
 export interface Message { id: string; direction: string; authorKind: string; content: { text: string; internal?: boolean }; createdAt: string }
