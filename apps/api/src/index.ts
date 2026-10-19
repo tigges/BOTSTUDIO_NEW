@@ -26,6 +26,7 @@ import { startConversationAnalysisWorker } from './workers/conversation-analysis
 import { startCampaignWorker } from './workers/campaign-send.js'
 import { startQuietChatSweep } from './lib/chat-outcome.js'
 import { installLlmLedger, withLlmScope } from './lib/llm-ledger.js'
+import { setTurnBroadcast } from './lib/turn-pipeline.js'
 import { systemRoutes } from './routes/system.js'
 import { cannedRoutes, reportsRoutes, databaseRoutes, integrationsRoutes } from './routes/studio.js'
 import { authMiddleware } from './middleware/auth.js'
@@ -126,6 +127,7 @@ await app.register(integrationsRoutes, { prefix: '/api/v1/integrations' })
 await app.register(systemRoutes, { prefix: '/api/v1/system' })
 
 installLlmLedger()
+setTurnBroadcast(broadcastToTenant)
 
 try {
   await app.listen({ port: PORT, host: HOST })

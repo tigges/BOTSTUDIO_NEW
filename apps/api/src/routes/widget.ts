@@ -9,21 +9,16 @@
 
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { prisma } from '@ybot/db'
-import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
-import type { LlmMessage } from '@ybot/llm'
 import { readFile } from 'node:fs/promises'
-import { triggerRules } from '../lib/automation-engine.js'
 import { resolve, dirname } from 'node:path'
-import { finishBotLines, saveContactName, takeNameTurn } from '../lib/visitor-name.js'
-import { fillNameTokens } from '@ybot/shared'
 import { proposeDraftFlows, textMightStartDraft } from '../lib/draft-flows.js'
-import { runFlowIfPublished } from '../lib/flow-runner.js'
+import { runTurn } from '../lib/turn-pipeline.js'
+import { triggerRules } from '../lib/automation-engine.js'
 import { appBuildLabel, BELLA_PUBLIC_CHANNEL, resolveDemoChannel } from '../lib/demo-page.js'
 import { visitorTurn } from '../lib/widget-open.js'
 import { loadPublicChannel } from '../lib/web-channels.js'
 import { streamDoneEvent } from '../lib/widget-rating.js'
-import { onInboundCustomerMessage, onOutboundReply } from '../lib/sla.js'
-import { conversationScope, enterLlmScope, withLlmScope } from '../lib/llm-ledger.js'
+import { withLlmScope } from '../lib/llm-ledger.js'
 import { fileURLToPath } from 'node:url'
 
 /** Derive the public-facing origin robustly when running behind a reverse proxy.
@@ -39,33 +34,12 @@ function requestOrigin(request: FastifyRequest): string {
     request.hostname
   return `${proto}://${host}`
 }
-const llm     = createLlmAdapter()
-const embedAI = createEmbeddingAdapter()
 
 // ── CORS helper — applied to every public route ────────────────────────────
 function setCors(reply: { header(k: string, v: string): void }) {
   reply.header('Access-Control-Allow-Origin',  '*')
   reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   reply.header('Access-Control-Allow-Headers', 'Content-Type')
-}
-
-// ── RAG ───────────────────────────────────────────────────────────────────
-async function ragSearch(query: string, tenantId: string, botId: string, topK = 4): Promise<string[]> {
-  try {
-    const r = await embedAI.embed({ texts: [query] })
-    const vec = r.embeddings[0]
-    if (!vec || vec.length === 0) return []
-    const rows = await (prisma.$queryRawUnsafe as (sql: string, ...p: unknown[]) => Promise<Array<{ content: string }>>)(
-      `SELECT dc.content
-       FROM "document_chunks" dc
-       JOIN "documents" d ON dc."documentId"=d.id
-       JOIN "knowledge_sources" ks ON d."knowledgeSourceId"=ks.id
-       WHERE dc."tenantId"=$2 AND ks."botId"=$3 AND dc.embedding IS NOT NULL
-       ORDER BY dc.embedding <=> $1::vector LIMIT $4`,
-      JSON.stringify(vec), tenantId, botId, topK,
-    )
-    return rows.map((r) => r.content)
-  } catch { return [] }
 }
 
 // ── Widget JS source (served if compiled bundle is absent) ─────────────────
@@ -417,9 +391,9 @@ export async function widgetRoutes(app: FastifyInstance) {
       visitorName?: string
       history?: Array<{ role: string; content: string }>
     }
-    const turn = visitorTurn({ message: body.message, opening: body.opening === true })
-    if (!turn) return reply.status(400).send({ error: 'message required' })
-    const userText = turn.text
+    const visitor = visitorTurn({ message: body.message, opening: body.opening === true })
+    if (!visitor) return reply.status(400).send({ error: 'message required' })
+    const userText = visitor.text
 
     const channel = await loadPublicChannel(channelId)
     if (!channel?.bot) return reply.status(404).send({ error: 'Channel not found' })
@@ -436,7 +410,7 @@ export async function widgetRoutes(app: FastifyInstance) {
       }
     }
 
-    const { tenantId, botId, bot } = { tenantId: channel.tenantId, botId: channel.botId, bot: channel.bot }
+    const { tenantId, botId } = { tenantId: channel.tenantId, botId: channel.botId }
 
     // ── Resolve or create a conversation ──────────────────────────────────
     let conversationId = body.conversationId ?? null
@@ -474,31 +448,10 @@ export async function widgetRoutes(app: FastifyInstance) {
       }
     }
 
-    // ── Save inbound user message ────────────────────────────────────────
-    // An opening greeting is the bot's first line. There is no visitor message yet.
-    if (conversationId && turn.showVisitor) {
-      await prisma.message.create({
-        data: { tenantId, conversationId, direction: 'inbound', authorKind: 'user', content: { text: userText } },
-      }).catch(() => {})
-
-      // Fire automation rules for message.received
-      const msgCount = await prisma.message.count({ where: { conversationId, direction: 'inbound' } }).catch(() => 0)
-      triggerRules('message.received', {
-        tenantId, botId, conversationId,
-        messageContent: userText,
-        messageCount: msgCount,
-        conversationStatus: 'active',
-      }).catch(() => {})
-    }
-
-    if (conversationId) enterLlmScope(await conversationScope(conversationId))
-    else enterLlmScope({ source: 'runtime', tenantId, botId })
-
     if (textMightStartDraft(userText)) {
       void withLlmScope({ source: 'authoring', tenantId, botId }, () => proposeDraftFlows(botId)).catch(() => {})
     }
 
-    // ── SSE helpers (shared by both flow and RAG paths) ───────────────────
     reply.raw.setHeader('Content-Type', 'text/event-stream')
     reply.raw.setHeader('Cache-Control', 'no-cache')
     reply.raw.setHeader('Connection', 'keep-alive')
@@ -508,110 +461,24 @@ export async function widgetRoutes(app: FastifyInstance) {
 
     const send = (data: object) => reply.raw.write(`data: ${JSON.stringify(data)}\n\n`)
 
+    if (!conversationId) {
+      send({ chunk: 'This chat is not set up yet. Please try again later.' })
+      send(streamDoneEvent(false))
+      reply.raw.end()
+      return
+    }
+
     // Emit conversationId first so client can persist it
-    if (conversationId) send({ conversationId })
-
-    // Working hours start the SLA clock. They do not replace the bot's answer.
-    if (conversationId) {
-      await onInboundCustomerMessage({ conversationId, botId }).catch(() => null)
-    }
-
-    // ── Try published flow first ──────────────────────────────────────────
-    if (conversationId) {
-      try {
-        const flowResult = await runFlowIfPublished({ conversationId, botId, tenantId, userText })
-
-        if (flowResult.handled) {
-          const fullText = flowResult.messages.join('\n\n')
-          if (fullText) {
-            send({ chunk: fullText })
-            await prisma.message.create({
-              data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: fullText } },
-            }).catch(() => {})
-            await onOutboundReply(conversationId).catch(() => {})
-          }
-          send(streamDoneEvent(flowResult.ended))
-          reply.raw.end()
-          return
-        }
-      } catch (flowErr) {
-        request.log.warn({ err: flowErr }, 'Flow runner error — falling back to RAG/LLM')
-      }
-    }
-
-    if (!userText) {
-      send({ chunk: 'I don’t have a next line for that.' })
-      send(streamDoneEvent(false))
-      reply.raw.end()
-      return
-    }
-
-    // ── RAG/LLM fallback (no journey map) ────────────────────────────────
-    const cfg = await prisma.botConfig.findUnique({ where: { botId } }).catch(() => null)
-    const systemPrompt = cfg?.systemPrompt ?? `You are a helpful assistant for ${bot.name}. Answer using the knowledge base context.`
-    const model = cfg?.model ?? undefined
-    const temperature = cfg?.temperature ?? 0.3
-    const maxTokens = cfg?.maxTokens ?? 2048
-
-    const ragChunks = await ragSearch(userText, tenantId, botId)
-    const contextBlock = ragChunks.length > 0
-      ? `\n\n--- KNOWLEDGE BASE ---\n${ragChunks.map((c, i) => `[${i + 1}] ${c}`).join('\n\n')}\n--- END KNOWLEDGE BASE ---\n\nAnswer using only this context. If unknown, say so.`
-      : ''
-
-    const history: LlmMessage[] = (body.history ?? [])
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .slice(-10)
-      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
-
-    const messages: LlmMessage[] = [...history, { role: 'user', content: userText }]
-
-    const named = conversationId ? await takeNameTurn(conversationId, userText) : null
-    if (named?.thanks) {
-      send({ chunk: named.thanks })
-      if (conversationId) {
-        await prisma.message.create({
-          data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: named.thanks } },
-        }).catch(() => {})
-        await onOutboundReply(conversationId).catch(() => {})
-      }
-      send(streamDoneEvent(false))
-      reply.raw.end()
-      return
-    }
-
-    let fullText = ''
-    try {
-      const adapter = model ? createLlmAdapterForModel(model) : llm
-      await adapter.stream({
-        messages, systemPrompt: systemPrompt + contextBlock, model, temperature, maxTokens,
-        onChunk: (chunk) => {
-          const clean = fillNameTokens(chunk, named?.spoken)
-          fullText += clean
-          send({ chunk: clean })
-        },
-      })
-    } catch {
-      fullText = "I'm sorry, something went wrong."
-      send({ chunk: "I'm sorry, something went wrong. Please try again." })
-    }
-    if (named) {
-      const finished = finishBotLines([fullText], named.contact, named.spoken, {
-        conversationId: conversationId ?? undefined,
-      })
-      const next = finished.lines.filter((line) => line.trim().length > 0).join('\n\n')
-      if (next.startsWith(fullText) && next.length > fullText.length) send({ chunk: next.slice(fullText.length) })
-      fullText = next
-      if (named.contact?.id && finished.metadata) {
-        await saveContactName(named.contact.id, { metadata: finished.metadata }).catch(() => {})
-      }
-    }
-    send({ done: true })
-    if (conversationId && fullText.trim()) {
-      await prisma.message.create({
-        data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: fullText } },
-      }).catch(() => {})
-      await onOutboundReply(conversationId).catch(() => {})
-    }
+    send({ conversationId })
+    const turn = await runTurn({
+      conversationId,
+      tenantId,
+      botId,
+      text: userText,
+      opening: !visitor.showVisitor,
+      onChunk: (chunk) => send({ chunk }),
+    })
+    send(streamDoneEvent(turn.ended))
     reply.raw.end()
   })
 
