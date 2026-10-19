@@ -6,7 +6,7 @@ import {
   executeSetVariable, executeCondition, executeHttpRequest,
   executeClassifyIntent, executeHandover, executeCreateTicket, executeEndFlow,
   executeSearchKnowledge, executeLlmGenerate, executeRouteTopic, executeExecuteFlow,
-  executeLookupCatalog,
+  executeLookupCatalog, executeRunTool,
 } from './nodes/executors.js'
 
 type NodeExecutor = (ctx: NodeContext) => Promise<NodeResult>
@@ -22,6 +22,7 @@ const EXECUTORS: Record<string, NodeExecutor> = {
   route_topic:      executeRouteTopic,
   execute_flow:     executeExecuteFlow,
   lookup_catalog:   executeLookupCatalog,
+  run_tool:         executeRunTool,
   handover:         executeHandover,
   transfer_agent:   executeHandover,
   create_ticket:    executeCreateTicket,

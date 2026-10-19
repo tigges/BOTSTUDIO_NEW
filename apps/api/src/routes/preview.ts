@@ -168,7 +168,7 @@ export async function previewRoutes(app: FastifyInstance) {
         state: state as TestChatState | undefined,
         onChunk: (text) => send('chunk', { text }),
       })
-      send('done', { fullText: turn.text, state: turn.state, path: turn.path, ended: turn.ended, chapter: turn.chapter })
+      send('done', { fullText: turn.text, state: turn.state, path: turn.path, ended: turn.ended, chapter: turn.chapter, tools: turn.tools })
     } catch (err) {
       request.log.warn({ err }, 'test chat failed')
       send('error', { message: TEST_CHAT_FAILED })

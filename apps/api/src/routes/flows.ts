@@ -139,7 +139,8 @@ export async function flowsRoutes(app: FastifyInstance) {
     if (!latest) return reply.status(404).send({ error: { code: 'NO_VERSION', message: 'No flow version found' } })
 
     const names = await prisma.flow.findMany({ where: { botId, tenantId }, select: { name: true } })
-    const blocking = inspectFlowGraph(latest.graph as { nodes: []; edges: [] } | null, { flowNames: names.map((item) => item.name) })
+    const tools = await prisma.tool.findMany({ where: { botId, tenantId }, select: { id: true } })
+    const blocking = inspectFlowGraph(latest.graph as { nodes: []; edges: [] } | null, { flowNames: names.map((item) => item.name), toolIds: tools.map((tool) => tool.id) })
       .filter((issue) => issue.level === 'repair' || issue.level === 'block')
     if (blocking.length > 0) {
       return reply.status(422).send({

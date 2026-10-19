@@ -1,6 +1,6 @@
 import { fillNameTokens, isNameVariable, nameForSpeech } from './contact-speech.js'
 
-function lookup(variables: Record<string, unknown>, path: string): unknown {
+export function lookup(variables: Record<string, unknown>, path: string): unknown {
   const keys = path.trim().split('.')
   let val: unknown = variables
   for (const key of keys) {

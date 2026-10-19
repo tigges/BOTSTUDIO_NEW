@@ -37,6 +37,8 @@ export interface FlowIssue {
 export interface CheckOptions {
   /** Names of flows on this bot. A jump to an unknown name is a gap. */
   flowNames?: string[]
+  /** Ids of tools on this bot. A Run tool step pointing elsewhere is a gap. */
+  toolIds?: string[]
 }
 
 const TERMINALS = new Set(['end_flow', 'resolve', 'handover', 'transfer_agent', 'execute_flow'])
@@ -264,6 +266,14 @@ export function inspectFlowGraph(graph: CheckGraph | null | undefined, options: 
     }
     if (kind === 'http_request' && !String(config['url'] ?? '').trim()) {
       issues.push({ level: 'note', code: 'empty-url', nodeId: node.id, message: `${label} has no address to call.` })
+    }
+    if (kind === 'run_tool') {
+      const toolId = String(config['toolId'] ?? '').trim()
+      if (!toolId) {
+        issues.push({ level: 'block', code: 'empty-tool', nodeId: node.id, message: `${label} does not name the tool to run. Choose one from the Tools list.` })
+      } else if (options.toolIds && !options.toolIds.includes(toolId)) {
+        issues.push({ level: 'block', code: 'missing-tool', nodeId: node.id, message: `${label} runs a tool that is no longer in the Tools list. Choose another tool.` })
+      }
     }
     if (kind === 'execute_flow') {
       const flowName = String(config['flowName'] ?? '').trim()

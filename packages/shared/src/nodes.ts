@@ -25,6 +25,7 @@ export type NodeKind =
   | 'create_ticket'
   | 'route_topic'
   | 'lookup_catalog'
+  | 'run_tool'
 
 export interface NodePort {
   id: string
@@ -109,6 +110,19 @@ export const NODE_DEFINITIONS: Record<NodeKind, NodeDefinition> = {
     category: 'integration',
     icon: 'globe',
     color: '#06b6d4',
+    ports: [
+      { id: 'in', type: 'target' },
+      { id: 'success', label: 'Success', type: 'source' },
+      { id: 'error', label: 'Error', type: 'source' },
+    ],
+  },
+  run_tool: {
+    kind: 'run_tool',
+    label: 'Run tool',
+    description: 'Run a tool from the Tools list and keep its result',
+    category: 'integration',
+    icon: 'wrench',
+    color: '#0ea5e9',
     ports: [
       { id: 'in', type: 'target' },
       { id: 'success', label: 'Success', type: 'source' },
