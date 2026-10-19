@@ -150,7 +150,7 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
   }
 
   const guard = !input.opening && input.text ? evaluateGuardrails(input.text, 'input', safety.rules, safety.privacy.custom) : null
-  if (guard?.hits.length) input = { ...input, text: guard.outcome === 'allow' ? guard.text : input.text, guardrails: guard.hits }
+  if (guard?.hits.length) input = { ...input, text: guard.text, guardrails: guard.hits }
 
   if (!input.opening && !input.inboundSaved) await ports.saveInbound(input)
 

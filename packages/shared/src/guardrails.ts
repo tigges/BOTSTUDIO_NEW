@@ -172,7 +172,7 @@ export interface GuardrailHit {
 }
 
 export interface GuardrailDecision {
-  /** allow: send `text` (possibly redacted) on. */
+  /** The message with every Redact match replaced, whatever the outcome. */
   outcome: 'allow' | 'block' | 'escalate' | 'reask'
   text: string
   hits: GuardrailHit[]
@@ -205,19 +205,20 @@ export function evaluateGuardrails(
   if (hits.length === 0) return { outcome: 'allow', text, hits: [] }
   const strongest = hits.reduce((best, hit) => (RANK[hit.rule.action] > RANK[best.rule.action] ? hit : best))
   const all = hits.map((hit) => asHit(hit.rule))
+  const redacted = redactRanges(text, hits.filter((hit) => hit.rule.action === 'redact').flatMap((hit) => hit.ranges))
   const action = strongest.rule.action
   if (action === 'block') {
-    return { outcome: 'block', text, hits: all, rule: asHit(strongest.rule), line: strongest.rule.message.trim() || (side === 'input' ? BLOCKED_INPUT_LINE : BLOCKED_OUTPUT_LINE) }
+    return { outcome: 'block', text: redacted, hits: all, rule: asHit(strongest.rule), line: strongest.rule.message.trim() || (side === 'input' ? BLOCKED_INPUT_LINE : BLOCKED_OUTPUT_LINE) }
   }
-  if (action === 'escalate') return { outcome: 'escalate', text, hits: all, rule: asHit(strongest.rule) }
-  if (action === 'reask') return { outcome: 'reask', text, hits: all, rule: asHit(strongest.rule), line: strongest.rule.message.trim() || REASK_LINE }
-  const ranges = hits
-    .filter((hit) => hit.rule.action === 'redact')
-    .flatMap((hit) => hit.ranges)
-    .sort((a, b) => a[0] - b[0])
+  if (action === 'escalate') return { outcome: 'escalate', text: redacted, hits: all, rule: asHit(strongest.rule) }
+  if (action === 'reask') return { outcome: 'reask', text: redacted, hits: all, rule: asHit(strongest.rule), line: strongest.rule.message.trim() || REASK_LINE }
+  return { outcome: 'allow', text: redacted, hits: all }
+}
+
+function redactRanges(text: string, ranges: Array<[number, number]>): string {
   let out = ''
   let at = 0
-  for (const [start, end] of ranges) {
+  for (const [start, end] of [...ranges].sort((a, b) => a[0] - b[0])) {
     if (start < at) {
       at = Math.max(at, end)
       continue
@@ -225,7 +226,7 @@ export function evaluateGuardrails(
     out += text.slice(at, start) + REDACTED
     at = end
   }
-  return { outcome: 'allow', text: out + text.slice(at), hits: all }
+  return out + text.slice(at)
 }
 
 /** Replies must be held back until checked when any reply rule can change them. */

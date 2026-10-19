@@ -119,17 +119,41 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
 }
 
+/** A change to many rows reads as one line per row and field, e.g. "Strict · active". */
+function flattenRows(value: unknown, fields: string[]): Record<string, unknown> | null {
+  if (!Array.isArray(value)) return asRecord(value)
+  const out: Record<string, unknown> = {}
+  for (const [index, row] of value.entries()) {
+    const record = asRecord(row) ?? {}
+    const named = [record['name'], record['title'], record['id']].find((v) => typeof v === 'string' && v)
+    const label = typeof named === 'string' ? named : `#${index + 1}`
+    for (const field of fields) out[`${label} · ${field}`] = record[field]
+  }
+  return out
+}
+
 function auditChange(metadata: Record<string, unknown> | undefined): AuditChange | null {
   if (!metadata || !('before' in metadata || 'after' in metadata)) return null
+  const changes = Array.isArray(metadata['changes']) ? (metadata['changes'] as unknown[]).filter((f): f is string => typeof f === 'string') : []
+  const many = Array.isArray(metadata['before']) || Array.isArray(metadata['after'])
+  const rowFields = changes.length ? changes : [...new Set([metadata['before'], metadata['after']].flatMap((rows) => (Array.isArray(rows) ? rows : []).flatMap((row) => Object.keys(asRecord(row) ?? {}))))].filter((key) => !HIDDEN_FIELDS.has(key))
+  const before = flattenRows(metadata['before'], rowFields)
+  const after = flattenRows(metadata['after'], rowFields)
   return {
-    before: asRecord(metadata['before']),
-    after: asRecord(metadata['after']),
-    changes: Array.isArray(metadata['changes']) ? (metadata['changes'] as unknown[]).filter((f): f is string => typeof f === 'string') : [],
+    before,
+    after,
+    changes: many ? Object.keys({ ...before, ...after }) : changes,
     source: typeof metadata['source'] === 'string' ? metadata['source'] : null,
   }
 }
 
 const HIDDEN_FIELDS = new Set(['id', 'tenantId', 'createdAt', 'updatedAt'])
+
+function changeHeading(action: string, change: AuditChange): string {
+  if (action.endsWith('.created')) return 'Created with'
+  if (action.endsWith('.deleted')) return 'Deleted record'
+  return change.changes.length ? `Changed: ${change.changes.join(', ')}` : 'No fields changed'
+}
 
 function shortValue(value: unknown): string {
   if (value === undefined || value === null) return '—'
@@ -339,7 +363,7 @@ export function AuditPage() {
                           <Info size={13} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
                           <div className="min-w-0 flex-1">
                             <p className="text-xs font-medium text-[var(--text-secondary)] mb-1">
-                              {ev.change ? (ev.change.changes.length ? `Changed: ${ev.change.changes.join(', ')}` : 'Record') : 'Event details'}
+                              {ev.change ? changeHeading(ev.action, ev.change) : 'Event details'}
                               {ev.change?.source && <span className="ml-2 font-normal text-[var(--text-muted)]">via {ev.change.source === 'console' ? 'the console' : ev.change.source === 'api' ? 'an API key' : 'a script'}</span>}
                             </p>
                             {ev.change ? <ChangeTable change={ev.change} /> : <p className="text-xs text-[var(--text-muted)]">{ev.details}</p>}

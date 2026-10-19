@@ -56,8 +56,10 @@ interface Convo {
   previousConvos?: number
 }
 
+const GUARDRAIL_STRENGTH: Record<GuardrailHit['action'], number> = { block: 4, escalate: 3, reask: 2, redact: 1, warn: 0 }
+
 function guardrailFlag(hits: GuardrailHit[]): string {
-  const first = hits[0]!
+  const first = [...hits].sort((a, b) => GUARDRAIL_STRENGTH[b.action] - GUARDRAIL_STRENGTH[a.action])[0]!
   const more = hits.length > 1 ? ` +${hits.length - 1}` : ''
   return `${GUARDRAIL_ACTION_LABELS[first.action]}: ${first.name}${more}`
 }

@@ -82,6 +82,14 @@ export function hideSecrets(value: unknown, depth = 0): unknown {
 
 /** Field names whose values differ between before and after. */
 export function changedFields(before: unknown, after: unknown): string[] {
+  if (Array.isArray(before) || Array.isArray(after)) {
+    const byId = (rows: unknown) => new Map((Array.isArray(rows) ? rows : []).map((row) => [(row as { id?: unknown })?.id, row]))
+    const a = byId(before)
+    const b = byId(after)
+    const fields = new Set<string>()
+    for (const id of new Set([...a.keys(), ...b.keys()])) changedFields(a.get(id), b.get(id)).forEach((f) => fields.add(f))
+    return [...fields].sort()
+  }
   const a = before && typeof before === 'object' ? before as Record<string, unknown> : {}
   const b = after && typeof after === 'object' ? after as Record<string, unknown> : {}
   const keys = new Set([...Object.keys(a), ...Object.keys(b)])

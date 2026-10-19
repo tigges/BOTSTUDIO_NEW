@@ -137,6 +137,7 @@ test('audit rows hide secrets and name what changed', () => {
     name: 'Shop', secretEnc: '[hidden]', apiKey: '[hidden]', passwordHash: '[hidden]', nested: { token: '[hidden]' }, empty: null,
   })
   assert.deepEqual(changedFields({ a: 1, b: 2, updatedAt: 'x' }, { a: 1, b: 3, updatedAt: 'y' }), ['b', 'updatedAt'])
+  assert.deepEqual(changedFields([{ id: '1', active: true, name: 'A' }], [{ id: '1', active: false, name: 'A' }]), ['active'], 'many-row writes compare row by row')
   assert.equal(auditAction('GuardrailPolicy', 'create', false), 'guardrail_policy.created')
   assert.equal(auditAction('Bot', 'upsert', true), 'bot.updated')
   assert.equal(auditAction('Tool', 'deleteMany', true), 'tool.deleted')
@@ -155,6 +156,9 @@ test('guardrails: strongest action wins, redact rewrites, new rules warn, issues
   assert.equal(evaluateGuardrails('refunded', 'input', rules).hits.length, 0, 'whole words only')
   assert.equal(evaluateGuardrails('refund', 'output', rules).hits.length, 0, 'input rules leave replies alone')
   assert.equal(holdsReplies(rules), false)
+  const escalated = evaluateGuardrails('my lawyer has card 4242 4242 4242 4242', 'input', [...rules, newGuardrailRule({ id: 'c', name: 'Legal', check: { kind: 'words', words: ['lawyer'] }, action: 'escalate' })])
+  assert.equal(escalated.outcome, 'escalate')
+  assert.equal(escalated.text, 'my lawyer has card [redacted]', 'a stronger action still keeps the redaction')
   const issues = guardrailIssues([newGuardrailRule({ id: 'x', name: '' }), newGuardrailRule({ id: 'y', name: 'Bad', check: { kind: 'pattern', pattern: '[' } })])
   assert.deepEqual(issues.map((issue) => `${issue.ruleId}.${issue.field}`), ['x.name', 'x.check', 'y.check'])
 })
