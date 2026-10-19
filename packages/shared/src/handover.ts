@@ -88,14 +88,20 @@ function clip(text: string, max: number): string {
   return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`
 }
 
-/** Captured answers worth passing on: not internal (_x), not empty, not objects. */
+/** Keys flow steps write about themselves (routes taken, API status, generated text), not guest answers. */
+const STEP_OUTPUT_KEYS = new Set([
+  'sent', 'result', 'status', 'data', 'ok', 'route', 'jump', 'fact', 'catalog_title', 'catalog_id',
+  'intent', 'confidence', 'handed_over', 'ticket_created', 'subject', 'completed', 'answer', 'sources', 'generated',
+])
+
+/** Captured answers worth passing on: not internal (_x), not empty, not objects, not unfilled {{templates}}. */
 function capturedValues(flow: Record<string, unknown>): Record<string, string> {
   const out: Record<string, string> = {}
   for (const [key, value] of Object.entries(flow)) {
     if (key.startsWith('_') || key === 'handed_over') continue
     if (value == null || typeof value === 'object') continue
     const text = clip(String(value), 200)
-    if (text) out[key] = text
+    if (text && !text.includes('{{')) out[key] = text
   }
   return out
 }
@@ -112,7 +118,7 @@ export function handoverFromConfig(
   const priority = handoverPriority(config['priority']) ?? 'medium'
   const named = handoverList(config['variables'])
   const captured = capturedValues(flow)
-  let variables = captured
+  let variables = Object.fromEntries(Object.entries(captured).filter(([key]) => !STEP_OUTPUT_KEYS.has(key)))
   if (named.length) {
     variables = {}
     for (const name of named) {

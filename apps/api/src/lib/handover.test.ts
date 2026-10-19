@@ -46,6 +46,18 @@ test('an older step with team, note and a legacy priority still hands over in fu
   assert.deepEqual(request.variables, { service: 'Colour' })
 })
 
+test('by default only the guest answers travel, not step outputs or unfilled templates', () => {
+  const flow = {
+    jump: 'Talk to the salon', sent: 'true', route: 'talk-to-the-salon', intent: 'booking',
+    topic: '{{_last_user_message}}', request: 'Can I talk to the receptionist?', guest_name: 'Ana',
+  }
+  assert.deepEqual(handoverFromConfig({}, flow).variables, { request: 'Can I talk to the receptionist?', guest_name: 'Ana' })
+  assert.deepEqual(handoverFromConfig({ variables: 'route, flow.guest_name, topic' }, flow).variables, {
+    route: 'talk-to-the-salon',
+    guest_name: 'Ana',
+  })
+})
+
 test('a bare step gets the default reason, medium priority and the support queue', () => {
   const request = handoverFromConfig({})
   assert.equal(request.reason, DEFAULT_HANDOVER_REASON)
