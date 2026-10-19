@@ -6,6 +6,7 @@ import { sendEmail, inviteEmail } from '../lib/email.js'
 import { canRemoveWebChannel, ensureWebChannels } from '../lib/web-channels.js'
 import { parseChannelConfig, channelWebhookPath } from '@ybot/shared'
 import { registerTelegramWebhook, verifyChannelCredentials } from '../lib/channel-verify.js'
+import { summariseOutcomes } from '../lib/outcome-summary.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -346,6 +347,17 @@ export async function analyticsRoutes(app: FastifyInstance) {
 
     const avgResponseTimeMs = respRows[0]?.avg_ms ? Math.round(parseFloat(respRows[0].avg_ms)) : null
 
+    const llmSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    const [outcomeRows, llmTotals] = await Promise.all([
+      prisma.conversation.groupBy({ by: ['outcome'], where, _count: { _all: true } }),
+      prisma.llmCall.aggregate({
+        where: { tenantId, createdAt: { gte: llmSince }, ...(botId ? { botId } : {}) },
+        _sum: { costUsd: true },
+        _count: { _all: true },
+      }).catch(() => null),
+    ])
+    const outcomes = summariseOutcomes(outcomeRows.map((row) => ({ outcome: row.outcome, count: row._count._all })))
+
     const resolutionRate = totalConvos > 0 ? Math.round((resolvedConvos / totalConvos) * 100 * 10) / 10 : 0
     const escalationRate = totalConvos > 0 ? Math.round((escalatedConvos / totalConvos) * 100 * 10) / 10 : 0
     const botHandledPct = totalConvos > 0 ? Math.round((botHandledConvos / totalConvos) * 100) : 0
@@ -362,8 +374,31 @@ export async function analyticsRoutes(app: FastifyInstance) {
         csatScore,
         avgResponseTimeMs,
         botHandledPct,
+        outcomes,
+        llm: llmTotals
+          ? { days: 30, calls: llmTotals._count._all, costUsd: llmTotals._count._all > 0 ? llmTotals._sum.costUsd ?? 0 : null }
+          : null,
       }
     }
+  })
+
+  // GET /analytics/llm-calls?conversationId=&botId=&source=&limit= — one row per model call (raw tier)
+  app.get('/llm-calls', async (request) => {
+    const { tenantId } = request.user as JWT
+    const q = request.query as Record<string, string>
+    const limit = Math.min(Math.max(parseInt(q['limit'] ?? '100', 10) || 100, 1), 500)
+    const rows = await prisma.llmCall.findMany({
+      where: {
+        tenantId,
+        ...(q['conversationId'] ? { conversationId: q['conversationId'] } : {}),
+        ...(q['botId'] ? { botId: q['botId'] } : {}),
+        ...(q['source'] ? { source: q['source'] } : {}),
+        ...(q['environment'] ? { environment: q['environment'] } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    })
+    return { data: rows }
   })
 
   // GET /analytics/conversations?botId=...&days=7
@@ -379,14 +414,14 @@ export async function analyticsRoutes(app: FastifyInstance) {
       botId
         ? `SELECT date_trunc('day', "createdAt") AS day,
              COUNT(*)::text AS conversations,
-             SUM(CASE WHEN status='resolved' THEN 1 ELSE 0 END)::text AS resolved,
-             SUM(CASE WHEN status='escalated' THEN 1 ELSE 0 END)::text AS escalated
+             SUM(CASE WHEN outcome LIKE 'contained%' THEN 1 ELSE 0 END)::text AS resolved,
+             SUM(CASE WHEN outcome='escalated' THEN 1 ELSE 0 END)::text AS escalated
            FROM conversations WHERE "tenantId"=$1 AND "botId"=$2 AND "createdAt">=$3
            GROUP BY 1 ORDER BY 1 ASC`
         : `SELECT date_trunc('day', "createdAt") AS day,
              COUNT(*)::text AS conversations,
-             SUM(CASE WHEN status='resolved' THEN 1 ELSE 0 END)::text AS resolved,
-             SUM(CASE WHEN status='escalated' THEN 1 ELSE 0 END)::text AS escalated
+             SUM(CASE WHEN outcome LIKE 'contained%' THEN 1 ELSE 0 END)::text AS resolved,
+             SUM(CASE WHEN outcome='escalated' THEN 1 ELSE 0 END)::text AS escalated
            FROM conversations WHERE "tenantId"=$1 AND "createdAt">=$2
            GROUP BY 1 ORDER BY 1 ASC`,
       ...(botId ? [tenantId, botId, since] : [tenantId, since]),
@@ -442,23 +477,17 @@ export async function analyticsRoutes(app: FastifyInstance) {
     const botId = q['botId']
     const where = { tenantId, ...(botId ? { botId } : {}) }
 
-    const [total, resolved, escalated, botResolved] = await Promise.all([
-      prisma.conversation.count({ where }),
-      prisma.conversation.count({ where: { ...where, status: 'resolved' } }),
-      prisma.conversation.count({ where: { ...where, status: 'escalated' } }),
-      prisma.conversation.count({ where: { ...where, status: 'resolved', assignedTo: null } }),
-    ])
-
-    const agentHandover = resolved - botResolved
-    const abandoned = Math.max(0, total - resolved - escalated)
+    const rows = await prisma.conversation.groupBy({ by: ['outcome'], where, _count: { _all: true } })
+    const outcomes = summariseOutcomes(rows.map((row) => ({ outcome: row.outcome, count: row._count._all })))
 
     return {
       data: [
-        { name: 'Bot resolved', value: botResolved },
-        { name: 'Agent handover', value: agentHandover },
-        { name: 'Escalated', value: escalated },
-        { name: 'Abandoned', value: abandoned },
-      ]
+        { name: 'Contained', value: outcomes.buckets.contained },
+        { name: 'Escalated', value: outcomes.buckets.escalated },
+        { name: 'Abandoned', value: outcomes.buckets.abandoned },
+      ],
+      finished: outcomes.finished,
+      open: outcomes.open,
     }
   })
 

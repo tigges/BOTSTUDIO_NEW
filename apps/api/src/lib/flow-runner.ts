@@ -16,7 +16,7 @@ import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
 import { newestByFlow, pickWorkingCopy } from './entry-flow.js'
 import { runFlowTurn } from './flow-turn.js'
 import { finishBotLines, nameThanksEndsTurn, saveContactName, takeNameTurn } from './visitor-name.js'
-import { keepWithBot, liveAgentsFor, reopenForBot, resolveByBot } from './chat-outcome.js'
+import { escalateChat, keepWithBot, liveAgentsFor, markNoTeam, reopenForBot, resolveByBot } from './chat-outcome.js'
 
 const defaultLlm = createLlmAdapter()
 
@@ -347,9 +347,10 @@ export async function runFlowIfPublished(opts: {
 
   if (outcome.handover && !(await liveAgentsFor(botId))) {
     outcome = { ...outcome, handover: undefined, messages: keepWithBot(outcome.messages) }
+    await markNoTeam(conversationId)
   }
   if (outcome.handover) {
-    await prisma.conversation.update({ where: { id: conversationId }, data: { status: 'escalated' } }).catch(() => {})
+    await escalateChat(conversationId)
   } else if (outcome.session.status === 'completed') {
     await resolveByBot(conversationId)
   }

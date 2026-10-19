@@ -42,6 +42,7 @@
 import { prisma } from '@ybot/db'
 import { fillNameTokens } from '@ybot/shared'
 import { dispatchWebhookEvent } from '../queues.js'
+import { outcomeAfterStatus } from './chat-outcome.js'
 
 // ── Context ───────────────────────────────────────────────────────────────────
 
@@ -134,7 +135,7 @@ async function executeAction(action: string, ctx: RuleContext, ruleId: string, r
       if (ctx.conversationId) {
         await prisma.conversation.updateMany({
           where: { id: ctx.conversationId, tenantId: ctx.tenantId },
-          data: { status: 'escalated' },
+          data: { status: 'escalated', outcome: 'escalated' },
         })
       }
       break
@@ -142,9 +143,10 @@ async function executeAction(action: string, ctx: RuleContext, ruleId: string, r
 
     case 'resolve': {
       if (ctx.conversationId) {
+        const before = await prisma.conversation.findFirst({ where: { id: ctx.conversationId, tenantId: ctx.tenantId }, select: { assignedTo: true, outcome: true } })
         await prisma.conversation.updateMany({
           where: { id: ctx.conversationId, tenantId: ctx.tenantId },
-          data: { status: 'resolved', resolvedAt: new Date() },
+          data: { status: 'resolved', resolvedAt: new Date(), outcome: outcomeAfterStatus('resolved', before?.assignedTo ?? null, before?.outcome ?? null) },
         })
       }
       break
@@ -152,9 +154,10 @@ async function executeAction(action: string, ctx: RuleContext, ruleId: string, r
 
     case 'close': {
       if (ctx.conversationId) {
+        const before = await prisma.conversation.findFirst({ where: { id: ctx.conversationId, tenantId: ctx.tenantId }, select: { assignedTo: true, outcome: true } })
         await prisma.conversation.updateMany({
           where: { id: ctx.conversationId, tenantId: ctx.tenantId },
-          data: { status: 'closed' },
+          data: { status: 'closed', outcome: outcomeAfterStatus('closed', before?.assignedTo ?? null, before?.outcome ?? null) },
         })
       }
       break
