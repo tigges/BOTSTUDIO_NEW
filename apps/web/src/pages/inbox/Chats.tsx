@@ -13,6 +13,7 @@ import {
 } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
 import { cn } from '@ybot/ui'
+import { formatLlmCost, llmCallsLine } from '../../lib/outcome-format'
 import { useConversations, useConversation, useSendMessage, useAssignConversation, useResolveConversation, useCreateConversation } from '../../lib/hooks'
 import { useConversationWS, useTenantWS } from '../../lib/ws'
 import { useAppStore } from '../../store/app'
@@ -376,6 +377,7 @@ export function ChatsPage() {
                     ? <> · Assigned to <span className="text-[var(--text-secondary)]">{selected.assignee}</span></>
                     : <> · <span className="text-[var(--warning,#fbbf24)]">Unassigned</span></>
                   }
+                  <> · <span title={llmCallsLine(selectedConvo?.llm)}>Model cost {formatLlmCost(selectedConvo?.llm)}</span></>
                 </p>
               </div>
             </div>

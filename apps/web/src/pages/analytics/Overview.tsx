@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import {
-  MessageSquare, Users, CheckCircle, Clock, TrendingUp,
+  MessageSquare, DollarSign, CheckCircle, Clock, TrendingUp,
   ThumbsUp, Bot, UserCheck, Download, ChevronDown, Star,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, Badge, Button } from '@ybot/ui'
@@ -11,6 +11,7 @@ import {
   useAnalyticsOverview, useConversationTrends, useAnalyticsAgents, useAnalyticsChannels,
   useAnalyticsCsatTrend, useAnalyticsResolutionBreakdown, useAnalyticsResponseTimeByHour,
 } from '../../lib/hooks'
+import { containedDetail, formatLlmCost, llmCallsLine, ofFinished, openLine, percentOrDash } from '../../lib/outcome-format'
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
   PieChart, Pie, Cell,
@@ -25,7 +26,7 @@ const SUBNAV = [
 
 const RANGES = ['Today', 'Last 7 days', 'Last 30 days', 'Last 90 days', 'Custom']
 
-const RESOLUTION_COLORS = ['#6366f1', '#f59e0b', '#ef4444', '#6b7280']
+const RESOLUTION_COLORS = ['#22c55e', '#6366f1', '#6b7280']
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 function MetricTile({ label, value, icon, sub }: {
@@ -69,6 +70,7 @@ export function AnalyticsOverviewPage() {
   const days = rangeDays[range] ?? 7
 
   const { data: overview } = useAnalyticsOverview()
+  const outcomes = overview?.outcomes
   const { data: trends = [] } = useConversationTrends(days)
   const { data: agentStats = [] } = useAnalyticsAgents(days)
   const { data: channelStats = [] } = useAnalyticsChannels()
@@ -131,16 +133,16 @@ export function AnalyticsOverviewPage() {
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {/* KPI tiles */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-          <MetricTile label="Total Conversations" value={String(overview?.totalConversations ?? 0)} icon={<MessageSquare size={20} />} />
-          <MetricTile label="Resolution Rate" value={`${overview?.resolutionRate?.toFixed(1) ?? 0}%`} icon={<CheckCircle size={20} />} sub={`Bot: ${overview?.botHandledPct ?? 0}% of volume`} />
+          <MetricTile label="Total Conversations" value={String(overview?.totalConversations ?? 0)} icon={<MessageSquare size={20} />} sub={openLine(outcomes) || undefined} />
+          <MetricTile label="Resolved by bot" value={percentOrDash(outcomes?.rates.resolvedByBot)} icon={<CheckCircle size={20} />} sub={ofFinished(outcomes?.counts.contained_resolved ?? 0, outcomes)} />
           <MetricTile label="CSAT Score" value={overview?.csatScore ? String(overview.csatScore) : '—'} icon={<ThumbsUp size={20} />} sub="Out of 100" />
           <MetricTile label="Avg Response Time" value={avgRespDisplay} icon={<Clock size={20} />} sub="First bot reply latency" />
         </div>
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-          <MetricTile label="Active Users" value={String(overview?.totalContacts ?? 0)} icon={<Users size={20} />} />
-          <MetricTile label="Bot Handled" value={`${overview?.botHandledPct ?? 0}%`} icon={<Bot size={20} />} sub={`${Math.round(((overview?.botHandledPct ?? 0) / 100) * (overview?.totalConversations ?? 0))} resolved by bot`} />
-          <MetricTile label="Agent Handovers" value={String(resolutionBreakdown.find((r) => r.name === 'Agent handover')?.value ?? 0)} icon={<UserCheck size={20} />} sub="conversations transferred" />
-          <MetricTile label="Escalation Rate" value={`${overview?.escalationRate?.toFixed(1) ?? 0}%`} icon={<TrendingUp size={20} />} sub="escalations this period" />
+          <MetricTile label="Contained" value={percentOrDash(outcomes?.rates.contained)} icon={<Bot size={20} />} sub={[ofFinished(outcomes?.buckets.contained ?? 0, outcomes), containedDetail(outcomes)].filter(Boolean).join(' · ')} />
+          <MetricTile label="Escalation Rate" value={percentOrDash(outcomes?.rates.escalated)} icon={<UserCheck size={20} />} sub={ofFinished(outcomes?.buckets.escalated ?? 0, outcomes)} />
+          <MetricTile label="Abandoned" value={percentOrDash(outcomes?.rates.abandoned)} icon={<TrendingUp size={20} />} sub={ofFinished(outcomes?.buckets.abandoned ?? 0, outcomes)} />
+          <MetricTile label={`Model cost · ${overview?.llm?.days ?? 30} days`} value={formatLlmCost(overview?.llm)} icon={<DollarSign size={20} />} sub={llmCallsLine(overview?.llm)} />
         </div>
 
         {/* Row 1: Conversation trend + CSAT */}
@@ -172,7 +174,7 @@ export function AnalyticsOverviewPage() {
                       <Tooltip {...TOOLTIP_STYLE} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Area type="monotone" dataKey="conversations" name="Total" stroke="#6366f1" fill="url(#convGrad)" strokeWidth={2} />
-                      <Area type="monotone" dataKey="resolved" name="Resolved" stroke="#22c55e" fill="url(#resolvedGrad)" strokeWidth={1.5} />
+                      <Area type="monotone" dataKey="resolved" name="Contained" stroke="#22c55e" fill="url(#resolvedGrad)" strokeWidth={1.5} />
                       <Area type="monotone" dataKey="escalated" name="Escalated" stroke="#ef4444" fill="transparent" strokeWidth={1.5} strokeDasharray="4 2" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -209,8 +211,8 @@ export function AnalyticsOverviewPage() {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
           <Card padding="none">
             <CardHeader className="px-5 pt-4 pb-2">
-              <CardTitle>Resolution breakdown</CardTitle>
-              <Badge variant="muted">% of total</Badge>
+              <CardTitle>How chats ended</CardTitle>
+              <Badge variant="muted">% of finished chats</Badge>
             </CardHeader>
             <div className="flex items-center gap-4 px-4 pb-4 h-[220px]">
               {resolutionBreakdown.length === 0 || resolutionBreakdown.every((r) => r.value === 0)

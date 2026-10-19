@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, Badge } from '@ybot/ui'
 import { useAppStore } from '../store/app'
 import { useAnalyticsOverview, useConversationTrends, useConversations, useAnalyticsChannels } from '../lib/hooks'
 import { chatText } from '../lib/chat-text'
+import { ofFinished, percentOrDash } from '../lib/outcome-format'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar,
@@ -88,14 +89,14 @@ export function OverviewPage() {
           <MetricTile
             label="Total Conversations"
             value={overview ? overview.totalConversations.toLocaleString() : '—'}
-            sub={overview ? `${overview.escalationRate.toFixed(1)}% escalated` : undefined}
+            sub={overview?.outcomes ? `${percentOrDash(overview.outcomes.rates.escalated)} escalated · ${ofFinished(overview.outcomes.buckets.escalated, overview.outcomes)}` : undefined}
             icon={<MessageSquare size={18} className="text-[var(--accent)]" />}
             color="var(--accent-muted)"
             loading={ovLoading}
           />
           <MetricTile
-            label="Resolution Rate"
-            value={overview ? pct(overview.resolutionRate) : '—'}
+            label="Resolved by bot"
+            value={percentOrDash(overview?.outcomes?.rates.resolvedByBot)}
             sub={overview?.csatScore ? `CSAT ${pct(overview.csatScore)}` : undefined}
             icon={<CheckCircle size={18} className="text-[var(--success)]" />}
             color="var(--success-muted)"
@@ -104,7 +105,7 @@ export function OverviewPage() {
           <MetricTile
             label="Total Contacts"
             value={overview ? overview.totalContacts.toLocaleString() : '—'}
-            sub={overview ? `${pct(overview.botHandledPct)} bot-handled` : undefined}
+            sub={overview?.outcomes ? `${percentOrDash(overview.outcomes.rates.contained)} contained by the bot` : undefined}
             icon={<Users size={18} className="text-[var(--info)]" />}
             color="var(--info-muted)"
             loading={ovLoading}
