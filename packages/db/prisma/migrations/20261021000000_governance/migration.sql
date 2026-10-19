@@ -1,8 +1,11 @@
+-- Idempotent: a database adopted by migrate.sh is db-pushed to the current
+-- schema before this runs, so every statement must tolerate existing objects.
+
 -- AlterTable
-ALTER TABLE "bot_configs" ADD COLUMN     "privacy" JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE "bot_configs" ADD COLUMN IF NOT EXISTS "privacy" JSONB NOT NULL DEFAULT '{}';
 
 -- CreateTable
-CREATE TABLE "guardrail_policies" (
+CREATE TABLE IF NOT EXISTS "guardrail_policies" (
     "id" TEXT NOT NULL,
     "tenantId" TEXT NOT NULL,
     "botId" TEXT NOT NULL,
@@ -16,7 +19,10 @@ CREATE TABLE "guardrail_policies" (
 );
 
 -- CreateIndex
-CREATE INDEX "guardrail_policies_botId_active_idx" ON "guardrail_policies"("botId", "active");
+CREATE INDEX IF NOT EXISTS "guardrail_policies_botId_active_idx" ON "guardrail_policies"("botId", "active");
 
 -- AddForeignKey
-ALTER TABLE "guardrail_policies" ADD CONSTRAINT "guardrail_policies_botId_fkey" FOREIGN KEY ("botId") REFERENCES "bots"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "guardrail_policies" ADD CONSTRAINT "guardrail_policies_botId_fkey" FOREIGN KEY ("botId") REFERENCES "bots"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
