@@ -169,9 +169,11 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
 type Broadcast = (tenantId: string, event: object) => void
 let broadcast: Broadcast = () => {}
 
-/** The API wires the Inbox socket once at startup. */
+/** The API wires the Inbox socket once at startup. A live update that fails never costs the guest a reply. */
 export function setTurnBroadcast(next: Broadcast): void {
-  broadcast = next
+  broadcast = (tenantId, event) => {
+    try { next(tenantId, event) } catch (err) { console.warn('[turn] inbox broadcast failed:', err instanceof Error ? err.message : err) }
+  }
 }
 
 const defaultLlm = createLlmAdapter()
