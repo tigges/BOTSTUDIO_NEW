@@ -23,7 +23,7 @@ import {
   type WebsiteChatDraft,
 } from '@ybot/shared'
 
-const IMPORT_TIMEOUT_MS = 20_000
+const IMPORT_TIMEOUT_MS = 45_000
 const FETCH_TIMEOUT_MS = 8_000
 const PAGE_CHARS = 1_800
 const MAX_JOBS = 8
