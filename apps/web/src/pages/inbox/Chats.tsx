@@ -4,7 +4,7 @@ import {
   AlertCircle, Clock, CheckCheck, MoreHorizontal, Tag,
   UserPlus, ArrowRightLeft, Ticket, StickyNote, MessageCircle,
   Phone, Mail, Globe, Hash, ChevronRight, X, Mic,
-  Circle, Zap, Star,
+  Circle, Zap, Star, Wrench,
 } from 'lucide-react'
 import { Avatar, Badge, Input, Button, Skeleton } from '@ybot/ui'
 import {
@@ -17,6 +17,7 @@ import { formatLlmCost, llmCallsLine } from '../../lib/outcome-format'
 import { useConversations, useConversation, useSendMessage, useAssignConversation, useResolveConversation, useCreateConversation, useHandBackConversation } from '../../lib/hooks'
 import { showsHandover } from '../../lib/handover-format'
 import { HandoverCard } from './HandoverCard'
+import { RunToolPanel } from './RunToolPanel'
 import { useConversationWS, useTenantWS } from '../../lib/ws'
 import { useAppStore } from '../../store/app'
 import * as api from '../../lib/api'
@@ -62,6 +63,7 @@ interface Message {
   text: string
   time: string
   isNote?: boolean
+  tool?: api.ToolNote
 }
 
 const CANNED_RESPONSES = [
@@ -157,6 +159,7 @@ export function ChatsPage() {
 
   const [reply, setReply] = useState('')
   const [noteType, setNoteType] = useState<NoteType>('reply')
+  const [showTools, setShowTools] = useState(false)
   const [view, setView] = useState<View>('all')
   const [showCanned, setShowCanned] = useState(false)
   const [cannedFilter, setCannedFilter] = useState('')
@@ -195,6 +198,7 @@ export function ChatsPage() {
     text: chatMarkup(m.content?.text, selectedConvo?.contact?.displayName),
     time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     isNote: Boolean(m.content?.internal),
+    tool: m.content?.tool,
   }))
 
   const selected = convos.find((c) => c.id === selectedId) ?? (selectedId ? undefined : convos[0])
@@ -497,6 +501,14 @@ export function ChatsPage() {
                       </div>
                       <div className="rounded-[var(--radius-md)] px-3 py-2 text-sm bg-[var(--warning-muted,#2d2000)] border border-[var(--warning,#fbbf24)]/25 text-[var(--text-primary)] max-w-[70%]">
                         <ChatText text={msg.text} />
+                        {msg.tool && (
+                          <details className="mt-1.5 text-[11px]">
+                            <summary className="cursor-pointer text-[var(--text-muted)]">{msg.tool.ok ? 'Result' : 'Details'}</summary>
+                            <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-[var(--bg-overlay)] p-2 font-mono text-[10px]">
+                              {JSON.stringify(msg.tool.ok ? msg.tool.output : { args: msg.tool.args, error: msg.tool.error }, null, 2)}
+                            </pre>
+                          </details>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -567,6 +579,8 @@ export function ChatsPage() {
               </button>
             </div>
 
+            {showTools && selectedId && <RunToolPanel conversationId={selectedId} onClose={() => setShowTools(false)} />}
+
             {/* Canned response suggestions */}
             {showCanned && filteredCanned.length > 0 && (
               <div className="mx-4 mb-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-elevated)] overflow-hidden shadow-[var(--shadow-lg)] max-h-44 overflow-y-auto">
@@ -612,6 +626,15 @@ export function ChatsPage() {
                   </button>
                   <button className="p-1.5 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] transition-colors" title="Canned responses">
                     <Zap size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowTools((open) => !open)}
+                    className={cn('p-1.5 rounded hover:bg-[var(--bg-hover)] transition-colors', showTools ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]')}
+                    title="Run a tool"
+                    aria-label="Run a tool"
+                  >
+                    <Wrench size={14} />
                   </button>
                 </div>
                 <div className="flex items-center gap-2">

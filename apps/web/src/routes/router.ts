@@ -19,6 +19,7 @@ import { OverviewPage } from '../pages/Overview'
 import { FlowsPage } from '../pages/build/Flows'
 import { JourneyPage } from '../pages/build/Journey'
 import { WorkflowsPage } from '../pages/build/Workflows'
+import { ToolsPage } from '../pages/build/Tools'
 import { FlowCanvasPage } from '../pages/build/canvas/FlowCanvas'
 import { IntentsPage } from '../pages/build/knowledge/Intents'
 import { EntitiesPage } from '../pages/build/knowledge/Entities'
@@ -130,6 +131,7 @@ const flowCanvasRoute = createRoute({
   component: FlowCanvasPage,
 })
 const workflowsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/workflows', component: WorkflowsPage })
+const toolsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/tools', component: ToolsPage })
 const knowledgeRedirectRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge', beforeLoad: () => { throw redirect({ to: '/build/knowledge/intents' }) }, component: () => null })
 const intentsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/intents', component: IntentsPage })
 const entitiesRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/entities', component: EntitiesPage })
@@ -185,6 +187,7 @@ const routeTree = rootRoute.addChildren([
     flowsRoute,
     flowCanvasRoute,
     workflowsRoute,
+    toolsRoute,
     intentsRoute,
     entitiesRoute,
     faqsRoute,

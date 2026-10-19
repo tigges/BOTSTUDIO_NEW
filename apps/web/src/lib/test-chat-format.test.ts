@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { TestChatState } from './api'
-import { testChatNote } from './test-chat-format'
+import { joinNotes, testChatNote, testToolNote } from './test-chat-format'
 
 const open: TestChatState = { status: 'active', outcome: null, handover: null }
 
@@ -32,4 +32,17 @@ test('nobody on chat and a finished journey each say so once', () => {
   assert.match(testChatNote(open, kept, 'none') ?? '', /nobody is on chat/)
   assert.equal(testChatNote(kept, kept, 'journey'), undefined)
   assert.equal(testChatNote(open, { ...open, status: 'resolved', outcome: 'contained_resolved' }, 'journey'), 'Resolved by the bot.')
+})
+
+test('tool calls say what ran, what was skipped and what failed', () => {
+  const note = testToolNote([
+    { toolId: 'a', name: 'lookup_order', ok: true, skipped: false },
+    { toolId: 'b', name: 'refund_order', ok: true, skipped: true },
+    { toolId: 'c', name: 'crm_note', ok: false, skipped: false, error: 'HTTP 401' },
+  ]) ?? ''
+  assert.match(note, /Ran lookup_order\./)
+  assert.match(note, /Skipped refund_order: it changes data/)
+  assert.match(note, /crm_note failed: HTTP 401\. The step took its Error line\./)
+  assert.equal(testToolNote([]), undefined)
+  assert.equal(joinNotes(undefined, 'Resolved by the bot.'), 'Resolved by the bot.')
 })

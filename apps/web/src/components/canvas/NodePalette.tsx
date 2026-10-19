@@ -4,7 +4,7 @@ import { NODE_DEFINITIONS, type NodeKind } from '@ybot/shared'
 import {
   Play, MessageSquare, HelpCircle, GitBranch, Variable,
   Globe, Workflow, Headphones, CheckCircle, Clock, Mail,
-  Sparkles, Search, Layout, Layers, Zap, FileText, ChevronLeft, ChevronRight,
+  Sparkles, Search, Layout, Layers, Zap, FileText, ChevronLeft, ChevronRight, Wrench,
 } from 'lucide-react'
 
 const ICON_MAP: Record<NodeKind, React.ElementType> = {
@@ -34,6 +34,7 @@ const ICON_MAP: Record<NodeKind, React.ElementType> = {
   create_ticket: FileText,
   route_topic: GitBranch,
   lookup_catalog: Search,
+  run_tool: Wrench,
 }
 
 const CATEGORIES = [

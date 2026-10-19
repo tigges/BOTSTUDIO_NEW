@@ -4,7 +4,7 @@ import { Avatar, Button, cn } from '@ybot/ui'
 import type { FlowGraph } from '@ybot/runtime'
 import type { StudioCatalog } from '@ybot/shared'
 import { preview, type TestChatState } from '../../lib/api'
-import { testChatNote } from '../../lib/test-chat-format'
+import { joinNotes, testChatNote, testToolNote } from '../../lib/test-chat-format'
 import { ChatText } from '../../components/ChatText'
 
 export interface JourneyTestChapter {
@@ -100,7 +100,7 @@ export function JourneyTest({
     })
     const turn = result.data
     stateRef.current = turn.state
-    const note = testChatNote(state, turn.state, turn.path)
+    const note = joinNotes(testToolNote(turn.tools), testChatNote(state, turn.state, turn.path))
     return { ...turn, note: note ? [{ id: `n_${Date.now()}`, role: 'assistant' as const, content: note, note: true }] : [] }
   }
 

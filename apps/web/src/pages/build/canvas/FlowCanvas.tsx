@@ -153,7 +153,7 @@ function FitAfterLayout({ tick }: { tick: number }) {
   return null
 }
 
-import { useFlows, useSaveCanvas, useFlowCanvas, usePublishFlow, useUpdateFlow } from '../../../lib/hooks'
+import { useFlows, useSaveCanvas, useFlowCanvas, usePublishFlow, useTools, useUpdateFlow } from '../../../lib/hooks'
 import { useAppStore } from '../../../store/app'
 import { PublishCheckDialog, reviewFlow } from '../PublishCheck'
 
@@ -198,7 +198,9 @@ export function FlowCanvasPage() {
   const shown = versionForEnvironment(flow?.versions, environmentId, selectedEnv)
   const canvasVersion = shown?.version ?? 0
   const flowNames = useMemo(() => (flows ?? []).map((item) => item.name), [flows])
-  const review = useMemo(() => reviewFlow({ nodes, edges }, { flowNames }), [nodes, edges, flowNames])
+  const { data: tools } = useTools()
+  const toolIds = useMemo(() => tools?.map((tool) => tool.id), [tools])
+  const review = useMemo(() => reviewFlow({ nodes, edges }, { flowNames, toolIds }), [nodes, edges, flowNames, toolIds])
   const blockingByNode = useMemo(() => {
     const counts = new Map<string, number>()
     for (const issue of review.blocks) {
@@ -440,7 +442,7 @@ export function FlowCanvasPage() {
 
   function handlePublish() {
     if (!environmentId) return
-    const findings = reviewFlow({ nodes, edges }, { flowNames })
+    const findings = reviewFlow({ nodes, edges }, { flowNames, toolIds })
     if (findings.before.length === 0) {
       void publishGraph({ nodes, edges })
       return
