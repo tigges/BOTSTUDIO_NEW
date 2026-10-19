@@ -1,4 +1,4 @@
-import { hoursFromCatalog, takeBookingTime } from '@ybot/shared'
+import { hoursFromCatalog, takeBookingTime, type HandoverRequest } from '@ybot/shared'
 import { usableContactName } from './contact-speech.js'
 import type { NodeContext, NodeResult, Session, ExecutionServices } from './types.js'
 import {
@@ -23,6 +23,7 @@ const EXECUTORS: Record<string, NodeExecutor> = {
   execute_flow:     executeExecuteFlow,
   lookup_catalog:   executeLookupCatalog,
   handover:         executeHandover,
+  transfer_agent:   executeHandover,
   create_ticket:    executeCreateTicket,
   end_flow:         executeEndFlow,
   search_knowledge: executeSearchKnowledge,
@@ -66,7 +67,7 @@ export class SessionMachine {
     session: Session
     newMessages: Array<{ direction: 'outbound'; content: { text: string } }>
     waitForInput?: Session['waitingFor']
-    handover?: { team?: string; priority?: string; note?: string }
+    handover?: HandoverRequest
     jumpToFlow?: string
     ticket?: { subject: string; description?: string }
     completed?: boolean

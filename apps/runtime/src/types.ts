@@ -1,3 +1,5 @@
+import type { HandoverRequest } from '@ybot/shared'
+
 // Session variable scopes
 export type VarScope = 'flow' | 'global' | 'contact'
 
@@ -40,7 +42,7 @@ export interface NodeResult {
   output: Record<string, unknown>
   nextNodeId?: string
   waitForInput?: { variable: string; type: string; choices?: string[]; question?: string }
-  handover?: { team?: string; priority?: string; note?: string }
+  handover?: HandoverRequest
   /** Leave this graph and continue in the published flow with this name. */
   jumpToFlow?: string
   ticket?: { subject: string; description?: string }

@@ -1,6 +1,7 @@
 import type { NodeContext, NodeResult } from '../types.js'
 import { pickCatalog } from '../catalog-lookup.js'
 import { matchTopic, pickTopic, type TopicRoute } from '../topic-route.js'
+import { handoverFromConfig } from '@ybot/shared'
 import { evaluateCondition, interpolate } from '../utils.js'
 
 // ── trigger_start ────────────────────────────────────────────────────────────
@@ -155,10 +156,11 @@ export async function executeClassifyIntent(ctx: NodeContext): Promise<NodeResul
 
 // ── handover ──────────────────────────────────────────────────────────────────
 export async function executeHandover(ctx: NodeContext): Promise<NodeResult> {
-  const { config } = ctx
+  const { config, session } = ctx
+  const vars = { ...session.variables.flow, contact: session.variables.contact }
   return {
     output: { handed_over: true },
-    handover: { team: String(config['team'] ?? 'support'), priority: String(config['priority'] ?? 'medium'), note: String(config['note'] ?? '') },
+    handover: handoverFromConfig(config, session.variables.flow, (text) => interpolate(text, vars)),
   }
 }
 
