@@ -126,8 +126,13 @@ export function useSaveCanvas() {
   const bid = botId()
   return useMutation({
     mutationFn: ({ flowId, version, graph }: { flowId: string; version: number; graph: api.FlowGraph }) =>
-      api.flows.saveCanvas(bid, flowId, version, graph),
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['canvas', bid, v.flowId] }),
+      api.flows.saveCanvas(bid, flowId, version, graph).then((r) => r.data),
+    onSuccess: (saved, v) => {
+      void qc.invalidateQueries({ queryKey: ['canvas', bid, v.flowId] })
+      // A save over a published version lands in a new draft; the canvas follows it.
+      if (saved?.forked) void qc.invalidateQueries({ queryKey: ['flows', bid] })
+      void qc.invalidateQueries({ queryKey: ['releases', bid] })
+    },
   })
 }
 
@@ -237,7 +242,11 @@ export function usePublishFlow() {
   return useMutation({
     mutationFn: ({ flowId, environmentId, version }: { flowId: string; environmentId: string; version?: number }) =>
       api.flows.publish(bid, flowId, environmentId, version),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['flows', bid] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['flows', bid] })
+      void qc.invalidateQueries({ queryKey: ['releases', bid] })
+      void qc.invalidateQueries({ queryKey: ['evals', bid] })
+    },
   })
 }
 
@@ -1009,6 +1018,106 @@ export function useSafetyTest() {
   const bid = botId()
   return useMutation({
     mutationFn: (body: Parameters<typeof api.safety.test>[1]) => api.safety.test(bid, body).then((r) => r.data),
+  })
+}
+
+// ── Evals, releases, export/import ──────────────────────────────────────────
+
+export function useEvalSuites() {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['evals', bid],
+    queryFn: () => api.evals.list(bid).then((r) => r.data),
+    enabled: !!bid && bid !== 'demo',
+  })
+}
+
+export function useSaveEvalSuite() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: ({ id, body }: { id?: string; body: Parameters<typeof api.evals.create>[1] }) =>
+      (id ? api.evals.save(bid, id, body) : api.evals.create(bid, body)).then((r) => r.data),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['evals', bid] })
+      void qc.invalidateQueries({ queryKey: ['releases', bid] })
+    },
+  })
+}
+
+export function useDeleteEvalSuite() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.evals.delete(bid, id).then(() => undefined),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['evals', bid] })
+      void qc.invalidateQueries({ queryKey: ['releases', bid] })
+    },
+  })
+}
+
+export function useRunEvalSuite() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.evals.run(bid, id).then((r) => r.data),
+    onSuccess: (_run, id) => {
+      void qc.invalidateQueries({ queryKey: ['evals', bid] })
+      void qc.invalidateQueries({ queryKey: ['eval-runs', bid, id] })
+    },
+  })
+}
+
+export function useEvalRuns(suiteId: string | null) {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['eval-runs', bid, suiteId],
+    queryFn: () => api.evals.runs(bid, suiteId!).then((r) => r.data),
+    enabled: !!bid && bid !== 'demo' && !!suiteId,
+  })
+}
+
+export function useReleases() {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['releases', bid],
+    queryFn: () => api.releases.list(bid).then((r) => r.data),
+    enabled: !!bid && bid !== 'demo',
+  })
+}
+
+export function usePublishRelease() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (note?: string) => api.releases.publish(bid, note).then((r) => r.data),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['releases', bid] })
+      void qc.invalidateQueries({ queryKey: ['flows', bid] })
+      void qc.invalidateQueries({ queryKey: ['evals', bid] })
+    },
+  })
+}
+
+export function useRollback() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.releases.rollback(bid, id).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['releases', bid] }),
+  })
+}
+
+export function useImportBundle() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (body: Parameters<typeof api.bundle.import>[1]) => api.bundle.import(bid, body).then((r) => r.data),
+    onSuccess: (plan) => {
+      if (!plan.applied) return
+      for (const key of ['flows', 'tools', 'safety', 'evals', 'releases']) void qc.invalidateQueries({ queryKey: [key, bid] })
+    },
   })
 }
 
