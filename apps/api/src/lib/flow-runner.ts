@@ -10,7 +10,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { SessionMachine, acceptedHoursOffer, hoursChapterName, copyJumpVariables, missingChapterLine, hearChapter, offerOnMap, isSmallTalk, isTopicSwitch, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn } from '@ybot/runtime'
+import { SessionMachine, acceptedHoursOffer, hoursChapterName, copyJumpVariables, missingChapterLine, hearChapter, offerOnMap, isSmallTalk, isTopicSwitch, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn, basicAct, basicsReply } from '@ybot/runtime'
 import type { Session, SessionVariables, FlowGraph, ToolCallResult } from '@ybot/runtime'
 import { prisma } from '@ybot/db'
 import { CATALOG_ENTITY, catalogFromValues, type HandoverRequest, type StudioCatalog } from '@ybot/shared'
@@ -132,6 +132,44 @@ export function silentMapReply(
   return offerOnMap(chapters, current)
 }
 
+/**
+ * A hello, thanks or "are you a bot?" gets a person-like answer before any chart reads it.
+ * While a question is open the chat keeps its place and the question is asked again;
+ * after a finished chapter the map's offer is the question.
+ */
+async function conversationBasics(
+  store: JourneyStore,
+  active: VersionRow,
+  fsRecord: SavedSession | null,
+  userText: string,
+): Promise<FlowRunResult | undefined> {
+  if (!basicAct(userText)) return undefined
+  const graph = active.graph as FlowGraph
+  const waiting = asRecord(fsRecord?.waitingFor)
+  let reply
+  if (fsRecord?.status === 'waiting_input') {
+    reply = basicsReply({
+      text: userText,
+      graph,
+      nodeId: fsRecord.currentNodeId,
+      question: savedQuestion(fsRecord.waitingFor),
+      waitingType: typeof waiting['type'] === 'string' ? waiting['type'] : undefined,
+    })
+  } else if (fsRecord?.status === 'completed') {
+    const offer = offerOnMap(await store.chapters(), active.flow.name)
+    reply = basicsReply({ text: userText, graph, nodeId: fsRecord.currentNodeId, question: offer })
+  }
+  if (!reply) return undefined
+  await store.logStep({
+    flowVersionId: active.id,
+    nodeId: fsRecord?.currentNodeId ?? 'basics',
+    nodeKind: 'conversation_basics',
+    input: { text: userText },
+    output: { act: reply.act },
+  })
+  return { handled: true, messages: [reply.text], flowName: active.flow.name }
+}
+
 /** A saved session from an older chart may not have flow, global, and contact. */
 export function resumeVariables(raw: unknown, userText: string, contactName: string): SessionVariables {
   const record = asRecord(raw)
@@ -176,6 +214,9 @@ export async function runJourney(store: JourneyStore, opts: {
     ? await store.version(fsRecord.flowVersionId)
     : await store.entry()
   if (!active) return { handled: false, messages: [] }
+
+  const basics = await conversationBasics(store, active, fsRecord, userText)
+  if (basics) return basics
 
   const llmAdapter = await store.llm()
   const catalog = await store.catalog()
