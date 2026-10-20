@@ -56,6 +56,8 @@ export interface SlaSnapshot {
   resolutionDueAt: Date | null
   firstRespondedAt: Date | null
   slaBreachedAt: Date | null
+  /** Kept as it was: stamping a clock is bookkeeping, not activity in the chat. */
+  updatedAt?: Date
 }
 
 export function parseInboxPolicy(raw: unknown): InboxPolicy {
@@ -205,6 +207,7 @@ async function stampBreach(
     resolutionDueAt?: Date
     firstRespondedAt?: Date
     slaBreachedAt?: Date
+    updatedAt?: Date
   } = {}
   if (!row.firstResponseDueAt) data.firstResponseDueAt = addHours(row.createdAt, policy.sla.firstResponseHours)
   if (!row.resolutionDueAt) data.resolutionDueAt = addHours(row.createdAt, policy.sla.resolutionHours)
@@ -212,6 +215,7 @@ async function stampBreach(
   const newlyBreached = label === 'Breached' && !row.slaBreachedAt
   if (newlyBreached) data.slaBreachedAt = now
   if (Object.keys(data).length === 0) return
+  if (row.updatedAt) data.updatedAt = row.updatedAt
   await prisma.conversation.update({ where: { id: row.id }, data }).catch(() => {})
   if (newlyBreached) {
     triggerRules('sla.breached', {
