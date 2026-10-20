@@ -185,6 +185,8 @@ model BotConfig {
   inboxConfig  Json     @default("{}")
   /// Personal data render modes per reader and custom patterns (see @ybot/shared privacy.ts).
   privacy      Json     @default("{}")
+  /// Answers the bot keeps per contact across chats (see @ybot/shared memory.ts).
+  memory       Json     @default("{}")
   updatedAt    DateTime @updatedAt
 
   bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
@@ -577,8 +579,30 @@ model Contact {
   updatedAt   DateTime @updatedAt
 
   conversations Conversation[]
+  memories      ContactMemory[]
 
   @@map("contacts")
+}
+
+/// One fact a bot remembered about a contact, recalled as {{contact.<key>}} in later chats.
+model ContactMemory {
+  id             String    @id @default(cuid())
+  tenantId       String
+  contactId      String
+  key            String
+  value          String
+  /// The bot that remembered it.
+  botId          String?
+  conversationId String?
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, key])
+  @@index([tenantId])
+  @@map("contact_memories")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -776,12 +800,18 @@ model DataRecord {
 model IntegrationConnection {
   id          String   @id @default(cuid())
   tenantId    String
-  provider    String
-  apiKey      String?
-  connectedAt DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  provider      String
+  /// Legacy plaintext key. Moved into an Auth Profile at boot and cleared; drop in a later release.
+  apiKey        String?
+  /// The credential lives here, sealed.
+  authProfileId String?
+  /// Non-secret settings, for example the Zendesk subdomain.
+  settings      Json     @default("{}")
+  connectedAt   DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  authProfile AuthProfile? @relation(fields: [authProfileId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, provider])
   @@map("integration_connections")
@@ -928,8 +958,9 @@ model AuthProfile {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tools  Tool[]
+  tenant       Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tools        Tool[]
+  integrations IntegrationConnection[]
 
   @@unique([tenantId, name])
   @@map("auth_profiles")
