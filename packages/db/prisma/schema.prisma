@@ -414,6 +414,8 @@ model Conversation {
    * The handover contract (reason, priority, tags, summary, variables, routing, context) and how it came back.
    */
   handover             Json?
+  /// Set when a scheduled test run started this chat through the public channel. Null for real visitors.
+  testRunId            String?
 
   bot           Bot                 @relation(fields: [botId], references: [id], onDelete: Cascade)
   environment   Environment         @relation(fields: [environmentId], references: [id])
@@ -425,7 +427,35 @@ model Conversation {
   labels        ConversationLabel[]
   csatResponses CsatResponse[]
 
+  @@index([testRunId])
   @@map("conversations")
+}
+
+/**
+ * One scheduled end-to-end run against a live bot: simulated visitors through the public channel,
+ * a scripted person in the Inbox, and the checks that decided pass or fail. No foreign keys, so the
+ * record outlives the chats it pruned.
+ */
+model TestRun {
+  id         String    @id @default(cuid())
+  tenantId   String
+  botId      String
+  /// traffic | release
+  kind       String
+  /// running | passed | failed
+  status     String    @default("running")
+  /// Replays the same generated visitors when the same seed is used again.
+  seed       String
+  startedBy  String?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  /// Conversation count, handovers, cost and other totals.
+  summary    Json      @default("{}")
+  /// Every check: { name, ok, detail, conversationId? }
+  checks     Json      @default("[]")
+
+  @@index([botId, startedAt])
+  @@map("test_runs")
 }
 
 model Message {
