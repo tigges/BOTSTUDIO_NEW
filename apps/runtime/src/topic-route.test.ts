@@ -62,6 +62,27 @@ test('matchTopic picks the longest phrase', () => {
   )
 })
 
+test('a route that hears more of the words wins over one longer word, and a slip counts half', () => {
+  const telco = [
+    { handle: 'sim', phrases: ['sim only deals', 'no contract sim', 'esim'] },
+    { handle: 'cost', phrases: ['social tariff', 'help with cost of living', 'cheaper plans'] },
+  ]
+  assert.equal(matchTopic('What SIM only plans do you have?', telco), 'sim')
+  assert.equal(matchTopic('cheaper plans please', telco), 'cost')
+  const bbc = [
+    { handle: 'complain', phrases: ['how do i complain to the bbc', 'where do i post a complaint'] },
+    { handle: 'jobs', phrases: ['bbc vacancies', 'bbc jobs', 'freelance work bbc'] },
+  ]
+  assert.equal(matchTopic('Are there jobs at the BBC?', bbc), 'jobs')
+  assert.equal(matchTopic('I want to complain', bbc), 'complain')
+  const colour = [
+    { handle: 'in-between-roots', phrases: ['in between roots', 'between', 'roots'] },
+    { handle: 'roots', phrases: ['roots'] },
+  ]
+  assert.equal(matchTopic('How much are roots?', colour), 'roots')
+  assert.equal(matchTopic('in-between roots please', colour), 'in-between-roots')
+})
+
 test('a phrase miss asks the model for one of this node\'s jobs', async () => {
   const routes = [
     { handle: 'plans', phrases: ['plans', 'sim only'] },
