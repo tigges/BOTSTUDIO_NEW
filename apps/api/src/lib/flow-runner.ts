@@ -21,6 +21,7 @@ import { finishBotLines, nameThanksEndsTurn, saveContactName, takeNameTurn, type
 import { reopenForBot, resolveByBot } from './chat-outcome.js'
 import { toolRunnerFor } from './tools-store.js'
 import { chapterRow as releaseRow, releaseForChat, type LiveRelease } from './releases.js'
+import { recallForChat, rememberFromChat } from './contact-memory.js'
 
 const defaultLlm = createLlmAdapter()
 
@@ -102,6 +103,10 @@ export interface JourneyStore {
   createTicket(ticket: { subject: string; description: string }): Promise<void>
   /** Runs a tool from the bot's Tools list for a Run tool step. */
   runTool?(toolId: string, args: Record<string, unknown>): Promise<ToolCallResult>
+  /** What the bot remembers about this contact, for contact.* in a new session. */
+  recall?(): Promise<Record<string, string>>
+  /** Keeps the bot's listed answers for the contact's next chat. */
+  remember?(flow: Record<string, unknown>): Promise<void>
 }
 
 function startNodeId(graph: FlowGraph): string | undefined {
@@ -184,6 +189,8 @@ export async function runJourney(store: JourneyStore, opts: {
   })
   const loadChapters = () => store.chapters()
   const previousAsked = savedQuestion(fsRecord?.waitingFor)
+  let recalled: Promise<Record<string, string>> | undefined
+  const recall = () => (recalled ??= store.recall ? store.recall().catch(() => ({})) : Promise.resolve({}))
 
   let first
   try {
@@ -246,6 +253,7 @@ export async function runJourney(store: JourneyStore, opts: {
         tenantId,
         userText,
         contactName: named.spoken,
+        recall,
       })
     }
   } catch (error) {
@@ -264,6 +272,7 @@ export async function runJourney(store: JourneyStore, opts: {
       tenantId,
       userText,
       contactName: named.spoken,
+      recall,
     })
   }
   if (!first) {
@@ -391,6 +400,7 @@ export async function runJourney(store: JourneyStore, opts: {
     status: outcome.session.status,
     waitingFor: outcome.session.waitingFor,
   })
+  if (store.remember) await store.remember(outcome.session.variables.flow).catch(() => {})
 
   if (!outcome.handover && outcome.session.status === 'completed') {
     await store.resolved()
@@ -468,6 +478,7 @@ async function runVersion(store: JourneyStore, opts: {
   userText: string
   contactName: string
   seedVariables?: SessionVariables
+  recall?: () => Promise<Record<string, string>>
 }) {
   const graph = opts.version.graph as unknown as FlowGraph
   const startId = startNodeId(graph)
@@ -475,6 +486,7 @@ async function runVersion(store: JourneyStore, opts: {
 
   let session: Session
   if (!opts.fsRecord) {
+    const remembered = !opts.seedVariables && opts.recall ? await opts.recall() : {}
     session = {
       id: randomUUID(),
       conversationId: opts.conversationId,
@@ -486,7 +498,7 @@ async function runVersion(store: JourneyStore, opts: {
       variables: opts.seedVariables ?? {
         flow: { _last_user_message: opts.userText },
         global: {},
-        contact: { name: opts.contactName },
+        contact: { ...remembered, name: opts.contactName },
       } satisfies SessionVariables,
       status: 'running',
       createdAt: new Date(),
@@ -541,6 +553,10 @@ export function postgresJourneyStore(opts: { conversationId: string; botId: stri
     nameTurn: (userText) => takeNameTurn(conversationId, userText),
     saveContactName,
     runTool: (toolId, args) => toolRunnerFor(tenantId, botId, { source: 'bot', conversationId })(toolId, args),
+    recall: () => recallForChat(conversationId, botId),
+    async remember(flow) {
+      await rememberFromChat(conversationId, botId, flow)
+    },
     loadSession: () => prisma.flowSession.findUnique({ where: { conversationId } }),
     async saveSession(session) {
       const row = {

@@ -28,7 +28,7 @@ import { startQuietChatSweep } from './lib/chat-outcome.js'
 import { installLlmLedger, withLlmScope } from './lib/llm-ledger.js'
 import { setTurnBroadcast } from './lib/turn-pipeline.js'
 import { systemRoutes } from './routes/system.js'
-import { cannedRoutes, reportsRoutes, databaseRoutes, integrationsRoutes } from './routes/studio.js'
+import { cannedRoutes, reportsRoutes, databaseRoutes, integrationsRoutes, INTEGRATION_CATALOG } from './routes/studio.js'
 import { toolsRoutes, authProfilesRoutes } from './routes/tools.js'
 import { authMiddleware } from './middleware/auth.js'
 import { wsRoutes, broadcastToTenant } from './ws.js'
@@ -40,6 +40,8 @@ import { safetyRoutes } from './routes/safety.js'
 import { evalsRoutes } from './routes/evals.js'
 import { releasesRoutes } from './routes/releases.js'
 import { bundleRoutes } from './routes/bundle.js'
+import { botMemoryRoutes, contactMemoryRoutes } from './routes/memory.js'
+import { sweepExpiredMemory } from './lib/contact-memory.js'
 
 installConsoleScrubbing()
 
@@ -139,6 +141,8 @@ await app.register(safetyRoutes, { prefix: '/api/v1/bots' })
 await app.register(evalsRoutes, { prefix: '/api/v1/bots' })
 await app.register(releasesRoutes, { prefix: '/api/v1/bots' })
 await app.register(bundleRoutes, { prefix: '/api/v1/bots' })
+await app.register(botMemoryRoutes, { prefix: '/api/v1/bots' })
+await app.register(contactMemoryRoutes, { prefix: '/api/v1' })
 await app.register(reportsRoutes, { prefix: '/api/v1/bots' })
 await app.register(cannedRoutes, { prefix: '/api/v1/canned-replies' })
 await app.register(databaseRoutes, { prefix: '/api/v1/database' })
@@ -160,6 +164,13 @@ try {
     .then((mod) => mod.ensureBellaBenchmark())
     .then((result) => console.log('[bella-benchmark]', JSON.stringify(result)))
     .catch((err) => console.warn('[bella-benchmark]', err instanceof Error ? err.message : err))
+  import('./lib/integrations.js')
+    .then((mod) => mod.moveLegacyIntegrationKeys(INTEGRATION_CATALOG))
+    .then((result) => { if (result.moved) console.log('[integrations] moved plain-text keys into Auth Profiles', JSON.stringify(result)) })
+    .catch((err) => console.warn('[integrations]', err instanceof Error ? err.message : err))
+  const sweepMemory = () => sweepExpiredMemory().catch((err) => console.warn('[contact-memory]', err instanceof Error ? err.message : err))
+  void sweepMemory()
+  setInterval(sweepMemory, 6 * 3_600_000).unref()
   startKnowledgeSyncWorker().catch(() => {})
   startWebhookWorker().catch(() => {})
   startConversationAnalysisWorker().catch(() => {})

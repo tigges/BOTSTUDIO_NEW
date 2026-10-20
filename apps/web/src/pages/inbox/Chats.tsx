@@ -26,7 +26,8 @@ import { useNavigate } from '@tanstack/react-router'
 import { claimChat, queueContact } from '../../lib/inbox-nav'
 import { ChatText } from '../../components/ChatText'
 import { chatMarkup, chatText } from '../../lib/chat-text'
-import { useCannedReplies, useTeamMembers, useLabels, useCreateLabel, useCreateTicket } from '../../lib/hooks'
+import { useCannedReplies, useTeamMembers, useLabels, useCreateLabel, useCreateTicket, useChatMemory } from '../../lib/hooks'
+import { RememberedFacts } from '../../components/RememberedFacts'
 import { GUARDRAIL_ACTION_LABELS, type GuardrailHit, type ReturnOutcome } from '@ybot/shared'
 
 type ConvoStatus = 'active' | 'resolved' | 'escalated' | 'pending' | 'bot'
@@ -734,6 +735,9 @@ export function ChatsPage() {
                   </div>
                 ))}
               </div>
+              <div className="pt-2 border-t border-[var(--border)]">
+                <ChatMemory conversationId={selected.id} />
+              </div>
               <div className="pt-2 border-t border-[var(--border)] space-y-2">
                 <Button variant="secondary" size="sm" className="w-full gap-1.5" onClick={() => setShowTicketDialog(true)}>
                   <Ticket size={13} /> Create ticket
@@ -966,4 +970,9 @@ export function ChatsPage() {
       </Dialog>
     </div>
   )
+}
+
+function ChatMemory({ conversationId }: { conversationId: string }) {
+  const { data, isLoading, isError, refetch } = useChatMemory(conversationId)
+  return <RememberedFacts compact contactId={data?.contactId} facts={data?.facts} loading={isLoading} error={isError} onRetry={() => refetch()} />
 }
