@@ -311,7 +311,7 @@ function RunPanel({ suiteId, latest, running }: { suiteId: string; latest: EvalR
         <p className="px-4 py-4 text-xs text-[var(--text-muted)]">This suite has not run yet. Run it on the working copy, or publish to Production to run it as a gate.</p>
       ) : (
         <ul className="divide-y divide-[var(--border)]">
-          {(latest.results ?? []).map((result) => <ScenarioResult key={result.scenarioId} result={result} />)}
+          {(latest.results ?? []).map((result) => <ScenarioResult key={`${latest.id}:${result.scenarioId}`} result={result} />)}
         </ul>
       )}
       <div className="border-t border-[var(--border)] px-4 py-3">
