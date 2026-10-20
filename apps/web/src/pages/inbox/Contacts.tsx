@@ -13,7 +13,8 @@ import {
   DropdownMenuItem, DropdownMenuSeparator,
 } from '@ybot/ui'
 import { cn } from '@ybot/ui'
-import { useContacts, useCreateContact, useUpdateContact, useDeleteContact, useContactConversations, useCreateConversation, useCreateTicket, useChannels } from '../../lib/hooks'
+import { useContacts, useCreateContact, useUpdateContact, useDeleteContact, useContactConversations, useCreateConversation, useCreateTicket, useChannels, useContactMemory } from '../../lib/hooks'
+import { RememberedFacts } from '../../components/RememberedFacts'
 import { useAppStore } from '../../store/app'
 import { useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
@@ -74,6 +75,7 @@ interface ContactDetailProps {
 
 function ContactDetail({ contact, onClose, onOpenChat, onStart, starting }: ContactDetailProps) {
   const { data: convos = [] } = useContactConversations(contact.id)
+  const memory = useContactMemory(contact.id)
   return (
     <DialogContent size="lg">
       <DialogHeader>
@@ -115,6 +117,10 @@ function ContactDetail({ contact, onClose, onOpenChat, onStart, starting }: Cont
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="mt-6 border-t border-[var(--border)] pt-4">
+          <RememberedFacts contactId={contact.id} facts={memory.data} loading={memory.isLoading} error={memory.isError} onRetry={() => memory.refetch()} />
         </div>
 
         {/* Recent conversations */}

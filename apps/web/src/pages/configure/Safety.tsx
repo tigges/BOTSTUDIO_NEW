@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, AlertTriangle, EyeOff, Loader2, Plus, ShieldCheck, Trash2, FlaskConical, Lock } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Brain, EyeOff, Loader2, Plus, ShieldCheck, Trash2, FlaskConical, Lock, X } from 'lucide-react'
 import {
   Badge, Button, EmptyState, cn,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody, DialogFooter,
@@ -23,7 +23,10 @@ import {
   RENDER_MODE_LABELS,
   REASK_LINE,
   REVEAL_TO_AGENTS_WARNING,
+  DEFAULT_MEMORY,
+  MEMORY_MAX_DAYS,
   guardrailIssues,
+  memoryIssues,
   newGuardrailRule,
   privacyIssues,
   readerMode,
@@ -33,7 +36,7 @@ import {
   type RenderMode,
 } from '@ybot/shared'
 import type { GuardrailPolicyRow, SafetyTestResult } from '../../lib/api'
-import { usePolicyAction, useSafety, useSafetyTest, useSavePolicy, useSavePrivacy } from '../../lib/hooks'
+import { useMemorySettings, usePolicyAction, useSafety, useSafetyTest, useSaveMemorySettings, useSavePolicy, useSavePrivacy } from '../../lib/hooks'
 import { useAppStore } from '../../store/app'
 
 const field = 'rounded border border-[var(--border)] bg-[var(--bg-overlay)] px-2 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none'
@@ -48,7 +51,7 @@ function errorText(err: unknown): string | null {
 
 export function SafetyPage() {
   const { data, isLoading, isError, refetch } = useSafety()
-  const [tab, setTab] = useState<'privacy' | 'guardrails'>('privacy')
+  const [tab, setTab] = useState<'privacy' | 'guardrails' | 'memory'>('privacy')
   const [privacy, setPrivacy] = useState<PrivacySettings>(DEFAULT_PRIVACY)
   const [editing, setEditing] = useState<{ id?: string; name: string; rules: GuardrailRule[] } | null>(null)
 
@@ -63,10 +66,10 @@ export function SafetyPage() {
       <div className="border-b border-[var(--border)] bg-[var(--bg-surface)]">
         <div className="px-6 py-4">
           <h1 className="text-base font-semibold text-[var(--text-primary)]">Safety</h1>
-          <p className="text-xs text-[var(--text-muted)]">How this bot handles personal data, and the content rules every guest message and bot reply is checked against.</p>
+          <p className="text-xs text-[var(--text-muted)]">How this bot handles personal data, what it remembers about each contact, and the content rules every guest message and bot reply is checked against.</p>
         </div>
         <div className="flex gap-4 px-6">
-          {([['privacy', 'Personal data', EyeOff], ['guardrails', 'Guardrails', ShieldCheck]] as const).map(([id, label, Icon]) => (
+          {([['privacy', 'Personal data', EyeOff], ['guardrails', 'Guardrails', ShieldCheck], ['memory', 'Contact memory', Brain]] as const).map(([id, label, Icon]) => (
             <button
               key={id}
               onClick={() => setTab(id)}
@@ -79,7 +82,7 @@ export function SafetyPage() {
       </div>
 
       <div className="flex-1 overflow-auto p-6">
-        {isLoading ? (
+        {tab === 'memory' ? <MemoryPanel /> : isLoading ? (
           <div className="flex items-center justify-center py-20 text-xs text-[var(--text-muted)]"><Loader2 size={16} className="mr-2 animate-spin" /> Loading safety settings…</div>
         ) : isError || !data ? (
           <EmptyState icon={<AlertCircle size={20} />} title="Safety settings could not be loaded" description="Check your connection and try again." action={<Button size="sm" variant="secondary" onClick={() => refetch()}>Retry</Button>} />
@@ -512,5 +515,125 @@ function LiveTest({ privacy, rules, rulesFrom }: { privacy: PrivacySettings; rul
         </div>
       )}
     </aside>
+  )
+}
+
+// ── Contact memory ───────────────────────────────────────────────────────────
+
+function MemoryPanel() {
+  const { data, isLoading, isError, refetch } = useMemorySettings()
+  const save = useSaveMemorySettings()
+  const [draft, setDraft] = useState(DEFAULT_MEMORY)
+  const [adding, setAdding] = useState('')
+  useEffect(() => { if (data) setDraft(data.settings) }, [data])
+  const issues = useMemo(() => memoryIssues(draft), [draft])
+  const dirty = data ? JSON.stringify(data.settings) !== JSON.stringify(draft) : false
+
+  if (isLoading) return <div className="flex items-center justify-center py-20 text-xs text-[var(--text-muted)]"><Loader2 size={16} className="mr-2 animate-spin" /> Loading contact memory…</div>
+  if (isError || !data) {
+    return <EmptyState icon={<AlertCircle size={20} />} title="Contact memory could not be loaded" description="Check your connection and try again." action={<Button size="sm" variant="secondary" onClick={() => refetch()}>Retry</Button>} />
+  }
+
+  const suggestions = data.variables.filter((name) => !draft.keys.includes(name) && name !== 'name')
+  const addKey = (key: string) => {
+    const clean = key.trim()
+    if (!clean || draft.keys.includes(clean)) return
+    setDraft({ ...draft, keys: [...draft.keys, clean] })
+    setAdding('')
+  }
+
+  return (
+    <div className="max-w-3xl space-y-5">
+      <section className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-medium text-[var(--text-primary)]">Remember answers between chats</h2>
+            <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+              When a guest answers one of the questions listed below, the bot keeps the answer for that contact. In their next chat it is ready as {'{{contact.<name>}}'}, for example {'{{contact.email}}'}. People in the Inbox see what is remembered and can delete it.
+            </p>
+          </div>
+          <label className="flex shrink-0 items-center gap-2 text-xs text-[var(--text-primary)]">
+            <input type="checkbox" checked={draft.enabled} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} />
+            {draft.enabled ? 'On' : 'Off'}
+          </label>
+        </div>
+      </section>
+
+      <section className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-surface)]">
+        <div className="border-b border-[var(--border)] px-4 py-3">
+          <h2 className="text-sm font-medium text-[var(--text-primary)]">Answers to remember</h2>
+          <p className="text-xs text-[var(--text-muted)]">Variables from Ask and Set variable steps. The contact’s name is kept already.</p>
+        </div>
+        <div className="space-y-3 p-4">
+          {draft.keys.length === 0 ? (
+            <p className="text-xs text-[var(--text-muted)]">Nothing is remembered yet. Add a variable below.</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {draft.keys.map((key, index) => {
+                const problem = issues.find((issue) => issue.field === `keys.${index}`)
+                return (
+                  <span key={key} className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[11px]', problem ? 'border-[var(--error)] text-[var(--error)]' : 'border-[var(--border)] text-[var(--text-primary)]')} title={problem?.message}>
+                    {key}
+                    {data.kept[key] ? <span className="font-sans text-[10px] text-[var(--text-muted)]">· {data.kept[key]} kept</span> : null}
+                    <button aria-label={`Stop remembering ${key}`} className="text-[var(--text-muted)] hover:text-[var(--error)]" onClick={() => setDraft({ ...draft, keys: draft.keys.filter((k) => k !== key) })}><X size={11} /></button>
+                  </span>
+                )
+              })}
+            </div>
+          )}
+          {suggestions.length > 0 && (
+            <div>
+              <p className="mb-1 text-[11px] text-[var(--text-muted)]">Asked in this bot’s journey:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {suggestions.map((name) => (
+                  <button key={name} className="inline-flex items-center gap-1 rounded-full border border-dashed border-[var(--border)] px-2 py-0.5 font-mono text-[11px] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]" onClick={() => addKey(name)}>
+                    <Plus size={10} /> {name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <input
+              className={cn(field, 'w-56 font-mono')}
+              placeholder="variable_name"
+              value={adding}
+              onChange={(e) => setAdding(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addKey(adding) }}
+              aria-label="Variable to remember"
+            />
+            <Button size="sm" variant="secondary" disabled={!adding.trim()} onClick={() => addKey(adding)}><Plus size={12} /> Add</Button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+        <label className="flex items-center gap-2 text-xs text-[var(--text-primary)]">
+          Forget an answer
+          <input
+            type="number"
+            min={1}
+            max={MEMORY_MAX_DAYS}
+            className={cn(field, 'w-20', issues.some((issue) => issue.field === 'days') && 'border-[var(--error)]')}
+            value={draft.days}
+            onChange={(e) => setDraft({ ...draft, days: Number(e.target.value) })}
+          />
+          days after the guest last gave it.
+        </label>
+        <p className="mt-1 text-[11px] text-[var(--text-muted)]">Deleting a contact deletes everything remembered about them.</p>
+      </section>
+
+      {issues.length > 0 && (
+        <p className="flex items-start gap-1.5 text-xs text-[var(--error)]"><AlertCircle size={12} className="mt-0.5 shrink-0" /> {issues[0]!.message}</p>
+      )}
+      {save.error && <p className="text-xs text-[var(--error)]">{errorText(save.error)}</p>}
+      <div className="flex items-center gap-2">
+        <Button size="sm" disabled={!dirty || issues.length > 0 || save.isPending} onClick={() => save.mutate(draft)}>
+          {save.isPending ? <Loader2 size={12} className="animate-spin" /> : null} Save
+        </Button>
+        {dirty && <Button size="sm" variant="ghost" onClick={() => setDraft(data.settings)}>Discard changes</Button>}
+        {!dirty && save.isSuccess && <span className="text-xs text-[var(--success)]">Saved</span>}
+      </div>
+    </div>
   )
 }
