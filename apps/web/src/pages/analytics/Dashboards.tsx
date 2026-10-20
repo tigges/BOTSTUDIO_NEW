@@ -27,12 +27,12 @@ const DASHBOARD_ICONS: Record<string, React.ReactNode> = {
   inbox: <MessageSquare size={20} />,
 }
 
-function metricValue(metric: string, overview: { totalConversations: number; totalContacts: number; resolutionRate: number; botHandledPct: number } | undefined) {
+function metricValue(metric: string, overview: { totalConversations: number; totalContacts: number; resolutionRate: number | null; botHandledPct: number | null } | undefined) {
   if (!overview) return '—'
   if (metric === 'totalConversations') return overview.totalConversations.toLocaleString()
   if (metric === 'totalContacts') return overview.totalContacts.toLocaleString()
-  if (metric === 'resolutionRate') return `${overview.resolutionRate.toFixed(1)}%`
-  if (metric === 'botHandledPct') return `${overview.botHandledPct}%`
+  if (metric === 'resolutionRate') return overview.resolutionRate == null ? '—' : `${overview.resolutionRate.toFixed(1)}%`
+  if (metric === 'botHandledPct') return overview.botHandledPct == null ? '—' : `${overview.botHandledPct}%`
   return '—'
 }
 

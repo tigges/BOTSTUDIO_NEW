@@ -921,7 +921,8 @@ export interface IntegrationConnection {
 }
 export interface Label { id: string; name: string; color: string }
 export interface TeamMember { id: string; displayName: string; email: string; memberships: Array<{ role: string }>; agentProfile?: { status: string } }
-export interface AnalyticsOverview { totalConversations: number; resolvedConversations: number; resolutionRate: number; escalationRate: number; totalContacts: number; csatScore: number; avgResponseTimeMs: number | null; botHandledPct: number; outcomes?: OutcomeSummary; llm?: { days: number; calls: number; costUsd: number | null } | null }
+/** Rates and scores are null when there is nothing to measure; show a dash, never zero. */
+export interface AnalyticsOverview { totalConversations: number; resolvedConversations: number; resolutionRate: number | null; escalationRate: number | null; totalContacts: number; csatScore: number | null; avgResponseTimeMs: number | null; botHandledPct: number | null; outcomes?: OutcomeSummary; llm?: { days: number; calls: number; costUsd: number | null } | null }
 export interface OutcomeSummary {
   finished: number
   open: number

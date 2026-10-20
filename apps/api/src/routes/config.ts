@@ -358,11 +358,11 @@ export async function analyticsRoutes(app: FastifyInstance) {
     ])
     const outcomes = summariseOutcomes(outcomeRows.map((row) => ({ outcome: row.outcome, count: row._count._all })))
 
-    const resolutionRate = totalConvos > 0 ? Math.round((resolvedConvos / totalConvos) * 100 * 10) / 10 : 0
-    const escalationRate = totalConvos > 0 ? Math.round((escalatedConvos / totalConvos) * 100 * 10) / 10 : 0
-    const botHandledPct = totalConvos > 0 ? Math.round((botHandledConvos / totalConvos) * 100) : 0
+    const resolutionRate = totalConvos > 0 ? Math.round((resolvedConvos / totalConvos) * 100 * 10) / 10 : null
+    const escalationRate = totalConvos > 0 ? Math.round((escalatedConvos / totalConvos) * 100 * 10) / 10 : null
+    const botHandledPct = totalConvos > 0 ? Math.round((botHandledConvos / totalConvos) * 100) : null
     const avgRating = csatRows._avg.rating ?? 0
-    const csatScore = csatRows._count.id > 0 ? Math.round(((avgRating + 1) / 2) * 100) : 0
+    const csatScore = csatRows._count.id > 0 ? Math.round(((avgRating + 1) / 2) * 100) : null
 
     return {
       data: {

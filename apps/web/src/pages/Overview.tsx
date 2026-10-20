@@ -99,7 +99,7 @@ export function OverviewPage() {
           <MetricTile
             label="Resolved by bot"
             value={percentOrDash(overview?.outcomes?.rates.resolvedByBot)}
-            sub={overview?.csatScore ? `CSAT ${pct(overview.csatScore)}` : undefined}
+            sub={overview?.csatScore != null ? `CSAT ${pct(overview.csatScore)}` : undefined}
             icon={<CheckCircle size={18} className="text-[var(--success)]" />}
             color="var(--success-muted)"
             loading={ovLoading}
