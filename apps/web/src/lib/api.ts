@@ -1,5 +1,5 @@
 import type {
-  AuthProfileKind, EvalScenario, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
+  AuthProfileKind, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
   ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns,
 } from '@ybot/shared'
 import { messageForStatus } from './api-error'
@@ -411,6 +411,44 @@ export interface MemoryView {
   variables: string[]
   /** Facts kept per key for this bot's contacts. */
   kept: Record<string, number>
+}
+
+export type BlueprintCard = {
+  id: string
+  version: number
+  name: string
+  summary: string
+  businessNoun: string
+  persona: string
+  accent: string
+  fields: BlueprintFieldSpec[]
+  chapters: string[]
+}
+
+export interface BusinessView {
+  blueprint: BlueprintCard | null
+  profile: BusinessProfile | null
+  issues: ProfileIssue[]
+  documents: number
+}
+
+export interface BusinessRead {
+  profile: BusinessProfile
+  issues: ProfileIssue[]
+}
+
+export const business = {
+  blueprints: () => apiFetch<{ data: BlueprintCard[] }>('/bots/blueprints'),
+  sample: (blueprintId: string) => apiFetch<{ data: BusinessRead }>(`/bots/blueprints/${blueprintId}/sample`),
+  scan: (blueprintId: string, body: { url: string; businessName?: string; personaName?: string }) =>
+    apiFetch<{ data: BusinessRead }>(`/bots/blueprints/${blueprintId}/scan`, { method: 'POST', body: JSON.stringify(body) }),
+  get: (botId: string) => apiFetch<{ data: BusinessView }>(`/bots/${botId}/business`),
+  save: (botId: string, profile: BusinessProfile) =>
+    apiFetch<{ data: BusinessRead & { facts: number; documents: number } }>(`/bots/${botId}/business`, { method: 'PUT', body: JSON.stringify({ profile }) }),
+  reread: (botId: string, url?: string) =>
+    apiFetch<{ data: { changes: FieldChange[]; fresh: BusinessProfile } }>(`/bots/${botId}/business/reread`, { method: 'POST', body: JSON.stringify(url ? { url } : {}) }),
+  accept: (botId: string, fresh: BusinessProfile, keys: string[]) =>
+    apiFetch<{ data: BusinessRead & { accepted: string[] } }>(`/bots/${botId}/business/accept`, { method: 'POST', body: JSON.stringify({ fresh, keys }) }),
 }
 
 export const memory = {
