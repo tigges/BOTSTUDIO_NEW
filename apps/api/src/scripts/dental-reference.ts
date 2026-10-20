@@ -28,12 +28,14 @@ import { findTool, runAndRecord } from '../lib/tools-store.js'
 import { parseInboxPolicy, type InboxPolicy } from '../lib/sla.js'
 import { enqueueKnowledgeSync } from '../queues.js'
 import { REFERENCE_CHATS, playReferenceChat, referenceJourney, type ReferenceChat } from './dental-reference-chats.js'
+import { DENTAL_REF_BOT_ID, PRACTICE_PLACEHOLDER_BASE, PRACTICE_PROFILE_NAME } from '../lib/practice-sandbox.js'
 
-export const DENTAL_REF_BOT_ID = 'harbour-dental-ref'
+export { DENTAL_REF_BOT_ID }
+
 const BOT_NAME = 'Harbour Dental (reference)'
 const OWNER_EMAIL = 'charles@acme.com'
 const DAY = 86_400_000
-const AUTH_PROFILE = 'Harbour Dental practice system'
+const AUTH_PROFILE = PRACTICE_PROFILE_NAME
 
 type Journey = ReturnType<typeof referenceJourney>
 
@@ -44,13 +46,28 @@ export async function ensureDentalReference(now = new Date()) {
   const profile: BusinessProfile = DENTAL_BLUEPRINT.sample()
   const journey = referenceJourney(profile)
   const created = await ensureBot(tenantId, profile)
+  const memory = await ensureMemory(tenantId)
   const evalRuns = await ensureEvalRuns(tenantId, journey, owner.id)
   const release = await ensureRelease(tenantId, journey, owner.id)
   const workflows = await ensureWorkflows(tenantId, now)
   const tools = await ensureTools(tenantId, workflows.recallId, owner.id, now)
   const knowledge = await ensureKnowledge(tenantId)
   const chats = await ensureChats(tenantId, owner.id, journey, now)
-  return { status: 'ok', botId: DENTAL_REF_BOT_ID, created, evalRuns, release, workflows: workflows.added, tools, knowledge, chats }
+  return { status: 'ok', botId: DENTAL_REF_BOT_ID, created, memory, evalRuns, release, workflows: workflows.added, tools, knowledge, chats }
+}
+
+/** Returning patients are recognised by name; only set while nobody has configured memory for the bot. */
+async function ensureMemory(tenantId: string): Promise<boolean> {
+  const config = await prisma.botConfig.findUnique({ where: { botId: DENTAL_REF_BOT_ID }, select: { memory: true } })
+  const current = config?.memory
+  if (current && typeof current === 'object' && Object.keys(current).length > 0) return false
+  const memory = { enabled: true, keys: ['guest_name', 'visit_type', 'preferred_times'], days: 180 }
+  await prisma.botConfig.upsert({
+    where: { botId: DENTAL_REF_BOT_ID },
+    create: { tenantId, botId: DENTAL_REF_BOT_ID, memory },
+    update: { memory },
+  })
+  return true
 }
 
 async function ensureBot(tenantId: string, profile: BusinessProfile): Promise<boolean> {
@@ -214,7 +231,7 @@ async function ensureTools(tenantId: string, recallId: string, ownerId: string, 
     create: { tenantId, name: AUTH_PROFILE, kind: 'api_key', settings: { headerName: 'X-Api-Key' }, createdBy: ownerId },
     update: {},
   })
-  const base = 'https://pms.harbourdental.example/v1'
+  const base = PRACTICE_PLACEHOLDER_BASE
   const tools = [
     {
       name: 'Find free appointment slots',

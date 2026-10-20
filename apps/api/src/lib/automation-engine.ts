@@ -33,7 +33,7 @@
  *   "escalate"                    set conversation.status = 'escalated'
  *   "resolve"                     set conversation.status = 'resolved'
  *   "close"                       set conversation.status = 'closed'
- *   "add_label:<value>"           add a label tag to the conversation Activity
+ *   "add_label:<value>"           attach the label to the conversation (created if missing) and log it
  *   "send_message:<text>"         post a bot message into the conversation
  *   "assign_agent:<userId>"       assign conversation.assignedTo (or 'round_robin')
  *   "call_webhook"                dispatch webhooks registered for this event
@@ -64,7 +64,8 @@ export interface RuleContext {
 interface Condition {
   field: string
   operator: 'equals' | 'not_equals' | 'less_than' | 'greater_than' | 'contains' | 'is_set'
-  value: string
+  /** Saved rules may hold numbers or booleans, e.g. csat_rating equals -1. */
+  value: string | number | boolean
 }
 
 function resolveField(field: string, ctx: RuleContext): string {
@@ -81,18 +82,19 @@ function resolveField(field: string, ctx: RuleContext): string {
 
 function evaluateCondition(cond: Condition, ctx: RuleContext): boolean {
   const actual = resolveField(cond.field, ctx)
+  const expected = String(cond.value ?? '')
   switch (cond.operator) {
-    case 'equals':       return actual === cond.value
-    case 'not_equals':   return actual !== cond.value
-    case 'less_than':    return parseFloat(actual) < parseFloat(cond.value)
-    case 'greater_than': return parseFloat(actual) > parseFloat(cond.value)
-    case 'contains':     return actual.toLowerCase().includes(cond.value.toLowerCase())
+    case 'equals':       return actual === expected
+    case 'not_equals':   return actual !== expected
+    case 'less_than':    return parseFloat(actual) < parseFloat(expected)
+    case 'greater_than': return parseFloat(actual) > parseFloat(expected)
+    case 'contains':     return actual.toLowerCase().includes(expected.toLowerCase())
     case 'is_set':       return actual !== '' && actual !== 'undefined' && actual !== 'null'
     default:             return false
   }
 }
 
-function evaluateConditions(conditionsRaw: string, ctx: RuleContext): boolean {
+export function evaluateConditions(conditionsRaw: string, ctx: RuleContext): boolean {
   if (!conditionsRaw.trim()) return true  // empty = always fire
   try {
     const conditions: Condition[] = JSON.parse(conditionsRaw)
@@ -165,6 +167,16 @@ async function executeAction(action: string, ctx: RuleContext, ruleId: string, r
 
     case 'add_label': {
       if (param && ctx.conversationId) {
+        const label = await prisma.label.upsert({
+          where: { tenantId_name: { tenantId: ctx.tenantId, name: param } },
+          create: { tenantId: ctx.tenantId, name: param },
+          update: {},
+        })
+        await prisma.conversationLabel.upsert({
+          where: { conversationId_labelId: { conversationId: ctx.conversationId, labelId: label.id } },
+          create: { conversationId: ctx.conversationId, labelId: label.id },
+          update: {},
+        })
         await prisma.activity.create({
           data: {
             tenantId: ctx.tenantId,

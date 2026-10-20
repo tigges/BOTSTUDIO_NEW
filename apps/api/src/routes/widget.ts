@@ -22,6 +22,7 @@ import { visitorTurn } from '../lib/widget-open.js'
 import { loadPublicChannel } from '../lib/web-channels.js'
 import { streamDoneEvent } from '../lib/widget-rating.js'
 import { withLlmScope } from '../lib/llm-ledger.js'
+import { runForChat, TEST_RUN_HEADER } from '../lib/test-runs.js'
 import { fileURLToPath } from 'node:url'
 
 /** Derive the public-facing origin robustly when running behind a reverse proxy.
@@ -441,6 +442,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     }
 
     if (!conversationId) {
+      const testRunId = await runForChat(request.headers[TEST_RUN_HEADER], botId)
       const env = channel.environmentId
         ? await prisma.environment.findFirst({ where: { id: channel.environmentId, botId } })
         : await prisma.environment.findFirst({ where: { botId }, orderBy: { createdAt: 'asc' } })
@@ -454,14 +456,14 @@ export async function widgetRoutes(app: FastifyInstance) {
           })
         }
         const open = await prisma.conversation.findFirst({
-          where: { tenantId, channelId, contactId: contact.id, status: 'active' },
+          where: { tenantId, channelId, contactId: contact.id, status: 'active', ...(testRunId ? { testRunId } : {}) },
           orderBy: { updatedAt: 'desc' },
         })
         if (open) {
           conversationId = open.id
         } else {
           const convo = await prisma.conversation.create({
-            data: { tenantId, botId, environmentId: env.id, channelId, contactId: contact.id, status: 'active' },
+            data: { tenantId, botId, environmentId: env.id, channelId, contactId: contact.id, status: 'active', testRunId: testRunId ?? null },
           })
           conversationId = convo.id
         }

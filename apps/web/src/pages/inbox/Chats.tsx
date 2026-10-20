@@ -50,6 +50,7 @@ interface Convo {
   assigneeId?: string | null
   assignee: string | null
   sla?: string
+  testRun?: boolean
   labels?: string[]
   email?: string
   phone?: string
@@ -109,6 +110,17 @@ function SlaChip({ sla }: { sla?: string }) {
     )}>
       <Clock size={9} />
       {sla}
+    </span>
+  )
+}
+
+function TestRunChip() {
+  return (
+    <span
+      title="Opened by a scheduled test run, not a real visitor. Removed after 14 days."
+      className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--bg-overlay)] text-[var(--text-secondary)] border border-[var(--border)]"
+    >
+      Test run
     </span>
   )
 }
@@ -196,6 +208,7 @@ export function ChatsPage() {
     assigneeId: c.assignedTo ?? null,
     assignee: members.find((m) => m.id === c.assignedTo)?.displayName ?? null,
     sla: c.sla ?? undefined,
+    testRun: Boolean(c.testRunId),
     labels: c.labels?.map((l) => l.label?.name ?? '') ?? [],
     email: c.contact?.email,
     phone: c.contact?.phone,
@@ -382,6 +395,7 @@ export function ChatsPage() {
                 <div className="mt-1 flex items-center gap-1.5">
                   <ChannelIcon ch={conv.channel} />
                   {conv.sla && <SlaChip sla={conv.sla} />}
+                  {conv.testRun && <TestRunChip />}
                   {conv.unread > 0 && (
                     <span className="ml-auto text-[10px] font-bold text-white bg-[var(--accent)] rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
                       {conv.unread}
@@ -482,15 +496,16 @@ export function ChatsPage() {
           )}
 
           {/* Label chips */}
-          {selected.labels && selected.labels.length > 0 && (
+          {((selected.labels && selected.labels.length > 0) || selected.testRun) && (
             <div className="flex items-center gap-1.5 px-4 py-1.5 border-b border-[var(--border)] bg-[var(--bg-surface)]">
               <Tag size={11} className="text-[var(--text-muted)]" />
-              {selected.labels.map((l) => (
+              {(selected.labels ?? []).map((l) => (
                 <span key={l} className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--bg-overlay)] text-[var(--text-secondary)] border border-[var(--border)]">
                   {l}
                 </span>
               ))}
               {selected.sla && <SlaChip sla={selected.sla} />}
+              {selected.testRun && <TestRunChip />}
             </div>
           )}
 
