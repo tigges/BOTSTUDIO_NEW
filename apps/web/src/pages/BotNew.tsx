@@ -6,19 +6,22 @@ import type { FlowGraph } from '@ybot/runtime'
 import {
   SALON_WELCOME_NAME,
   START_CLUSTERS,
+  blueprintById,
   START_OPTIONS,
   identityFor,
   personaAvatar,
   startPreview,
   startWalkChapters,
   type BotStart,
+  type BusinessProfile,
   type ClusterId,
   type StartPath,
   type StartTemplate,
   type StudioCatalog,
 } from '@ybot/shared'
 import { useAppStore } from '../store/app'
-import { apiFetch, bots as botsApi, type WebsiteScanPreview } from '../lib/api'
+import { apiFetch, bots as botsApi, business as businessApi, type BusinessRead, type WebsiteScanPreview } from '../lib/api'
+import { BusinessFieldRow, takeAlternative } from '../components/BusinessFields'
 import type { Bot } from '../store/app'
 import { JourneyTest } from './build/JourneyTest'
 import { JourneyPreview } from '../components/JourneyPreview'
@@ -53,6 +56,17 @@ export function BotNewPage() {
   const [trying, setTrying] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [blueprintUrl, setBlueprintUrl] = useState('')
+  const [business, setBusiness] = useState<BusinessRead | null>(null)
+  const [readingBusiness, setReadingBusiness] = useState(false)
+  const blueprints = useQuery({
+    queryKey: ['blueprints'],
+    queryFn: () => businessApi.blueprints().then((res) => res.data),
+    enabled: !isDemoMode(),
+  })
+  const blueprintCard = blueprints.data?.[0] ?? null
+  const blueprint = blueprintById(blueprintCard?.id)
+  const blueprintBundle = useMemo(() => (blueprint && business ? blueprint.bundle(business.profile) : null), [blueprint, business])
   const catalog = useQuery({
     queryKey: ['start-catalog'],
     queryFn: () => botsApi.startCatalog().then((res) => res.data),
@@ -69,8 +83,8 @@ export function BotNewPage() {
   ))
   const identity = identityFor(start)
   const company = name.trim() || 'your company'
-  const voice = personaName.trim() || selectedTemplate?.persona || identity.persona
-  const accent = selectedTemplate?.accent || identity.accent
+  const voice = personaName.trim() || (path === 'blueprint' ? blueprintCard?.persona : selectedTemplate?.persona) || identity.persona
+  const accent = (path === 'blueprint' ? blueprintCard?.accent : selectedTemplate?.accent) || identity.accent
   const avatarUrl = personaAvatar(voice || company, accent)
   const preview = startPreview({
     start: start ?? (path === 'website' || path === 'sample' || path === 'blank' ? path : 'blank'),
@@ -86,7 +100,31 @@ export function BotNewPage() {
     : []
   const needsSample = path === 'sample' && !sample.trim()
   const needsWebsite = path === 'website' && !scan
-  const canCreate = path === 'template' ? Boolean(start) : !needsSample && !needsWebsite
+  const blueprintBlocked = path === 'blueprint' && (!business || business.issues.some((issue) => issue.level === 'block'))
+  const canCreate = path === 'template' ? Boolean(start) : !needsSample && !needsWebsite && !blueprintBlocked
+
+  function adopt(read: BusinessRead) {
+    const profile: BusinessProfile = { ...read.profile, businessName: name.trim() || read.profile.businessName, ...(voice ? { personaName: voice } : {}) }
+    setBusiness({ ...read, profile })
+  }
+
+  async function readBusiness(source: 'website' | 'sample') {
+    if (!blueprintCard) return
+    setReadingBusiness(true)
+    setError(null)
+    setBusiness(null)
+    setTrying(false)
+    try {
+      const result = source === 'sample'
+        ? await businessApi.sample(blueprintCard.id)
+        : await businessApi.scan(blueprintCard.id, { url: blueprintUrl.trim(), businessName: name.trim(), personaName: voice || undefined })
+      adopt(result.data)
+    } catch (err: unknown) {
+      if (err instanceof Error) setError(err.message)
+    } finally {
+      setReadingBusiness(false)
+    }
+  }
 
   async function readSite() {
     const url = websiteUrl.trim()
@@ -118,6 +156,7 @@ export function BotNewPage() {
     setStart(next)
     setTemplateId(null)
     if (next !== 'website') setScan(null)
+    if (next !== 'blueprint') setBusiness(null)
   }
 
   function pickTemplate(item: CatalogTemplate) {
@@ -166,6 +205,8 @@ export function BotNewPage() {
           sample: chosen === 'sample' ? sample.trim() : undefined,
           websiteUrl: chosen === 'website' ? websiteUrl.trim() : undefined,
           templateId: chosen === 'learned' ? templateId : undefined,
+          blueprintId: chosen === 'blueprint' ? blueprintCard?.id : undefined,
+          business: chosen === 'blueprint' ? business?.profile : undefined,
         }),
       })
       const botsRes = await apiFetch<{ data: Bot[] }>('/bots')
@@ -255,7 +296,75 @@ export function BotNewPage() {
     </Card>
   )
 
-  const tryChapters = path === 'website' && scan?.chapters
+  const blueprintReview = (
+    <Card>
+      <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+        {business
+          ? business.profile.websiteUrl
+            ? `${name.trim()}’s details, from ${siteHost(business.profile.websiteUrl)}`
+            : `${name.trim()}’s details, from the sample practice`
+          : `${blueprintCard?.name ?? 'Blueprint'} for ${name.trim()}`}
+      </h2>
+      <p className="mb-3 mt-1 text-xs text-[var(--text-muted)]">
+        {business
+          ? `${voice || 'The bot'} answers from these details. Check anything marked, then use it. You can change every detail later on Business details.`
+          : readingBusiness
+            ? 'Reading the public pages.'
+            : 'Read your website or use the sample. Nothing is saved until you use this.'}
+      </p>
+      {blueprintCard && !business && (
+        <div className="flex flex-wrap gap-1">
+          {blueprintCard.chapters.map((chapter) => (
+            <span key={chapter} className="rounded-full bg-[var(--bg-base)] px-2 py-0.5 text-[11px] text-[var(--text-secondary)]">{chapter}</span>
+          ))}
+        </div>
+      )}
+      {business && blueprintCard && (
+        <>
+          <p className="mb-2 text-[11px] text-[var(--text-secondary)]">
+            {business.issues.length === 0
+              ? 'Every required detail is filled in.'
+              : `${business.issues.length} detail${business.issues.length === 1 ? ' needs' : 's need'} a look.`}
+          </p>
+          <div className="grid max-h-[460px] gap-2 overflow-auto pr-1">
+            {blueprintCard.fields.map((spec) => (
+              <BusinessFieldRow
+                key={spec.key}
+                spec={spec}
+                field={business.profile.fields[spec.key]}
+                issue={business.issues.find((issue) => issue.field === spec.key)}
+                editing={false}
+                onChange={() => {}}
+                onUseAlternative={() => {
+                  const profile = takeAlternative(business.profile, spec.key)
+                  setBusiness({ profile, issues: business.issues.filter((issue) => issue.field !== spec.key) })
+                }}
+              />
+            ))}
+          </div>
+          <Button type="button" size="sm" variant="secondary" className="mt-3" onClick={() => setTrying(true)}>
+            Try this walk
+          </Button>
+        </>
+      )}
+      {error && <p className="mt-3 text-xs text-[var(--error)]">{error}</p>}
+      <div className="mt-4 flex flex-col gap-3">
+        <span className="text-xs font-semibold text-emerald-700">Other bots stay as they are</span>
+        <span className="flex justify-end gap-2">
+          <Button variant="secondary" type="button" onClick={() => setStep(1)}>
+            Back
+          </Button>
+          <Button type="button" className="whitespace-nowrap" disabled={loading || readingBusiness || !canCreate} onClick={() => { void createBot() }}>
+            {loading ? 'Creating…' : `Use this on ${name.trim()}`}
+          </Button>
+        </span>
+      </div>
+    </Card>
+  )
+
+  const tryChapters = path === 'blueprint' && blueprintBundle
+    ? blueprintBundle.flows.map((chapter) => ({ name: chapter.name, graph: chapter.graph as unknown as FlowGraph }))
+    : path === 'website' && scan?.chapters
     ? scan.chapters.map((chapter) => ({ name: chapter.name, graph: chapter.graph as unknown as FlowGraph }))
     : walkChapters.map((chapter) => ({ name: chapter.name, graph: chapter.graph as unknown as FlowGraph }))
 
@@ -307,7 +416,7 @@ export function BotNewPage() {
         <>
           <h1 className="text-xl font-bold text-[var(--text-primary)]">How should {name.trim()} start?</h1>
           <p className="mb-4 mt-1 text-sm text-[var(--text-muted)]">
-            Scan a site, paste a conversation, or start empty.
+            Scan a site, start from a blueprint, paste a conversation, or start empty.
           </p>
           <div className="grid items-start gap-4 lg:grid-cols-[1.15fr_0.85fr]">
             <div className="grid gap-2" role="radiogroup" aria-label="How it starts">
@@ -367,6 +476,41 @@ export function BotNewPage() {
                           </button>
                         </span>
                       )}
+                      {choice.id === 'blueprint' && selected && (
+                        <span className="mt-3 block" onClick={(event) => event.stopPropagation()}>
+                          <span className="flex gap-2">
+                            <input
+                              value={blueprintUrl}
+                              onChange={(event) => setBlueprintUrl(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  void readBusiness('website')
+                                }
+                              }}
+                              placeholder="https://www.your-practice.co.uk"
+                              aria-label="Practice website address"
+                              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-base)] px-2 py-2 text-xs text-[var(--text-primary)]"
+                            />
+                            <button
+                              type="button"
+                              disabled={readingBusiness || !blueprintUrl.trim() || !blueprintCard}
+                              onClick={() => { void readBusiness('website') }}
+                              className="shrink-0 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                            >
+                              {readingBusiness ? 'Reading…' : 'Read site'}
+                            </button>
+                          </span>
+                          <button
+                            type="button"
+                            disabled={readingBusiness || !blueprintCard}
+                            onClick={() => { void readBusiness('sample') }}
+                            className="mt-2 text-xs font-semibold text-[var(--accent)] disabled:opacity-50"
+                          >
+                            No website? Use the sample practice
+                          </button>
+                        </span>
+                      )}
                       {choice.id === 'sample' && selected && (
                         <textarea
                           value={sample}
@@ -403,7 +547,7 @@ export function BotNewPage() {
                   </Button>
                 </div>
               </Card>
-            ) : mapCard}
+            ) : path === 'blueprint' ? blueprintReview : mapCard}
           </div>
         </>
       ) : (
@@ -483,13 +627,15 @@ export function BotNewPage() {
             avatarUrl={avatarUrl}
             chapters={tryChapters}
             startChapter={
-              path === 'website'
+              path === 'blueprint'
+                ? (blueprintBundle?.flows.find((chapter) => chapter.tags.includes('welcome'))?.name ?? tryChapters[0]?.name ?? '')
+                : path === 'website'
                 ? (scan?.chapters?.find((chapter) => chapter.name === SALON_WELCOME_NAME)?.name ?? scan?.chapters?.[0]?.name ?? '')
                 : (tryChapters[0]?.name ?? '')
             }
             environmentLabel="Draft"
             chapterKey={`${walkStart ?? path}-${company}-${voice}`}
-            catalog={scan?.catalog as StudioCatalog | undefined}
+            catalog={(path === 'blueprint' ? blueprintBundle?.catalog : scan?.catalog) as StudioCatalog | undefined}
             onChapter={() => {}}
             onClose={() => setTrying(false)}
           />

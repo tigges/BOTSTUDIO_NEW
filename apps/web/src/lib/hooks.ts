@@ -5,7 +5,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import React from 'react'
-import type { GuardrailRule, ReturnOutcome } from '@ybot/shared'
+import type { BusinessProfile, GuardrailRule, ReturnOutcome } from '@ybot/shared'
 import * as api from './api'
 import * as demo from './demo-data'
 import { useAppStore } from '../store/app'
@@ -1399,6 +1399,45 @@ export function useDisconnectIntegration() {
       qc.invalidateQueries({ queryKey: ['integrations'] })
       qc.invalidateQueries({ queryKey: ['auth-profiles'] })
       qc.invalidateQueries({ queryKey: ['tools'] })
+    },
+  })
+}
+
+// ── Business details ────────────────────────────────────────────────────────
+
+export function useBusiness() {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['business', bid],
+    queryFn: () => api.business.get(bid).then((r) => r.data),
+    enabled: !!bid && bid !== 'demo',
+  })
+}
+
+export function useSaveBusiness() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (profile: BusinessProfile) => api.business.save(botId(), profile).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['business'] })
+      qc.invalidateQueries({ queryKey: ['evals'] })
+    },
+  })
+}
+
+export function useRereadBusiness() {
+  return useMutation({
+    mutationFn: (url?: string) => api.business.reread(botId(), url).then((r) => r.data),
+  })
+}
+
+export function useAcceptBusiness() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ fresh, keys }: { fresh: BusinessProfile; keys: string[] }) => api.business.accept(botId(), fresh, keys).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['business'] })
+      qc.invalidateQueries({ queryKey: ['evals'] })
     },
   })
 }

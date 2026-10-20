@@ -7,10 +7,14 @@ import {
   BOT_STARTS,
   START_CLUSTERS,
   bakedPack,
+  blueprintById,
   identityFor,
+  parseBusinessProfile,
+  profileIssues,
   packFromLearned,
   personaAvatar,
   type BotStart,
+  type BusinessProfile,
   type ClusterId,
   type LearnedTemplateSpec,
   type StarterPackId,
@@ -18,6 +22,7 @@ import {
 import { installCorporatePack, installHairStudioPack, installSitePack, removeStarterPack } from '../lib/install-corporate-pack.js'
 import { installDraftWelcome, installStarterFlows } from '../lib/install-starter-flows.js'
 import { installWebsiteScan } from '../lib/install-website-scan.js'
+import { installBlueprint } from '../lib/install-blueprint.js'
 import { PublicSiteError, readPublicSite } from '../lib/public-site.js'
 import { draftSiteSpecWithModel, draftWebsiteChatWithModel, type ImportReport } from '../lib/site-jobs.js'
 import { ensureOptionalChannels, ensureWebChannels } from '../lib/web-channels.js'
@@ -193,6 +198,9 @@ export async function botsRoutes(app: FastifyInstance) {
       websiteUrl?: string
       templateId?: string
       channels?: string[]
+      blueprintId?: string
+      /** Business details from the review step. Missing means the blueprint's sample business. */
+      business?: unknown
     }
     const parsedName = normalizedBotName(body.name ?? '')
     if (!parsedName.ok) {
@@ -203,8 +211,25 @@ export async function botsRoutes(app: FastifyInstance) {
     if (!(BOT_STARTS as string[]).includes(start)) {
       return reply.status(400).send({ error: { code: 'INVALID_START', message: 'Choose how this bot should start.' } })
     }
-    const identity = identityFor(start)
-    const personaName = (body.personaName ?? '').trim() || identity.persona || null
+    const blueprint = start === 'blueprint' ? blueprintById(body.blueprintId) : undefined
+    let business: BusinessProfile | null = null
+    if (start === 'blueprint') {
+      if (!blueprint) {
+        return reply.status(400).send({ error: { code: 'INVALID_BLUEPRINT', message: 'Choose a blueprint to start from.' } })
+      }
+      const parsed = body.business === undefined ? blueprint.sample() : parseBusinessProfile(blueprint.fields, { ...(body.business as object), blueprintId: blueprint.id })
+      if (!parsed) {
+        return reply.status(400).send({ error: { code: 'INVALID_PROFILE', message: 'Business details: send every field as it appears on the review form.' } })
+      }
+      business = { ...parsed, businessName: parsed.businessName || name }
+      const blocking = profileIssues(blueprint.fields, business).filter((issue) => issue.level === 'block')
+      if (blocking.length) {
+        return reply.status(422).send({ error: { code: 'PROFILE_INVALID', message: blocking[0]!.message, issues: blocking } })
+      }
+    }
+    const identity = blueprint ? { ...identityFor(start), persona: blueprint.persona, accent: blueprint.accent } : identityFor(start)
+    const personaName = (body.personaName ?? '').trim() || business?.personaName || identity.persona || null
+    if (business && personaName) business = { ...business, personaName }
     const avatarUrl = personaName ? personaAvatar(personaName, identity.accent) : personaAvatar(name, identity.accent)
     let learnedSpec: LearnedTemplateSpec | null = null
     if (start === 'learned') {
@@ -270,6 +295,8 @@ export async function botsRoutes(app: FastifyInstance) {
     } else if (start === 'learned' && learnedSpec) {
       const pack = packFromLearned(learnedSpec, companyName, personaName)
       await installSitePack(tenantId, bot.id, companyName, sandbox?.id ?? null, pack)
+    } else if (start === 'blueprint' && blueprint && business) {
+      await installBlueprint(tenantId, bot.id, sandbox?.id ?? null, blueprint, business)
     } else if (start === 'sample' || start === 'blank') {
       await installDraftWelcome(tenantId, bot.id, start === 'sample' ? (body.sample ?? '') : '')
     }

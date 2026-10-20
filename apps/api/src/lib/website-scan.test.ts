@@ -862,3 +862,19 @@ test('a UK shop homepage of switching copy is not a job, and SIM still answers p
   assert.match(plans!.answer, /£26 a month/)
   assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
 })
+
+test('a menu that leaves list items open does not hide the rest of the page', () => {
+  const page = pageFromHtml('https://dental.example/fees/', `<!doctype html>
+<html><head><title>Fees</title></head><body>
+<nav aria-label="Primary Menu"><ul>
+<li class="menu-item"><a href="/preventative/">Preventative</a>
+<ul><li><a href="/preventative/#hygiene">Hygiene</a><li><a href="/preventative/#exam">Exam</a></ul>
+<li><a href="/fees/">Fees</a>
+</ul></nav>
+<main><h2>Patient Examination</h2>
+<table><tr><td>New patient exam</td><td>£85</td></tr><tr><td>Existing patient exam</td><td>£45</td></tr></table>
+</main></body></html>`)
+  assert.match(page.text, /New patient exam \| £85/)
+  assert.match(page.text, /Existing patient exam \| £45/)
+  assert.doesNotMatch(page.text, /Preventative/)
+})

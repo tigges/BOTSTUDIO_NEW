@@ -187,6 +187,8 @@ model BotConfig {
   privacy      Json     @default("{}")
   /// Answers the bot keeps per contact across chats (see @ybot/shared memory.ts).
   memory       Json     @default("{}")
+  /// Business details from a blueprint: typed fields with status and source (see @ybot/shared blueprints/business.ts).
+  business     Json     @default("{}")
   updatedAt    DateTime @updatedAt
 
   bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)

@@ -83,6 +83,20 @@ test('a phrase miss can classify one of this map\'s chapters', async () => {
   assert.equal(await hearChapter({ chapters, text: 'how much for unlimited data roaming', current: 'Welcome' }), undefined)
 })
 
+test('words that belong to the chapter the guest is in keep them there instead of asking the model', async () => {
+  const start = { id: 's', data: { kind: 'trigger_start', label: 'Start', config: {} } }
+  const chapters = [
+    { name: 'Welcome', graph: { nodes: [start], edges: [] } },
+    { name: 'Change or cancel', graph: { nodes: [start], edges: [] } },
+    { name: 'Book a visit', graph: { nodes: [start], edges: [] } },
+  ]
+  let called = false
+  const llm = { classify: async () => { called = true; return { category: 'Book a visit', confidence: 0.9 } } }
+  assert.equal(await hearChapter({ chapters, text: 'cancel it', current: 'Change or cancel' }, llm), undefined)
+  assert.equal(called, false)
+  assert.equal(await hearChapter({ chapters, text: 'book me in for a cleaning', current: 'Change or cancel' }, llm), 'Book a visit')
+})
+
 test('a finished chapter offers the doors instead of repeating itself', () => {
   const { chapters } = salonChapters()
   const offer = offerOnMap(chapters, 'Salon hours')

@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   FlaskConical,
   Rocket,
+  Building2,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -54,6 +55,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Build',
     items: [
       { id: 'journey', label: 'Journey', icon: Route, path: '/build/journey' },
+      { id: 'business', label: 'Business details', icon: Building2, path: '/build/business' },
       { id: 'flows', label: 'Flows', icon: Workflow, path: '/build/flows' },
       { id: 'workflows', label: 'Workflows', icon: Repeat2, path: '/build/workflows' },
       { id: 'tools', label: 'Tools', icon: Wrench, path: '/build/tools' },

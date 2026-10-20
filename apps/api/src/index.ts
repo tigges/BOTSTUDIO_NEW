@@ -41,6 +41,7 @@ import { evalsRoutes } from './routes/evals.js'
 import { releasesRoutes } from './routes/releases.js'
 import { bundleRoutes } from './routes/bundle.js'
 import { botMemoryRoutes, contactMemoryRoutes } from './routes/memory.js'
+import { businessRoutes } from './routes/business.js'
 import { sweepExpiredMemory } from './lib/contact-memory.js'
 
 installConsoleScrubbing()
@@ -142,6 +143,7 @@ await app.register(evalsRoutes, { prefix: '/api/v1/bots' })
 await app.register(releasesRoutes, { prefix: '/api/v1/bots' })
 await app.register(bundleRoutes, { prefix: '/api/v1/bots' })
 await app.register(botMemoryRoutes, { prefix: '/api/v1/bots' })
+await app.register(businessRoutes, { prefix: '/api/v1/bots' })
 await app.register(contactMemoryRoutes, { prefix: '/api/v1' })
 await app.register(reportsRoutes, { prefix: '/api/v1/bots' })
 await app.register(cannedRoutes, { prefix: '/api/v1/canned-replies' })

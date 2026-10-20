@@ -29,6 +29,7 @@ export type BotStart =
   | 'sample'
   | 'blank'
   | 'learned'
+  | 'blueprint'
 
 export const BOT_STARTS: BotStart[] = [
   'hair-studio',
@@ -40,6 +41,7 @@ export const BOT_STARTS: BotStart[] = [
   'sample',
   'blank',
   'learned',
+  'blueprint',
 ]
 
 export interface StartCluster {
@@ -61,7 +63,7 @@ export interface StartTemplate {
 }
 
 /** `template` stays on the type so parked wizard UI still typechecks. It is not in START_OPTIONS. */
-export type StartPath = 'template' | 'website' | 'sample' | 'blank'
+export type StartPath = 'template' | 'website' | 'blueprint' | 'sample' | 'blank'
 
 export interface StartOption {
   id: StartPath
@@ -83,6 +85,12 @@ export const START_OPTIONS: StartOption[] = [
     title: 'Scan my website',
     body: 'We read the public pages it links to, then draft a greeting that asks one thing at a time.',
     tag: 'Draft only',
+  },
+  {
+    id: 'blueprint',
+    title: 'Start from a blueprint',
+    body: 'A complete bot for one kind of business: emergencies, bookings, prices and plans. Fill it from your website, or try the sample business.',
+    tag: 'Dental practice',
   },
   {
     id: 'sample',
