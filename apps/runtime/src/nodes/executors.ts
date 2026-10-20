@@ -30,8 +30,29 @@ export async function executeAskQuestion(ctx: NodeContext): Promise<NodeResult> 
   return askVerbatim(ctx)
 }
 
+function compact(text: string): string {
+  return text.toLowerCase().replace(/^(?:a|an|the|i'm|im)\s+/, '').replace(/[^a-z0-9]+/g, '')
+}
+
+/** The guest's latest message already names exactly one of the question's choices. */
+export function choiceAlreadyHeard(choices: unknown, heard: string): string | undefined {
+  if (!Array.isArray(choices) || !heard.trim()) return undefined
+  const said = compact(heard)
+  const named = choices.map(String).filter((choice) => {
+    const core = compact(choice)
+    return core.length >= 4 && said.includes(core)
+  })
+  return named.length === 1 ? named[0] : undefined
+}
+
 function askVerbatim(ctx: NodeContext): NodeResult {
   const { config, session } = ctx
+  const variable = String(config['variable'] ?? 'answer')
+  if (!String(session.variables.flow[variable] ?? '').trim()) {
+    // Asking for what the guest just said sounds robotic: "I need a check-up" → "What is the visit for?"
+    const known = choiceAlreadyHeard(config['choices'], String(session.variables.flow['_last_user_message'] ?? ''))
+    if (known) return { output: { [variable]: known } }
+  }
   const question = interpolate(String(config['question'] ?? ''), {
     ...session.variables.flow,
     contact: session.variables.contact,

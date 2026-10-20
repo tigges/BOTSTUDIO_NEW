@@ -289,6 +289,10 @@ test('conversation basics: a hello mid-booking keeps the booking question, thank
       checks: [{ kind: 'says', text: "You're welcome" }, { kind: 'never_says', text: "didn't catch" }],
     },
     {
+      id: 'no-repeat', name: 'A check-up request is not asked what the visit is for', turns: ['I need a check-up'],
+      checks: [{ kind: 'says', text: 'Which days and times' }, { kind: 'never_says', text: 'What is the visit for' }],
+    },
+    {
       id: 'bot-then-book', name: 'Asks if it is a bot, then books', turns: ['are you a bot?', 'I want to book'],
       checks: [{ kind: 'says', text: 'virtual assistant' }, { kind: 'reaches_chapter', chapter: 'Book a visit' }],
     },

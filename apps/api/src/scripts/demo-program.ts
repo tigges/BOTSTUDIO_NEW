@@ -14,6 +14,7 @@ import { assistantGreeting, greetingWelcomeGraph, starterFlows, withSampleOrder 
 import { graphAction, publishedSource } from '../lib/copy-graphs.js'
 import { stockWelcomeKind, type StockWelcomeKind } from '../lib/stock-welcome.js'
 import { SUPPORT_USE_CASES, supportUseCaseFlows } from './starter-flows.js'
+import { ensureDentalReference } from './dental-reference.js'
 
 const DEMO_PASSWORD = 'Demo1234!'
 const ACME_BOT_NAME = 'Acme Support Bot'
@@ -735,6 +736,7 @@ export async function applyDemoProgram() {
   const reference = await copyAcmeIntoQaLab()
   const synthetic = await ensureSyntheticChats()
   const product = await ensureProductBot()
+  const dental = await ensureDentalReference().catch((err) => ({ status: 'error', reason: err instanceof Error ? err.message : String(err) }))
   const acme = await acmeBot()
   const drafts = acme ? await proposeDraftFlows(acme.id) : []
   const productDrafts = await proposeDraftFlows(PRODUCT_BOT_ID)
@@ -744,5 +746,5 @@ export async function applyDemoProgram() {
   if (acme) dashboard = await ensureDashboard('acme-ops-dashboard', acme.tenantId, acme.id, 'Live operations')
   const lab = await prisma.tenant.findUnique({ where: { slug: 'qa-lab' } })
   if (lab) await ensureDashboard('acme-ref-ops-dashboard', lab.id, REF_BOT_ID, 'Live operations')
-  return { sampleOrders, routing, useCases, reference, synthetic, product, drafts, productDrafts, linked, productLinked, dashboard }
+  return { sampleOrders, routing, useCases, reference, synthetic, product, dental, drafts, productDrafts, linked, productLinked, dashboard }
 }
