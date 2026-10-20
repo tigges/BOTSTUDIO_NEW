@@ -1374,16 +1374,81 @@ export function useIntegrations() {
 export function useConnectIntegration() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ provider, apiKey }: { provider: string; apiKey: string }) => api.integrations.connect(provider, apiKey),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['integrations'] }),
+    mutationFn: ({ provider, secret, settings }: { provider: string; secret?: string; settings?: Record<string, string> }) =>
+      api.integrations.connect(provider, { secret, settings }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['integrations'] })
+      qc.invalidateQueries({ queryKey: ['auth-profiles'] })
+    },
+  })
+}
+
+export function useInstallConnectorTools() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (provider: string) => api.integrations.install(provider, botId()).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tools'] }),
   })
 }
 
 export function useDisconnectIntegration() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (provider: string) => api.integrations.disconnect(provider),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['integrations'] }),
+    mutationFn: (provider: string) => api.integrations.disconnect(provider).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['integrations'] })
+      qc.invalidateQueries({ queryKey: ['auth-profiles'] })
+      qc.invalidateQueries({ queryKey: ['tools'] })
+    },
+  })
+}
+
+// ── Contact memory ──────────────────────────────────────────────────────────
+
+export function useMemorySettings() {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['memory', bid],
+    queryFn: () => api.memory.get(bid).then((r) => r.data),
+    enabled: !!bid && bid !== 'demo',
+  })
+}
+
+export function useSaveMemorySettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: api.MemoryView['settings']) => api.memory.save(botId(), body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['memory'] }),
+  })
+}
+
+export function useContactMemory(contactId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['contact-memory', contactId],
+    queryFn: () => api.memory.contact(contactId!).then((r) => r.data),
+    enabled: !!contactId,
+  })
+}
+
+export function useChatMemory(conversationId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['chat-memory', conversationId],
+    queryFn: () => api.memory.conversation(conversationId!).then((r) => r.data),
+    enabled: !!conversationId,
+    refetchInterval: 20_000,
+  })
+}
+
+export function useForgetMemory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ contactId, key }: { contactId: string; key?: string }) =>
+      key ? api.memory.forget(contactId, key).then(() => ({ forgotten: 1 })) : api.memory.forgetAll(contactId).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contact-memory'] })
+      qc.invalidateQueries({ queryKey: ['chat-memory'] })
+      qc.invalidateQueries({ queryKey: ['memory'] })
+    },
   })
 }
 

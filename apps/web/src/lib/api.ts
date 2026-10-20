@@ -388,9 +388,39 @@ export const database = {
 
 export const integrations = {
   list: () => apiFetch<{ data: IntegrationConnection[] }>('/integrations'),
-  connect: (provider: string, apiKey: string) =>
-    apiFetch<{ data: { provider: string; status: string } }>(`/integrations/${provider}/connect`, { method: 'POST', body: JSON.stringify({ apiKey }) }),
-  disconnect: (provider: string) => apiFetch<void>(`/integrations/${provider}`, { method: 'DELETE' }),
+  connect: (provider: string, body: { secret?: string; settings?: Record<string, string> }) =>
+    apiFetch<{ data: { provider: string; status: string; authProfile: { id: string; name: string; secretHint: string | null } } }>(`/integrations/${provider}/connect`, { method: 'POST', body: JSON.stringify(body) }),
+  install: (provider: string, botId: string) =>
+    apiFetch<{ data: { created: Array<{ id: string; name: string }>; skipped: string[] } }>(`/integrations/${provider}/install`, { method: 'POST', body: JSON.stringify({ botId }) }),
+  disconnect: (provider: string) => apiFetch<{ data: { toolsLeft: number } }>(`/integrations/${provider}`, { method: 'DELETE' }),
+}
+
+export interface MemoryFact {
+  key: string
+  value: string
+  botId: string | null
+  botName: string | null
+  conversationId: string | null
+  updatedAt: string
+  expiresAt: string | null
+}
+
+export interface MemoryView {
+  settings: { enabled: boolean; keys: string[]; days: number }
+  /** Variables the journey asks for or sets. */
+  variables: string[]
+  /** Facts kept per key for this bot's contacts. */
+  kept: Record<string, number>
+}
+
+export const memory = {
+  get: (botId: string) => apiFetch<{ data: MemoryView }>(`/bots/${botId}/memory`),
+  save: (botId: string, body: MemoryView['settings']) =>
+    apiFetch<{ data: MemoryView['settings'] }>(`/bots/${botId}/memory`, { method: 'PUT', body: JSON.stringify(body) }),
+  contact: (contactId: string) => apiFetch<{ data: MemoryFact[] }>(`/contacts/${contactId}/memory`),
+  conversation: (conversationId: string) => apiFetch<{ data: { contactId: string | null; facts: MemoryFact[] } }>(`/conversations/${conversationId}/memory`),
+  forget: (contactId: string, key: string) => apiFetch<void>(`/contacts/${contactId}/memory/${encodeURIComponent(key)}`, { method: 'DELETE' }),
+  forgetAll: (contactId: string) => apiFetch<{ data: { forgotten: number } }>(`/contacts/${contactId}/memory`, { method: 'DELETE' }),
 }
 
 export const team = {
@@ -821,7 +851,19 @@ export interface CannedReply { id: string; shortcut: string; title: string; text
 export interface SavedReport { id: string; name: string; type: string; format: string; frequency: string; status: string; recipients: string[]; lastRunAt: string | null; createdAt: string }
 export interface DataColumn { name: string; type: string; nullable?: boolean }
 export interface DataTable { id: string; name: string; columns: DataColumn[]; rows: number; updatedAt: string }
-export interface IntegrationConnection { id: string; name: string; description: string; category: string; status: 'connected' | 'available' | 'coming_soon'; connectedAt?: string | null; hasKey?: boolean }
+export interface IntegrationConnection {
+  id: string
+  name: string
+  description: string
+  category: string
+  status: 'connected' | 'needs_details' | 'available' | 'coming_soon'
+  connectedAt?: string | null
+  hasKey?: boolean
+  gaps?: Array<{ field: string; message: string }>
+  settings?: Record<string, unknown>
+  authProfile?: { id: string; name: string; secretHint: string | null } | null
+  connector?: { fields: Array<{ key: string; label: string; placeholder: string; help: string }>; secretLabel: string; secretHelp: string; hasTools: boolean } | null
+}
 export interface Label { id: string; name: string; color: string }
 export interface TeamMember { id: string; displayName: string; email: string; memberships: Array<{ role: string }>; agentProfile?: { status: string } }
 export interface AnalyticsOverview { totalConversations: number; resolvedConversations: number; resolutionRate: number; escalationRate: number; totalContacts: number; csatScore: number; avgResponseTimeMs: number | null; botHandledPct: number; outcomes?: OutcomeSummary; llm?: { days: number; calls: number; costUsd: number | null } | null }
