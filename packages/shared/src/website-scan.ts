@@ -122,7 +122,9 @@ function dropAriaHidden(html: string): string {
     const closing = match[0].startsWith('</')
     const selfClosing = /\/\s*>$/.test(match[0]) || VOID_HTML.has(name)
     if (closing) {
-      if (skip.length > 0 && skip[skip.length - 1] === name) skip.pop()
+      // Menus often leave <li> and <p> open; a closing tag also closes whatever it still holds.
+      const open = skip.lastIndexOf(name)
+      if (open >= 0) skip.length = open
       else if (skip.length === 0) out += match[0]
       continue
     }
