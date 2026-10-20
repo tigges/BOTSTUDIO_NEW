@@ -19,6 +19,7 @@ import {
   stepMode,
   aiStepContract,
   type BusinessProfile,
+  type EvalScenario,
   type PriceItem,
 } from '@ybot/shared'
 import type { FlowGraph } from '@ybot/runtime'
@@ -249,7 +250,7 @@ function quietModel() {
   }
 }
 
-async function failedScenarios(profile: BusinessProfile) {
+async function failedScenarios(profile: BusinessProfile, scenarios?: EvalScenario[]) {
   const compiled = bp.bundle(profile)
   const deps: Partial<TestChatDeps> = {
     handoverRules: async () => ({ liveAgents: true, alwaysHuman: compiled.alwaysHuman }),
@@ -265,7 +266,7 @@ async function failedScenarios(profile: BusinessProfile) {
     chapters: compiled.flows.map((flow, index) => ({ name: flow.name, version: index + 1, flowId: `f${index}`, graph: flow.graph as unknown as FlowGraph })),
   }
   const results = []
-  for (const scenario of compiled.evals.scenarios) {
+  for (const scenario of scenarios ?? compiled.evals.scenarios) {
     results.push(await playScenario(scenario, { tenantId: 't', botId: 'b', snapshot: snapshot as never, environmentLabel: 'Sandbox' }, (input) => runTestTurn({ ...input, catalog: compiled.catalog }, deps)))
   }
   return results
@@ -275,6 +276,23 @@ async function failedScenarios(profile: BusinessProfile) {
 
 test('the Harbour Dental eval suite passes on the blueprint chapters without a model', async () => {
   assert.deepEqual(await failedScenarios(sample), [])
+})
+
+test('demo walks: a follow-up stays on its subject, a new patient books once, a nervous guest reaches a person', async () => {
+  assert.deepEqual(await failedScenarios(sample, [
+    {
+      id: 'aligners', name: 'Aligner shopper', turns: ['How much are aligners?', 'Can I pay monthly?'],
+      checks: [{ kind: 'says', text: 'Clear aligners are from' }, { kind: 'says', text: '0% finance' }, { kind: 'says', text: 'Shall I book you in?' }, { kind: 'reaches_chapter', chapter: DENTAL_CHAPTERS.prices }],
+    },
+    {
+      id: 'new-patient', name: 'Moving to the area', turns: ['Are you taking new patients?', 'yes', 'weekday evenings', 'Tom Hughes', '07700 900654'],
+      checks: [{ kind: 'says', text: 'first exam' }, { kind: 'never_says', text: 'What is the visit for' }, { kind: 'says', text: 'Thanks Tom Hughes' }],
+    },
+    {
+      id: 'nervous', name: 'Nervous patient', turns: ["I'm really nervous about the dentist, can I talk to someone first?"],
+      checks: [{ kind: 'reaches_chapter', chapter: DENTAL_CHAPTERS.talk }, { kind: 'never_says', text: 'What is the visit for' }],
+    },
+  ]), [])
 })
 
 test('a price list that never says "check-up" still answers it, and bundles never win a single treatment', async () => {

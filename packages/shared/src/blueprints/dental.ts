@@ -198,7 +198,7 @@ export function harbourDentalProfile(): BusinessProfile {
         'The dentist checks your teeth, gums and mouth, and takes X-rays if needed',
         'You get a written treatment plan with every cost before anything starts',
       ]),
-      emergency: sampleField('Call 0117 496 0123 as soon as we open. We keep emergency slots every weekday morning. Out of hours, call NHS 111.'),
+      emergency: sampleField('Call 0117 496 0123 as soon as we open. We keep emergency slots every weekday morning.'),
       booking_link: sampleField('https://book.harbourdental.example/'),
       cancellation: sampleField("Please give us 24 hours' notice to cancel or move an appointment. A missed appointment without notice may be charged."),
       treatments: sampleField(HARBOUR_TREATMENTS),
@@ -291,9 +291,11 @@ function pricePhrases(item: PriceItem, aliases: string[] = []): string[] {
   return [...new Set([base, base.replace(/-/g, ' '), base.replace(/-/g, ''), ...aliases])]
 }
 
-/** "Molar root canal is from £640." Group-prefixed names keep their comma: "Composite fillings, small: from £120." */
+/** "Molar root canal is from £640", "Clear aligners are from £2,950". Group-prefixed names keep their comma: "Composite fillings, small: from £120." */
 export function priceFact(item: PriceItem): string {
-  return item.name.includes(',') ? `${item.name}: ${formatPrice(item)}.` : `${item.name} is ${formatPrice(item)}.`
+  if (item.name.includes(',')) return `${item.name}: ${formatPrice(item)}.`
+  const plural = /[^su]s$/i.test(item.name.trim().split(/\s+/).at(-1) ?? '')
+  return `${item.name} ${plural ? 'are' : 'is'} ${formatPrice(item)}.`
 }
 
 function pricesFor(fees: PriceItem[] | null, topic: TopicItem): PriceItem[] {
@@ -383,7 +385,7 @@ const DOORS: Door[] = [
   { handle: 'treatments', flowName: C.treatments, label: 'Treatments explained', intent: 'What a treatment involves, such as whitening, aligners, implants, veneers or root canal.', phrases: [...new Set(DENTAL_VOCABULARY.filter((item) => item.name !== 'Check-ups' && item.name !== 'Hygiene visits').flatMap((item) => item.terms)), 'tell me about', 'what is', 'how does'] },
   { handle: 'hours', flowName: C.hours, label: 'Hours and location', intent: 'Opening hours, the address, directions, parking or the phone number.', phrases: ['opening hours', 'are you open', 'you open', 'opening', 'hours', 'what time', 'address', 'where are you', 'where is', 'directions', 'parking', 'park', 'car park', 'bus', 'train', 'station', 'phone number', 'postcode', 'located'] },
   { handle: 'change', flowName: C.change, label: 'Change or cancel', intent: 'Cancel, move or change an appointment they already have.', phrases: ['cancel', 'cancel my', 'cancel an', 'cancel my appointment', 'cancel an appointment', 'cancel my booking', 'move my booking', 'change my booking', 'cancel the', 'cancellation', 'reschedule', 'move my', 'change my', 'change my appointment', 'move my appointment', 'rearrange', "can't make it", 'cannot make it', 'running late'] },
-  { handle: 'talk', flowName: C.talk, label: 'Talk to a person', intent: 'Wants a person, reception, a call back, or to make a complaint.', phrases: ['person', 'human', 'real person', 'someone', 'speak to', 'talk to', 'reception', 'receptionist', 'call me back', 'call back'] },
+  { handle: 'talk', flowName: C.talk, label: 'Talk to a person', intent: 'Wants a person, reception, a call back, or to make a complaint.', phrases: ['person', 'human', 'real person', 'someone', 'speak to', 'talk to', 'talk to someone', 'speak to someone', 'talk to a person', 'reception', 'receptionist', 'call me back', 'call back', 'nervous', 'anxious', 'scared of the dentist', 'dental anxiety'] },
 ]
 
 function routesFor(doors: Door[]) {
@@ -400,19 +402,24 @@ function door(handle: string): Door {
   return DOORS.find((item) => item.handle === handle)!
 }
 
-/** A "what next" question after an answer: yes books, other named doors open their chapter, anything else closes politely. */
-function nextStep(prefix: string, x: number, y: number, question: string, doors: Door[]): { nodes: Node[]; edges: Edge[]; entry: string } {
+/**
+ * A "what next" question after an answer: yes books, other named doors open their chapter,
+ * anything else closes politely. `again` sends a follow-up on the same subject ("can I pay
+ * monthly?" after a price) back to this chapter's own lookup instead of out of it.
+ */
+function nextStep(prefix: string, x: number, y: number, question: string, doors: Door[], again?: { door: Door; target: string }): { nodes: Node[]; edges: Edge[]; entry: string } {
   const ask = `${prefix}-ask`
   const route = `${prefix}-next`
   const close = `${prefix}-close`
   const end = `${prefix}-end`
   const routed = doors.map((item, index) => index === 0 ? { ...item, phrases: [...YES, ...item.phrases] } : item)
   const jumps = doors.map((item, index) => n(`${prefix}-go-${item.handle}`, x + 560, y + index * 90, 'execute_flow', item.flowName, { flowName: item.flowName }))
+  const self = again ? [{ handle: 'again', label: `Another ${again.door.label.toLowerCase()} question`, intent: again.door.intent, phrases: again.door.phrases }] : []
   return {
     entry: ask,
     nodes: [
       n(ask, x, y, 'ask_question', 'What next', { question, variable: 'request' }),
-      n(route, x + 280, y, 'route_topic', 'Route the reply', { routes: routesFor(routed) }),
+      n(route, x + 280, y, 'route_topic', 'Route the reply', { routes: [...routesFor(routed), ...self] }),
       ...jumps,
       n(close, x + 560, y + doors.length * 90 + 40, 'send_message', 'Close', { text: 'No problem. Ask me anything else about the practice.' }),
       n(end, x + 820, y + doors.length * 90 + 40, 'end_flow', 'End'),
@@ -420,6 +427,7 @@ function nextStep(prefix: string, x: number, y: number, question: string, doors:
     edges: [
       e(ask, route),
       ...doors.map((item) => e(route, `${prefix}-go-${item.handle}`, item.handle)),
+      ...(again ? [e(route, again.target, 'again')] : []),
       e(route, close, 'other'),
       e(close, end),
     ],
@@ -482,7 +490,29 @@ function emergencyChapter(): StarterFlow {
   ], ['emergency', 'handover'])
 }
 
+/** When suits, a name and a number, then a booking request for reception and the online link if there is one. */
+function bookingTail(x: number, y: number, subject: string, description: string): { nodes: Node[]; edges: Edge[]; entry: string } {
+  return {
+    entry: 'when',
+    nodes: [
+      n('when', x, y, 'ask_question', 'When', { question: 'Which days and times usually suit you?', variable: 'preferred_times' }),
+      n('name', x + 220, y, 'ask_question', 'Name', { question: 'What name should the booking be under?', variable: 'guest_name' }),
+      n('phone', x + 440, y, 'ask_question', 'Phone', { question: 'And the best number to reach you on?', variable: 'phone' }),
+      n('ticket', x + 660, y, 'create_ticket', 'Booking request', { subject, description }),
+      n('look-link', x + 880, y, 'lookup_catalog', 'Online booking', { id: 'booking-link' }),
+      n('online', x + 1100, y - 80, 'send_message', 'Confirm with link', { text: 'Thanks {{guest_name}}. Reception will call you to confirm a time. {{fact}}' }),
+      n('done', x + 1100, y + 80, 'send_message', 'Confirm', { text: 'Thanks {{guest_name}}. Reception will call you to confirm a time.' }),
+      n('booked', x + 1320, y, 'end_flow', 'End'),
+    ],
+    edges: [
+      e('when', 'name'), e('name', 'phone'), e('phone', 'ticket'), e('ticket', 'look-link'),
+      e('look-link', 'online', 'found'), e('look-link', 'done', 'other'), e('online', 'booked'), e('done', 'booked'),
+    ],
+  }
+}
+
 function bookChapter(): StarterFlow {
+  const tail = bookingTail(680, 200, 'Booking request: {{visit_type}}', '{{guest_name}} ({{phone}}) would like {{visit_type}}. Suits: {{preferred_times}}.')
   return chapter(C.book, 'Asks what the visit is for, when suits, a name and a number, then leaves reception a booking request to confirm by phone.', [
     n('start', 0, 120, 'trigger_start', 'Start'),
     n('what', 220, 120, 'ask_question', 'Visit type', { question: 'What is the visit for: a check-up, a hygiene clean, a treatment, or are you new to us?', variable: 'visit_type' }),
@@ -494,47 +524,60 @@ function bookChapter(): StarterFlow {
     }),
     n('go-new', 680, 0, 'execute_flow', C.newPatients, { flowName: C.newPatients }),
     n('go-pain', 680, 60, 'execute_flow', C.emergency, { flowName: C.emergency }),
-    n('when', 680, 200, 'ask_question', 'When', { question: 'Which days and times usually suit you?', variable: 'preferred_times' }),
-    n('name', 900, 200, 'ask_question', 'Name', { question: 'What name should the booking be under?', variable: 'guest_name' }),
-    n('phone', 1120, 200, 'ask_question', 'Phone', { question: 'And the best number to reach you on?', variable: 'phone' }),
-    n('ticket', 1340, 200, 'create_ticket', 'Booking request', { subject: 'Booking request: {{visit_type}}', description: '{{guest_name}} ({{phone}}) would like {{visit_type}}. Suits: {{preferred_times}}.' }),
-    n('look', 1560, 200, 'lookup_catalog', 'Online booking', { id: 'booking-link' }),
-    n('online', 1780, 120, 'send_message', 'Confirm with link', { text: 'Thanks {{guest_name}}. Reception will call you to confirm a time. {{fact}}' }),
-    n('done', 1780, 280, 'send_message', 'Confirm', { text: 'Thanks {{guest_name}}. Reception will call you to confirm a time.' }),
-    n('end', 2000, 200, 'end_flow', 'End'),
+    ...tail.nodes,
   ], [
-    e('start', 'what'), e('what', 'kind'), e('kind', 'go-new', 'new'), e('kind', 'go-pain', 'pain'), e('kind', 'when', 'other'),
-    e('when', 'name'), e('name', 'phone'), e('phone', 'ticket'), e('ticket', 'look'),
-    e('look', 'online', 'found'), e('look', 'done', 'other'), e('online', 'end'), e('done', 'end'),
+    e('start', 'what'), e('what', 'kind'), e('kind', 'go-new', 'new'), e('kind', 'go-pain', 'pain'), e('kind', tail.entry, 'other'),
+    ...tail.edges,
   ], ['booking'])
 }
 
-function pinnedAnswer(name: string, description: string, factId: string, fallback: string, question: string, doors: Door[], tags: string[]): StarterFlow {
-  const next = nextStep('n', 880, 120, question, doors)
-  return chapter(name, description, [
+/** Explains the first visit, then books it here: they already said they are new, so nobody asks again. */
+function newPatientsChapter(): StarterFlow {
+  const tail = bookingTail(1100, 40, 'New patient exam request', '{{guest_name}} ({{phone}}) would like a new patient exam. Suits: {{preferred_times}}.')
+  const prices = door('prices')
+  return chapter(C.newPatients, 'Explains the first visit from the business details, then takes a new patient exam request for reception.', [
     n('start', 0, 120, 'trigger_start', 'Start'),
-    n('look', 220, 120, 'lookup_catalog', 'Look up', { id: factId }),
+    n('look', 220, 120, 'lookup_catalog', 'Look up', { id: 'new-patient' }),
     n('say', 440, 40, 'send_message', 'The answer', { text: '{{fact}}' }),
-    n('fallback', 440, 220, 'send_message', 'Not listed yet', { text: fallback }),
-    ...next.nodes,
+    n('fallback', 440, 220, 'send_message', 'Not listed yet', { text: 'New patients are welcome. Your first visit is a full exam with the dentist.' }),
+    n('ask', 660, 120, 'ask_question', 'Book it?', { question: 'Would you like to book your first exam?', variable: 'request' }),
+    n('route', 880, 120, 'route_topic', 'Route the reply', {
+      routes: [
+        { handle: 'yes', label: 'Book the first exam', intent: 'They want to book their first exam.', phrases: [...YES, 'book', 'book it', 'book me in', 'first exam'] },
+        { handle: prices.handle, label: prices.label, intent: prices.intent, phrases: prices.phrases, flowName: prices.flowName },
+      ],
+    }),
+    n('go-prices', 1100, 260, 'execute_flow', prices.flowName, { flowName: prices.flowName }),
+    n('close', 1100, 360, 'send_message', 'Close', { text: 'No problem. Ask me anything else about the practice.' }),
+    n('end', 1320, 360, 'end_flow', 'End'),
+    ...tail.nodes,
   ], [
-    e('start', 'look'), e('look', 'say', 'found'), e('look', 'fallback', 'other'),
-    e('say', next.entry), e('fallback', next.entry),
-    ...next.edges,
-  ], tags)
+    e('start', 'look'), e('look', 'say', 'found'), e('look', 'fallback', 'other'), e('say', 'ask'), e('fallback', 'ask'),
+    e('ask', 'route'), e('route', tail.entry, 'yes'), e('route', 'go-prices', prices.handle), e('route', 'close', 'other'), e('close', 'end'),
+    ...tail.edges,
+  ], ['new-patients'])
 }
 
-function lookupChapter(name: string, description: string, kind: string, which: string, question: string, doors: Door[], tags: string[]): StarterFlow {
-  const next = nextStep('n', 880, 120, question, doors)
+/**
+ * A follow-up on the same subject gets its own answer and a differently worded offer:
+ * the runner swaps a repeated question for the menu, which would drop the new answer.
+ */
+function lookupChapter(name: string, description: string, kind: string, which: string, question: string, againQuestion: string, doors: Door[], tags: string[]): StarterFlow {
+  const self = DOORS.find((item) => item.flowName === name)
+  const next = nextStep('n', 880, 120, question, doors, self ? { door: self, target: 'look-again' } : undefined)
   return chapter(name, description, [
     n('start', 0, 120, 'trigger_start', 'Start'),
     n('look', 220, 120, 'lookup_catalog', 'Look up', { kind }),
     n('say', 440, 40, 'send_message', 'The answer', { text: '{{fact}}' }),
     n('which', 440, 240, 'ask_question', 'Which one', { question: which, variable: 'request' }),
+    n('look-again', 880, 420, 'lookup_catalog', 'Look up the follow-up', { kind }),
+    n('say-again', 1100, 420, 'send_message', 'The follow-up answer', { text: '{{fact}}' }),
+    n('ask-again', 1320, 420, 'ask_question', 'What next after a follow-up', { question: againQuestion, variable: 'request' }),
     ...next.nodes,
   ], [
     e('start', 'look'), e('look', 'say', 'found'), e('look', 'which', 'other'), e('which', 'look'),
     e('say', next.entry),
+    e('look-again', 'say-again', 'found'), e('look-again', 'which', 'other'), e('say-again', 'ask-again'), e('ask-again', 'n-next'),
     ...next.edges,
   ], tags)
 }
@@ -551,7 +594,7 @@ function plansChapter(): StarterFlow {
       goal: 'Help the guest choose the care plan that suits them.',
       exitWhen: 'The guest has chosen a plan, or says they do not want one.',
       maxTurns: 4,
-      prompt: 'The guest has just been shown these plans: {{fact}} Only mention these plans, prices and benefits. Ask what matters to them (check-ups only, hygiene visits, emergencies covered). Never promise discounts beyond what a plan lists.',
+      prompt: 'The guest has just read these plans: {{fact}} Do not list the plans again or refer to the list. Your first reply is only one short question: what matters most to them (check-ups only, more hygiene visits, or emergencies covered). Then recommend one plan by name with its monthly price, in two sentences at most. When they choose, confirm the plan name and price in one sentence. You cannot sign anyone up, so never say you have noted, saved or set up a plan. Only mention these plans, prices and benefits, and never promise discounts beyond what a plan lists.',
     }),
     n('noted', 1100, 40, 'send_message', 'Noted', { text: 'Reception can set that up at your next visit.' }),
     ...next.nodes,
@@ -595,19 +638,17 @@ export function dentalChapters(profile: BusinessProfile): StarterFlow[] {
     welcomeChapter(profile, persona),
     emergencyChapter(),
     bookChapter(),
-    pinnedAnswer(C.newPatients, 'Explains the first visit from the business details, then offers to book it.', 'new-patient',
-      'New patients are welcome. Your first visit is a full exam with the dentist.',
-      'Would you like to book your first exam?', [door('book'), door('prices')], ['new-patients']),
+    newPatientsChapter(),
     lookupChapter(C.prices, 'Answers one price or the finance options from the price list, then offers to book.', 'service',
       'Which treatment would you like a price for? For example a check-up, a hygiene visit or a filling.',
-      'Would you like to book?', [door('book'), door('plans'), door('treatments')], ['prices']),
+      'Would you like to book?', 'Shall I book you in?', [door('book'), door('plans'), door('treatments')], ['prices']),
     plansChapter(),
     lookupChapter(C.treatments, 'Explains one treatment from the business details, with its listed price, then offers a consultation.', 'offer',
       'Which treatment would you like to know about? For example whitening, aligners or implants.',
-      'Would you like to book a consultation?', [door('book'), door('prices')], ['treatments']),
+      'Would you like to book a consultation?', 'Shall I book you a consultation?', [door('book'), door('prices')], ['treatments']),
     lookupChapter(C.hours, 'Answers opening hours, the address, parking or the phone number, then offers to book.', 'studio',
       'Are you after our opening hours, the address, parking, or our phone number?',
-      'Would you like to book a visit?', [door('book')], ['location']),
+      'Would you like to book a visit?', 'Shall I book you a visit?', [door('book')], ['location']),
     changeChapter(),
     talkChapter(),
   ]
