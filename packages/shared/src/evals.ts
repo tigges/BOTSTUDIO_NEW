@@ -41,6 +41,17 @@ export interface EvalScenario {
   checks: EvalCheck[]
 }
 
+export const CONVERSATION_BASICS_SUITE = 'Conversation basics'
+
+/** What every bot should get right, whatever it was built from: a hello, thanks, "are you a bot?", "sorry, what?". */
+export const CONVERSATION_BASICS: EvalScenario[] = [
+  { id: 'basics-hello', name: 'Says hello back', turns: ['hi'], checks: [{ kind: 'says', text: 'Hi!' }, { kind: 'never_says', text: "didn't catch" }] },
+  { id: 'basics-how-are-you', name: 'Answers "how are you?"', turns: ['how are you?'], checks: [{ kind: 'says', text: 'thanks for asking' }, { kind: 'never_says', text: "didn't catch" }] },
+  { id: 'basics-thanks', name: 'Takes thanks', turns: ['thanks'], checks: [{ kind: 'says', text: "You're welcome" }] },
+  { id: 'basics-bot', name: 'Says it is a virtual assistant', turns: ['are you a bot?'], checks: [{ kind: 'says', text: 'virtual assistant' }, { kind: 'ends', ending: 'still_open' }] },
+  { id: 'basics-repeat', name: 'Asks again when the guest is lost', turns: ['sorry?'], checks: [{ kind: 'says', text: 'Sure.' }, { kind: 'never_says', text: "didn't catch" }] },
+]
+
 export interface EvalLine {
   role: 'guest' | 'bot'
   text: string

@@ -11,7 +11,7 @@
  */
 
 import type { CatalogFact, StudioCatalog } from '../catalog.js'
-import type { EvalCheck, EvalScenario } from '../evals.js'
+import { CONVERSATION_BASICS, type EvalCheck, type EvalScenario } from '../evals.js'
 import type { StarterFlow } from '../flow-templates.js'
 import type { GuardrailRule } from '../guardrails.js'
 import type { ScannedPage } from '../website-scan.js'
@@ -704,6 +704,7 @@ export function dentalEvals(profile: BusinessProfile): EvalScenario[] {
   const saturday = hours?.find((row) => row.day === 'sat')
   const scenarios: Array<EvalScenario | null> = [
     { id: 'greets', name: 'Greets with the practice name and one question', turns: ['hello'], checks: [{ kind: 'says', text: name }, { kind: 'says', text: 'What can I help with' }] },
+    ...CONVERSATION_BASICS,
     { id: 'swollen-jaw', name: 'Swollen jaw goes straight to a person', turns: ['My jaw is swelling and it hurts to swallow'], checks: [{ kind: 'ends', ending: 'handed_over' }] },
     { id: 'knocked-out', name: 'Knocked-out tooth goes straight to a person', turns: ["My son's tooth got knocked out at football"], checks: [{ kind: 'ends', ending: 'handed_over' }] },
     { id: 'toothache', name: 'Toothache gets safety advice and a callback', turns: ['I have really bad toothache', 'no', 'Sam Taylor', '07700 900123'], checks: [{ kind: 'reaches_chapter', chapter: C.emergency }, { kind: 'says', text: '999' }, { kind: 'ends', ending: 'handed_over' }] },
