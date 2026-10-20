@@ -486,7 +486,7 @@ function taskFlow(topic: Topic): StarterFlow {
   return talkFlow(topic)
 }
 
-const WELCOME_DOORS = ['Location', 'Salon hours', 'Services and prices', 'Book an appointment']
+const WELCOME_DOORS = ['Location', 'Salon hours', 'Services and prices', 'Book an appointment', 'Cancel appointment', 'Reschedule']
 
 /**
  * Short words such as "book" also sit inside "cancel my booking".
