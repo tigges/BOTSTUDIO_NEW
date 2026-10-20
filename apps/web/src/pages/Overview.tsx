@@ -5,6 +5,7 @@ import { useAppStore } from '../store/app'
 import { useAnalyticsOverview, useConversationTrends, useConversations, useAnalyticsChannels } from '../lib/hooks'
 import { chatText } from '../lib/chat-text'
 import { ofFinished, percentOrDash } from '../lib/outcome-format'
+import { TestRunsCard } from '../components/TestRunsCard'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar,
@@ -51,6 +52,7 @@ export function OverviewPage() {
   const selectedBot = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId))
   const selectedBotId = useAppStore((s) => s.selectedBotId)
   const selectedEnv = useAppStore((s) => s.selectedEnv)
+  const isAdmin = useAppStore((s) => s.user?.role === 'ADMIN')
 
   const { data: overview, isLoading: ovLoading } = useAnalyticsOverview()
   const { data: trends = [], isLoading: trendsLoading } = useConversationTrends()
@@ -163,6 +165,10 @@ export function OverviewPage() {
               </ResponsiveContainer>
             </div>
           </Card>
+        </div>
+
+        <div className="mt-6 empty:hidden">
+          <TestRunsCard botId={selectedBotId} isAdmin={isAdmin} />
         </div>
 
         {/* Recent conversations */}

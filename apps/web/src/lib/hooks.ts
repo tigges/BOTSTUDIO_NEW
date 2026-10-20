@@ -718,6 +718,17 @@ export function useAnalyticsAgents(days = 30) {
   })
 }
 
+/** Scheduled test runs for a bot. Admins only; a 403 or 404 means there is nothing to show. */
+export function useTestRuns(botId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['test-runs', botId],
+    queryFn: () => api.testRuns.list(botId!).then((r) => r.data),
+    enabled: Boolean(botId) && enabled,
+    staleTime: 60_000,
+    retry: (count, err) => !(err instanceof api.ApiError && [403, 404].includes(err.status)) && count < 2,
+  })
+}
+
 export function useAnalyticsChannels() {
   return useQuery({
     queryKey: ['analytics-channels'],

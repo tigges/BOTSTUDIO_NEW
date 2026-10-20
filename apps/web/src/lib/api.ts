@@ -470,6 +470,21 @@ export const team = {
   createLabel: (name: string) => apiFetch<{ data: Label }>('/team/labels', { method: 'POST', body: JSON.stringify({ name }) }),
 }
 
+export interface TestRunCheck { name: string; ok: boolean; detail?: string; conversationId?: string; by?: 'runner' | 'server' }
+export interface TestRun {
+  id: string
+  kind: 'traffic' | 'release'
+  status: 'running' | 'passed' | 'failed'
+  startedAt: string
+  finishedAt: string | null
+  summary: { chats?: number; handedOver?: number; chatCostUsd?: number; simulatorCostUsd?: number; failed?: number; total?: number }
+  checks: TestRunCheck[]
+}
+
+export const testRuns = {
+  list: (botId: string) => apiFetch<{ data: TestRun[] }>(`/system/test-runs?botId=${encodeURIComponent(botId)}`),
+}
+
 export const analytics = {
   overview: (botId?: string) => apiFetch<{ data: AnalyticsOverview }>(`/analytics/overview${botId ? `?botId=${botId}` : ''}`),
   conversations: (params?: Record<string, string>) => apiFetch<{ data: ConversationTrend[] }>(`/analytics/conversations?${new URLSearchParams(params ?? {})}`),
