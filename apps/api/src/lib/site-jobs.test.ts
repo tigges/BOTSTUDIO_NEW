@@ -354,16 +354,17 @@ test('shop picking keeps a listed country shop and drops a made-up host', async 
     { href: 'https://www.vodafone.de/', text: 'Deutschland' },
     { href: 'https://www.vodafone.co.uk/', text: 'United Kingdom' },
     { href: 'https://www.vodafone.es/', text: 'España' },
+    { href: 'https://www.vodafone.ie/', text: 'Ireland' },
   ]
   const picked = await chooseShopHomesWithModel({
     homeUrl: 'https://www.vodafone.com/',
     links,
     limit: 1,
     complete: async () => JSON.stringify({
-      urls: ['https://www.vodafone.de/', 'https://shops.example/'],
+      urls: ['https://www.vodafone.de/', 'https://www.vodafone.ie/', 'https://shops.example/'],
     }),
   })
-  assert.deepEqual(picked, ['https://www.vodafone.de/'])
+  assert.deepEqual(picked, ['https://www.vodafone.ie/'])
   const regex = chooseShopHomes({ homeUrl: 'https://www.vodafone.com/', links, limit: 1 })
   const silent = await chooseShopHomesWithModel({
     homeUrl: 'https://www.vodafone.com/',
@@ -373,6 +374,15 @@ test('shop picking keeps a listed country shop and drops a made-up host', async 
   })
   assert.deepEqual(silent, regex)
   assert.deepEqual(regex, ['https://www.vodafone.co.uk/'])
+})
+
+test('a language switcher on a global site is not a country shop', () => {
+  const links = [
+    { href: 'https://www.hubspot.de/', text: 'Deutsch' },
+    { href: 'https://www.hubspot.fr/', text: 'Français' },
+    { href: 'https://www.hubspot.es/', text: 'Español' },
+  ]
+  assert.deepEqual(chooseShopHomes({ homeUrl: 'https://www.hubspot.com/', links, limit: 3 }), [])
 })
 
 test('a hair studio keeps the authored salon walk even when a model replies', async () => {

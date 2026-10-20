@@ -314,6 +314,54 @@ test('linked pages become separate conversations instead of one price paragraph'
   assert.equal(/where we are/.test(menText), false)
 })
 
+test('a price table with a tier header row and "—" cells reads as one clean line per service', () => {
+  const tiers = `<title>Price list</title><h1>Price list</h1>
+<div class="price-group"><h2>Cut &amp; style</h2><table>
+<thead><tr><th scope="col">Service</th><th scope="col">Creative</th><th scope="col">Senior</th><th scope="col">Stylist</th><th scope="col">Junior</th></tr></thead>
+<tbody>
+<tr><th scope="row">Ladies wash, cut &amp; style</th><td data-label="Creative">£90</td><td data-label="Senior">£75</td><td data-label="Stylist">£60</td><td data-label="Junior">Up to £30</td></tr>
+<tr><th scope="row">Gents wash, cut &amp; style</th><td data-label="Creative">£60</td><td data-label="Senior">—</td><td data-label="Stylist">—</td><td data-label="Junior">—</td></tr>
+<tr><th scope="row">Kids (12 &amp; under)</th><td data-label="Creative">£35</td><td data-label="Senior">—</td><td data-label="Stylist">—</td><td data-label="Junior">—</td></tr>
+</tbody></table></div>
+<div class="price-group"><h2>Highlights / balayage</h2><table>
+<thead><tr><th scope="col">Service</th><th scope="col">Creative</th><th scope="col">Senior</th><th scope="col">Stylist</th></tr></thead>
+<tbody>
+<tr><th scope="row">Full head</th><td data-label="Creative">£155</td><td data-label="Senior">£127</td><td data-label="Stylist">£100</td></tr>
+<tr><th scope="row">Toner</th><td data-label="Creative">£40</td><td data-label="Senior">£40</td><td data-label="Stylist">£40</td></tr>
+</tbody></table></div>
+<p>Aura smoothing, with shampoo and conditioner +£175</p>`
+  const draft = draftWebsiteChat({
+    pages: [pageFromHtml('https://yuzu.hair/', '<title>Yuzu</title><p>Yuzu Hair and Beauty, Ealing. A Japanese hair salon for cuts and colour.</p>'), pageFromHtml('https://yuzu.hair/prices/', tiers)],
+    companyName: 'Yuzu',
+    personaName: 'Bella',
+  })
+  const services = draft.flows.find((flow) => flow.name === 'Services and prices')
+  const lines = messageTexts(services)
+  const questions = ((services?.graph as { nodes?: Array<{ data?: { kind?: string; config?: { question?: string } } }> }).nodes ?? [])
+    .filter((node) => node.data?.kind === 'ask_question')
+    .map((node) => node.data?.config?.question ?? '')
+  const all = [...lines, ...questions].join('\n')
+  assert.equal(/service \|/i.test(all), false)
+  assert.equal(/—/.test(lines.filter((text) => /£/.test(text)).join('\n')), false)
+  assert.ok(lines.includes('Ladies wash, cut & style is £90 with a creative, or £75 with a senior, or £60 with a stylist, or up to £30 with a junior.'))
+  assert.ok(lines.includes('Gents wash, cut & style is £60 with a creative.'))
+  assert.ok(lines.includes('Toner is £40.'))
+  assert.match(all, /Which cut & style\? Ladies, Gents, or Kids/)
+  assert.match(all, /Which highlights\?/)
+  assert.equal(/conditioner \+/.test(all), false)
+})
+
+test('a shop sitemap of single products does not crowd out the questions, menu and contact pages', () => {
+  const links = ['/pages/faqs', '/pages/menu', '/pages/contact', '/pages/ealing', '/cart', '/checkout', '/pages/login', '/collections/bread']
+    .map((href) => ({ href, text: '' }))
+  const sitemap = ['croissant', 'baguette', 'soho-bun', 'salad-pots', 'cream-tea-kit', 'muffin-box', 'gift-card']
+    .map((slug) => `https://gails.com/products/${slug}`)
+  const picked = chooseSitePages({ homeUrl: 'https://gails.com/pages/ealing', links, sitemap, limit: 6 })
+  assert.equal(picked.filter((href) => href.includes('/products/')).length, 2)
+  for (const page of ['faqs', 'menu', 'contact']) assert.ok(picked.includes(`https://gails.com/pages/${page}`), page)
+  for (const page of ['/pages/ealing', '/cart', '/checkout', '/pages/login']) assert.equal(picked.some((href) => href.endsWith(page)), false, page)
+})
+
 test('chooseSitePages keeps a price list, questions, and the team page once', () => {
   const chosen = chooseSitePages({
     homeUrl: 'https://yuzu.hair/',

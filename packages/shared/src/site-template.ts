@@ -140,7 +140,7 @@ function companyLabel(companyName: string): string {
 }
 
 const HELP_VERBS =
-  /^(?:apply|ask|book|buy|call|cancel|change|check|choose|claim|compare|contact|donate|download|explore|find|fix|get|give|hire|join|learn|listen|log|make|manage|open|order|pay|plan|read|register|renew|rent|report|request|reset|return|save|see|sell|send|set|shop|sign|start|switch|talk|top|track|trade|try|understand|update|upgrade|view|visit|watch|bundle)\b/i
+  /^(?:apply|ask|book|browse|buy|call|cancel|change|check|choose|claim|collect|compare|contact|discover|donate|download|explore|find|fix|follow|get|give|hire|join|learn|listen|log|make|manage|meet|open|order|pay|plan|read|register|renew|rent|report|request|reset|return|save|see|sell|send|set|shop|sign|start|switch|talk|top|track|trade|try|understand|update|upgrade|use|view|visit|watch|bundle)\b/i
 
 function asTask(choice: string): string {
   if (HELP_VERBS.test(choice)) return lowerLead(choice)
