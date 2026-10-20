@@ -81,9 +81,11 @@ export async function runTestRun(opts: RunOptions): Promise<RunReport> {
   const log = opts.log ?? (() => {})
   const client = new RunClient(opts.baseUrl, { publicGapMs: opts.publicGapMs })
   const me = await client.login(opts.email, opts.password)
+  const plan = planFor(opts.target)
   const started = (await client.json<StartedRun>('POST', '/api/v1/system/test-runs', {
     target: opts.target,
     kind: opts.kind,
+    sentinels: plan.sentinels,
     ...(opts.seed ? { seed: opts.seed } : {}),
     baseUrl: opts.baseUrl,
   })).data
@@ -104,7 +106,6 @@ export async function runTestRun(opts: RunOptions): Promise<RunReport> {
     if (opts.kind === 'release') {
       await releaseDrill(ctx)
     } else {
-      const plan = planFor(opts.target)
       const scenarios = opts.only?.length ? plan.scenarios.filter((s) => opts.only!.includes(s.id)) : plan.scenarios
       const handedOver: string[] = []
       for (const scenario of scenarios) {
@@ -200,7 +201,9 @@ async function playScenario(ctx: Ctx, scenario: Scenario, visitor: Visitor, inbo
   const said = lower(replies.join('\n'))
   const e = scenario.expect
   for (const text of e.says ?? []) check(`${label}: says "${text}"`, said.includes(lower(text)), said.includes(lower(text)) ? undefined : replies.slice(1).join(' | ').slice(0, 600), conversationId)
-  for (const text of e.neverSays ?? []) check(`${label}: never says "${text}"`, !said.includes(lower(text)), undefined, conversationId)
+  for (const text of e.neverSays ?? []) check(`${label}: never says "${text}"`, !said.includes(lower(text)), said.includes(lower(text)) ? replies.slice(1).join(' | ').slice(0, 600) : undefined, conversationId)
+  const answered = replies.slice(1).join('\n')
+  for (const { what, pattern } of e.mentions ?? []) check(`${label}: mentions ${what}`, pattern.test(answered), pattern.test(answered) ? undefined : answered.slice(0, 600) || 'no reply', conversationId)
 
   let convo = await conversation(client, conversationId)
   const handedOver = Boolean(convo.handover) || turns.some((t) => t.live)
@@ -287,8 +290,12 @@ async function personTakesOver(ctx: Ctx, script: PersonScript, conversationId: s
       const out = res.data
       if (Array.isArray(out.output)) for (const slot of out.output) if (slot && typeof slot === 'object' && 'slot_id' in slot) slots.push(String((slot as { slot_id: unknown }).slot_id))
       const shown = out.ok ? JSON.stringify(out.output ?? null).slice(0, 200) : out.error
-      const ok = step.expect === 'error' ? !out.ok : step.expect === 'empty' ? out.ok && Array.isArray(out.output) && out.output.length === 0 : out.ok && out.output !== undefined
-      check(`${label}: the person runs "${step.tool}" (${step.expect === 'error' ? 'refused' : step.expect === 'empty' ? 'no slots' : 'answers'})`, ok, shown, conversationId)
+      const ok = step.expect === 'error' ? !out.ok
+        : step.expect === 'empty' ? out.ok && Array.isArray(out.output) && out.output.length === 0
+          : step.expect === 'sources' ? out.ok && passagesWithSources(out.output)
+            : out.ok && out.output !== undefined
+      const outcome = { error: 'refused', empty: 'no slots', sources: 'passages with their sources', ok: 'answers' }[step.expect]
+      check(`${label}: the person runs "${step.tool}" (${outcome})`, ok, shown, conversationId)
     }
   }
 
@@ -323,6 +330,15 @@ async function personTakesOver(ctx: Ctx, script: PersonScript, conversationId: s
     }
     for (const text of script.thenSays ?? []) check(`${label}: after the hand-back the bot says "${text}"`, lower(replies.join(' ')).includes(lower(text)), undefined, conversationId)
   }
+}
+
+/** A Knowledge tool answer: at least one passage, each naming its document. */
+export function passagesWithSources(output: unknown): boolean {
+  const chunks = output && typeof output === 'object' ? (output as { chunks?: unknown }).chunks : undefined
+  return Array.isArray(chunks) && chunks.length > 0 && chunks.every((chunk) => {
+    const row = chunk && typeof chunk === 'object' ? chunk as Record<string, unknown> : {}
+    return typeof row['text'] === 'string' && typeof row['title'] === 'string' && Boolean(row['title']) && typeof row['source'] === 'string'
+  })
 }
 
 async function playGenerated(ctx: Ctx, persona: GeneratedVisitor, maxTurns: number) {
