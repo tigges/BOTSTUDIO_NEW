@@ -249,27 +249,50 @@ function quietModel() {
   }
 }
 
-test('the Harbour Dental eval suite passes on the blueprint chapters without a model', async () => {
+async function failedScenarios(profile: BusinessProfile) {
+  const compiled = bp.bundle(profile)
   const deps: Partial<TestChatDeps> = {
-    handoverRules: async () => ({ liveAgents: true, alwaysHuman: bundle.alwaysHuman }),
+    handoverRules: async () => ({ liveAgents: true, alwaysHuman: compiled.alwaysHuman }),
     answer: async () => {},
     llm: async () => quietModel() as never,
-    catalog: async () => bundle.catalog,
+    catalog: async () => compiled.catalog,
     db: {},
     now: () => new Date('2026-10-20T10:00:00.000Z'),
-    safety: async () => ({ rules: bundle.guardrails.rules, privacy: DEFAULT_PRIVACY }),
+    safety: async () => ({ rules: compiled.guardrails.rules, privacy: DEFAULT_PRIVACY }),
   }
   const snapshot = {
     entry: DENTAL_CHAPTERS.welcome,
-    chapters: bundle.flows.map((flow, index) => ({ name: flow.name, version: index + 1, flowId: `f${index}`, graph: flow.graph as unknown as FlowGraph })),
+    chapters: compiled.flows.map((flow, index) => ({ name: flow.name, version: index + 1, flowId: `f${index}`, graph: flow.graph as unknown as FlowGraph })),
   }
   const results = []
-  for (const scenario of bundle.evals.scenarios) {
-    results.push(await playScenario(scenario, { tenantId: 't', botId: 'b', snapshot: snapshot as never, environmentLabel: 'Sandbox' }, (input) => runTestTurn({ ...input, catalog: bundle.catalog }, deps)))
+  for (const scenario of compiled.evals.scenarios) {
+    results.push(await playScenario(scenario, { tenantId: 't', botId: 'b', snapshot: snapshot as never, environmentLabel: 'Sandbox' }, (input) => runTestTurn({ ...input, catalog: compiled.catalog }, deps)))
   }
-  const failed = results.filter((result) => !result.passed)
-  assert.deepEqual(
-    failed.map((result) => `${result.name}: ${result.error ?? result.checks.filter((check) => !check.passed).map((check) => check.detail).join(' ')} | ${result.transcript.map((line) => `${line.role}: ${line.text}`).join(' / ')}`),
-    [],
-  )
+  return results
+    .filter((result) => !result.passed)
+    .map((result) => `${result.name}: ${result.error ?? result.checks.filter((check) => !check.passed).map((check) => check.detail).join(' ')} | ${result.transcript.map((line) => `${line.role}: ${line.text}`).join(' / ')}`)
+}
+
+test('the Harbour Dental eval suite passes on the blueprint chapters without a model', async () => {
+  assert.deepEqual(await failedScenarios(sample), [])
+})
+
+test('a price list that never says "check-up" still answers it, and bundles never win a single treatment', async () => {
+  const fees: PriceItem[] = [
+    { name: 'New patient exam', amount: 85 },
+    { name: 'Existing patient exam', amount: 45 },
+    { name: 'Bundle exam & regular hygiene', amount: 120 },
+    { name: 'Regular hygiene', amount: 85 },
+    { name: 'Clear braces/Invisalign', amount: 3000, from: true },
+    { name: 'Six month smiles', amount: 2200 },
+  ]
+  const profile: BusinessProfile = { ...sample, fields: { ...sample.fields, fees: { value: fees, status: 'confirmed' } } }
+  const catalog = bp.catalog(profile)
+  const phrasesOf = (title: string) => catalog.facts.find((fact) => fact.title === title)!.phrases
+  assert.ok(phrasesOf('Existing patient exam').includes('check-up'))
+  assert.ok(!phrasesOf('New patient exam').includes('check-up'))
+  assert.ok(phrasesOf('Regular hygiene').includes('hygienist'))
+  assert.ok(!phrasesOf('Bundle exam & regular hygiene').includes('hygienist'))
+  assert.ok(!phrasesOf('Clear braces/Invisalign').includes('six month smiles'))
+  assert.deepEqual(await failedScenarios(profile), [])
 })

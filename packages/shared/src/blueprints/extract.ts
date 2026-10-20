@@ -11,6 +11,8 @@ export interface VocabularyTerm {
   name: string
   /** Words that mean this item on a page and in a guest's message. */
   terms: string[]
+  /** Which price row a guest means by these words when several match, e.g. the existing-patient exam for "check-up". */
+  prefer?: RegExp
 }
 
 function linesOf(page: ScannedPage): string[] {
@@ -205,11 +207,17 @@ export function readHours(pages: ScannedPage[]): BusinessField {
     const b = other.hours.find((row) => row.day === day)
     return JSON.stringify(a ?? null) !== JSON.stringify(b ?? null)
   })
-  const names = differing.map((day) => WEEKDAY_NAMES[day]).join(', ')
+  const say = (hours: OpeningDay[]) => differing
+    .map((day) => {
+      const row = hours.find((item) => item.day === day)
+      return row ? formatWeeklyHours([row]).replace(/\.$/, '') : `${WEEKDAY_NAMES[day]} not listed`
+    })
+    .join('; ')
+  const where = pathOf(other.page) === '/' ? 'the home page' : `the ${pathOf(other.page)} page`
   return found(best.hours, best.page, {
     status: 'conflict',
     alternative: other.hours,
-    note: `The website gives two different weeks (${names}): “${formatWeeklyHours(best.hours)}” and “${formatWeeklyHours(other.hours)}”. Pick the right one.`,
+    note: `The website disagrees with itself: most pages say ${say(best.hours)}, but ${where} says ${say(other.hours)}. Pick the right one.`,
   })
 }
 

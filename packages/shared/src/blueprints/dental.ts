@@ -87,7 +87,7 @@ export const DENTAL_FIELDS: BlueprintFieldSpec[] = [
 
 /** Words a guest or a website uses for each treatment. Order is the order Treatments explained lists them. */
 export const DENTAL_VOCABULARY: VocabularyTerm[] = [
-  { name: 'Check-ups', terms: ['check-up', 'check up', 'checkup', 'dental exam', 'exam', 'examination'] },
+  { name: 'Check-ups', terms: ['check-up', 'check up', 'checkup', 'dental exam', 'exam', 'examination'], prefer: /^(check-?\s?up|existing patient|routine|regular)\b/i },
   { name: 'Hygiene visits', terms: ['hygiene', 'hygienist', 'scale and polish', 'airflow'] },
   { name: 'Fillings', terms: ['filling', 'fillings'] },
   { name: 'Root canal', terms: ['root canal'] },
@@ -249,10 +249,46 @@ function termsFor(name: string): string[] {
   return DENTAL_VOCABULARY.filter((item) => item.terms.some((term) => lower.includes(term))).flatMap((item) => item.terms)
 }
 
-function pricePhrases(item: PriceItem): string[] {
+/**
+ * The one row a guest means by a treatment word. "How much is a check-up?" is the
+ * existing-patient exam, not the new-patient one; "hygiene" is the plain visit, not a bundle.
+ */
+export function representativePrice(fees: PriceItem[] | null | undefined, vocabulary: VocabularyTerm): PriceItem | undefined {
+  const others = PRICE_VOCABULARY.filter((item) => item.name !== vocabulary.name)
+  return (fees ?? [])
+    .map((item, index) => {
+      const name = item.name.toLowerCase()
+      return {
+        item,
+        index,
+        term: vocabulary.terms.findIndex((term) => name.includes(term)),
+        preferred: vocabulary.prefer?.test(item.name) ? 0 : 1,
+        bundle: others.filter((other) => other.terms.some((term) => name.includes(term))).length,
+      }
+    })
+    .filter((row) => row.term >= 0)
+    .sort((a, b) => a.preferred - b.preferred || a.bundle - b.bundle || a.term - b.term || a.index - b.index)[0]?.item
+}
+
+function vocabularyFor(name: string): VocabularyTerm {
+  return PRICE_VOCABULARY.find((item) => item.name === name)!
+}
+
+/** Each treatment word goes to one price row only, so two rows never tie for "check-up". */
+function priceAliases(fees: PriceItem[]): Map<PriceItem, string[]> {
+  const aliases = new Map<PriceItem, string[]>()
+  for (const vocabulary of PRICE_VOCABULARY) {
+    const item = representativePrice(fees, vocabulary)
+    if (!item) continue
+    const terms = vocabulary.terms.filter((term) => !fees.some((other) => other !== item && other.name.toLowerCase().includes(term)))
+    aliases.set(item, [...(aliases.get(item) ?? []), ...terms])
+  }
+  return aliases
+}
+
+function pricePhrases(item: PriceItem, aliases: string[] = []): string[] {
   const base = item.name.toLowerCase().replace(/\([^)]*\)/g, '').replace(/[,/&]+/g, ' ').replace(/\s+/g, ' ').trim()
-  // Only the item's own name: vocabulary terms like "exam" would tie a check-up question to the new patient exam.
-  return [...new Set([base, base.replace(/-/g, ' '), base.replace(/-/g, '')])]
+  return [...new Set([base, base.replace(/-/g, ' '), base.replace(/-/g, ''), ...aliases])]
 }
 
 /** "Molar root canal is from £640." Group-prefixed names keep their comma: "Composite fillings, small: from £120." */
@@ -289,8 +325,9 @@ export function dentalCatalog(profile: BusinessProfile): StudioCatalog {
   if (gettingHere) facts.push({ id: 'getting-here', kind: 'studio', title: 'Parking and transport', source: C.hours, fact: sentence(gettingHere), phrases: ['parking', 'park', 'car park', 'bus', 'train', 'station', 'tube', 'get there', 'getting here', 'directions', 'drive'] })
   if (phone) facts.push({ id: 'phone', kind: 'studio', title: 'Phone number', source: C.hours, fact: `You can call us on ${phone}.`, phrases: ['phone number', 'phone', 'call you', 'telephone', 'ring', 'number'] })
 
+  const aliases = priceAliases(fees ?? [])
   for (const item of fees ?? []) {
-    facts.push({ id: `price-${slugFor(item.name)}`, kind: 'service', title: item.name, source: C.prices, fact: priceFact(item), phrases: pricePhrases(item) })
+    facts.push({ id: `price-${slugFor(item.name)}`, kind: 'service', title: item.name, source: C.prices, fact: priceFact(item), phrases: pricePhrases(item, aliases.get(item)) })
   }
   if (finance) facts.push({ id: 'finance', kind: 'service', title: 'Finance', source: C.prices, fact: sentence(finance), phrases: ['finance', 'pay monthly', 'monthly payments', 'spread the cost', 'payment plan', 'payment options', 'interest free', '0%', 'instalments', 'pay in'] })
   if (plans?.length) {
@@ -612,10 +649,6 @@ export function dentalGuardrails(): GuardrailRule[] {
 
 // ── Evals ────────────────────────────────────────────────────────────────────
 
-function findPrice(fees: PriceItem[] | null, test: RegExp): PriceItem | undefined {
-  return fees?.find((item) => test.test(item.name))
-}
-
 /** Test chats written from this practice's own details, so they pass for any practice that fills the form in. */
 export function dentalEvals(profile: BusinessProfile): EvalScenario[] {
   const name = profile.businessName || 'the practice'
@@ -625,8 +658,8 @@ export function dentalEvals(profile: BusinessProfile): EvalScenario[] {
   const plans = valueOf<PlanItem[]>(profile, 'care_plans')
   const finance = valueOf<string>(profile, 'finance')
   const gettingHere = valueOf<string>(profile, 'getting_here')
-  const checkUp = findPrice(fees, /^(check-?up|existing patient exam|exam)\b/i) ?? findPrice(fees, /check-?up|exam/i)
-  const aligners = findPrice(fees, /aligner|invisalign/i)
+  const checkUp = representativePrice(fees, vocabularyFor('Check-ups'))
+  const aligners = representativePrice(fees, vocabularyFor('Clear aligners'))
   const saturday = hours?.find((row) => row.day === 'sat')
   const scenarios: Array<EvalScenario | null> = [
     { id: 'greets', name: 'Greets with the practice name and one question', turns: ['hello'], checks: [{ kind: 'says', text: name }, { kind: 'says', text: 'What can I help with' }] },

@@ -29,6 +29,7 @@ export type BotStart =
   | 'sample'
   | 'blank'
   | 'learned'
+  | 'blueprint'
 
 export const BOT_STARTS: BotStart[] = [
   'hair-studio',
@@ -40,6 +41,7 @@ export const BOT_STARTS: BotStart[] = [
   'sample',
   'blank',
   'learned',
+  'blueprint',
 ]
 
 export interface StartCluster {

@@ -68,15 +68,52 @@ async function crawlWebsite(url: string, depth = 2): Promise<Array<{ url: string
   return results
 }
 
+/** Business details are already one document per field; embed them as they are so each chunk keeps its source page. */
+async function embedSavedDocuments(sourceId: string, tenantId: string): Promise<void> {
+  const documents = await prisma.document.findMany({ where: { knowledgeSourceId: sourceId, tenantId }, select: { id: true, content: true, metadata: true } })
+  await prisma.$executeRawUnsafe(
+    `DELETE FROM "document_chunks" dc USING "documents" d
+     WHERE dc."documentId" = d.id AND d."knowledgeSourceId" = $1 AND d."tenantId" = $2`,
+    sourceId,
+    tenantId,
+  )
+  for (const doc of documents) {
+    for (const chunk of splitIntoChunks(doc.content)) {
+      try {
+        const embedding = (await embedder.embed({ texts: [chunk] })).embeddings[0] ?? []
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO "document_chunks" (id, "tenantId", "documentId", content, embedding, metadata, "createdAt")
+           VALUES (gen_random_uuid(), $1, $2, $3, $4::vector, $5::jsonb, now())
+           ON CONFLICT DO NOTHING`,
+          tenantId,
+          doc.id,
+          chunk,
+          JSON.stringify(embedding),
+          JSON.stringify(doc.metadata ?? {}),
+        )
+      } catch (err) {
+        console.error(`Embedding failed for business document ${doc.id}:`, err)
+      }
+    }
+  }
+  await prisma.knowledgeSource.update({ where: { id: sourceId }, data: { lastSyncAt: new Date() } })
+}
+
 // ── Main ingestion function ───────────────────────────────────────────────────
 export async function ingestKnowledgeSource(jobData: {
   sourceId: string
   tenantId: string
   botId: string
-  kind: 'website' | 'file' | 'notion' | 'gdocs'
-  config: Record<string, unknown>
+  kind: 'website' | 'file' | 'notion' | 'gdocs' | 'business'
+  config?: Record<string, unknown>
 }): Promise<void> {
-  const { sourceId, tenantId, kind, config } = jobData
+  const { sourceId, tenantId, kind } = jobData
+  const config = jobData.config ?? {}
+
+  if (kind === 'business') {
+    await embedSavedDocuments(sourceId, tenantId)
+    return
+  }
 
   const pages: Array<{ url?: string; text: string }> = []
 
