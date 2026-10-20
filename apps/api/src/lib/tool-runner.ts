@@ -10,6 +10,7 @@ import { mcpCallTool, type McpTransport } from './mcp-client.js'
 import { scrubValues } from './secrets.js'
 import { loadPrivacy, renderDeepFor } from './privacy.js'
 import type { PrivacySettings } from '@ybot/shared'
+import type { KnowledgeHit } from './knowledge-search.js'
 
 /** Where a run came from. Test chats and eval runs do not run tools that change data. */
 export type ToolRunSource = 'bot' | 'inbox' | 'console' | 'test_chat' | 'eval'
@@ -46,7 +47,7 @@ export interface ToolResult {
 export interface ToolDeps {
   fetch: typeof fetch
   checkUrl: (url: string) => Promise<unknown>
-  searchKnowledge: (query: string, tenantId: string, botId: string, topK: number) => Promise<string[]>
+  searchKnowledge: (query: string, tenantId: string, botId: string, topK: number) => Promise<KnowledgeHit[]>
   runWorkflow: (workflowId: string, ctx: { tenantId: string; botId: string; conversationId?: string }) => Promise<unknown>
   runFunction: typeof runFunctionCode
   sleep: (ms: number) => Promise<void>
@@ -61,7 +62,7 @@ export function defaultToolDeps(overrides: Partial<ToolDeps> = {}): ToolDeps {
   return {
     fetch: globalThis.fetch,
     checkUrl: (url) => assertPublicUrl(url),
-    searchKnowledge: async (query, tenantId, botId, topK) => (await import('./knowledge-search.js')).searchKnowledge(query, tenantId, botId, topK),
+    searchKnowledge: async (query, tenantId, botId, topK) => (await import('./knowledge-search.js')).searchKnowledgeHits(query, tenantId, botId, topK),
     runWorkflow: async (workflowId, ctx) => (await import('./automation-engine.js')).runWorkflowNow(workflowId, ctx),
     runFunction: runFunctionCode,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
@@ -214,7 +215,8 @@ export async function runTool(tool: RunnableTool, rawArgs: Record<string, unknow
         return finish(await runMcp(tool, args, auth, deps))
       case 'knowledge': {
         const topK = Math.min(10, Math.max(1, Number(config['topK'] ?? 4) || 4))
-        const chunks = await deps.searchKnowledge(String(args['query'] ?? ''), tool.tenantId, tool.botId, topK)
+        const hits = await deps.searchKnowledge(String(args['query'] ?? ''), tool.tenantId, tool.botId, topK)
+        const chunks = hits.map((hit) => ({ text: hit.content, title: hit.title, source: hit.source }))
         return finish({ ok: true, output: { found: chunks.length > 0, chunks }, attempts: 1 })
       }
       case 'workflow': {

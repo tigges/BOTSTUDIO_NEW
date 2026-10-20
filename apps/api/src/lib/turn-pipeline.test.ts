@@ -24,6 +24,7 @@ function fake(overrides: {
   alwaysHuman?: string[]
   rules?: GuardrailRule[]
   privacy?: PrivacySettings
+  sources?: Array<{ documentId: string; title: string; source: string }>
 } = {}): Fake {
   const log: string[] = []
   const answers: AnswerRequest[] = []
@@ -53,8 +54,11 @@ function fake(overrides: {
       answers.push(request)
       if (overrides.answer instanceof Error) throw overrides.answer
       for (const chunk of overrides.answer ?? []) request.onChunk(chunk)
+      return overrides.sources ? { sources: overrides.sources } : undefined
     },
-    async saveOutbound(_input, text, extra) { log.push(`out:${text}${extra?.guardrails?.length ? ` [${extra.guardrails.map((hit) => hit.action).join(',')}]` : ''}`) },
+    async saveOutbound(_input, text, extra) {
+      log.push(`out:${text}${extra?.guardrails?.length ? ` [${extra.guardrails.map((hit) => hit.action).join(',')}]` : ''}${extra?.sources?.length ? ` <${extra.sources.map((ref) => ref.title).join(',')}>` : ''}`)
+    },
     async saveContactName() { log.push('contact') },
     warn(message) { log.push(`warn:${message}`) },
   }
@@ -282,4 +286,22 @@ test('the guest sees personal data in their reader mode; masking holds the strea
   const result = await runTurnWith(f.ports, turn)
   assert.equal(result.text, 'We will email j•••@e•••.com.')
   assert.deepEqual(turn.chunks, ['We will email j•••@e•••.com.'])
+})
+
+const PRICE_LIST = { documentId: 'd1', title: 'Harbour Dental: Price list', source: 'Business details' }
+
+test('a knowledge answer is saved with the documents it was written from', async () => {
+  const f = fake({ answer: ['An implant is ', '£2,650.'], sources: [PRICE_LIST] })
+  await runTurnWith(f.ports, input({ text: 'How much is an implant?' }))
+  assert.equal(f.log.at(-1), 'out:An implant is £2,650. <Harbour Dental: Price list>')
+})
+
+test('a failed answer and a blocked answer carry no sources', async () => {
+  const failed = fake({ answer: new Error('model down'), sources: [PRICE_LIST] })
+  await runTurnWith(failed.ports, input())
+  assert.equal(failed.log.at(-1), `out:${ANSWER_FAILED}`)
+
+  const blocked = fake({ rules: [rule({ name: 'No prices', side: 'output', check: { kind: 'pattern', pattern: '£\\d+' }, action: 'block' })], answer: ['£40.'], sources: [PRICE_LIST] })
+  await runTurnWith(blocked.ports, input())
+  assert.ok(!blocked.log.at(-1)!.includes('<'), blocked.log.at(-1))
 })
