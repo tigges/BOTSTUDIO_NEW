@@ -403,7 +403,10 @@ function extractBooking(pages: ScannedPage[]): { url: string; label: string } | 
   return null
 }
 
-const JUNK_PATH = /\/(?:wp-admin|wp-json|feed|tag|category|author|sample-page|hello-world)(?:\/|$)/i
+const JUNK_PATH = /\/(?:wp-admin|wp-json|feed|tag|category|author|sample-page|hello-world|cart|basket|checkout|login|account|search)(?:\/|$)/i
+/** One item from a shop catalogue (/products/croissant). A sitemap can list hundreds; two say what is sold. */
+const CATALOGUE_LEAF = /^\/(?:products?|collections|items?)\/[^/]+\/?$/i
+const MAX_CATALOGUE_LEAVES = 2
 const SKIP_PATH = /\/(?:blog|company-news|careers-blog|glossary|case-stud(?:y|ies)|bid|investors?|shareholders?|governance|annual-report|code-of-conduct|articles|videos)(?:\/|$|-[^/]*)/i
 const ASSET_PATH = /\.(?:png|jpe?g|gif|svg|css|js|pdf|zip|webp|ico|mp4|xml)(?:\?|$)/i
 const PAGE_RANK: Array<[string, number]> = [
@@ -441,6 +444,7 @@ export function chooseSitePages(input: {
     url.hash = ''
     url.search = ''
     if (url.pathname === '/' || url.pathname === '') return
+    if (url.pathname.replace(/\/$/, '') === home.pathname.replace(/\/$/, '')) return
     if (JUNK_PATH.test(url.pathname) || ASSET_PATH.test(url.pathname) || SKIP_PATH.test(url.pathname)) return
     if (isStoryLeafPath(url.pathname)) return
     const stem = (url.pathname.split('/').filter(Boolean).pop() ?? '').replace(/\.html?$/i, '').toLowerCase()
@@ -478,8 +482,17 @@ export function chooseSitePages(input: {
   }
   for (const link of input.links) consider(link.href, link.text, 0)
   for (const loc of input.sitemap ?? []) consider(loc, '', 1)
-  return [...byKey.values()]
-    .sort((a, b) => b.score - a.score || a.pathLength - b.pathLength)
+  const ranked = [...byKey.values()].sort((a, b) => b.score - a.score || a.pathLength - b.pathLength)
+  const shop = input.links.some((link) => /\/(?:cart|basket|collections)(?:\/|$)/i.test(link.href))
+  const kept: typeof ranked = []
+  let leaves = 0
+  for (const item of ranked) {
+    const leaf = shop && CATALOGUE_LEAF.test(new URL(item.href).pathname)
+    if (leaf && leaves >= MAX_CATALOGUE_LEAVES) continue
+    if (leaf) leaves += 1
+    kept.push(item)
+  }
+  return kept
     .slice(0, Math.max(0, input.limit))
     .map((item) => item.href)
 }
@@ -487,6 +500,7 @@ export function chooseSitePages(input: {
 const SHOP_TLD = /(?:^|\.)(?:co\.uk|com\.au|co\.nz|co\.za|co\.in|com\.tr|ie|de|es|it|pt|nl|gr|ro|cz|hu|al|eg|gh|ke|tz)$/i
 const SHOP_HINT = /shop|plans?|sim|mobile|tariff|pay[- ]?monthly|store|\bbuy\b/i
 const ENGLISH_MARKET = /united kingdom|\buk\b|great britain|\bengland\b/i
+const ENGLISH_HOST = /(?:^|\.)(?:co\.uk|uk|ie|com\.au|co\.nz|co\.za|co\.in|com\.sg|ca)$/i
 
 function brandLabel(hostname: string): string {
   const host = hostname.replace(/^www\./, '').toLowerCase()
@@ -525,6 +539,8 @@ export function chooseShopHomes(input: {
     if (url.origin === home.origin) continue
     if (brandLabel(url.hostname) !== brand) continue
     const host = url.hostname.replace(/^www\./, '').toLowerCase()
+    // A language switcher (hubspot.com → hubspot.de) is not a shop: an English chat cannot quote German pages.
+    if (!ENGLISH_HOST.test(host) && !ENGLISH_MARKET.test(link.text)) continue
     const href = `${url.protocol}//${url.hostname}/`
     if (seen.has(href)) continue
     let score = 2
@@ -785,9 +801,15 @@ function roleName(column: string): string {
   return clean
 }
 
+const LABEL_COLUMN = /^(services?|treatments?|items?|name|menu)$/i
+
 function headerRoles(line: string): string[] | null {
   if (/£/.test(line)) return null
   const cells = line.split('|').map((cell) => cell.trim()).filter(Boolean)
+  // A table head row: "Service | Creative | Senior | Stylist | Junior". Any short tier names count.
+  if (cells.length >= 2 && cells.length <= 8 && LABEL_COLUMN.test(cells[0] ?? '') && !/\d/.test(line) && cells.every((cell) => cell.length <= 24)) {
+    return cells.map((cell) => roleName(cell)).filter(Boolean)
+  }
   const words = cells.length > 1 ? cells : line.split(/\s+/)
   if (words.length < 2 || words.length > 4 || words.some((word) => word.length > 18)) return null
   const known = new Set(['service', 'senior', 'stylist', 'price', 'prices', 'from', 'description', 'duration', 'item', 'name'])
@@ -801,14 +823,15 @@ function moneyPhrase(cell: string): string | null {
   if (range) return `£${range[1]} to £${range[2]}`
   const amount = cell.match(/£\s*(\d+)/)
   if (!amount) return null
-  return /\+\s*£|plus\s/i.test(cell) ? `plus £${amount[1]}` : `£${amount[1]}`
+  if (/\+\s*£|plus\s/i.test(cell)) return `plus £${amount[1]}`
+  return /\bup to\s*£/i.test(cell) ? `up to £${amount[1]}` : `£${amount[1]}`
 }
 
 function parsePriceLine(line: string, columns: string[]): { label: string; say: string } | null {
   if (headerRoles(line) || isNoiseLine(line) || !/£\s*\d/.test(line)) return null
   if (!line.includes('|')) {
     const spoken = moneyPhrase(line)
-    const label = line.replace(/£\s*\d+(?:\s*[–—-]\s*£?\s*\d+)?/g, ' ').replace(/^\s*\+\s*/, '').replace(/\s+/g, ' ').trim()
+    const label = line.replace(/£\s*\d+(?:\s*[–—-]\s*£?\s*\d+)?/g, ' ').replace(/^\s*\+\s*|\s*\+\s*$/g, '').replace(/\s+/g, ' ').trim()
     if (!spoken || label.length < 2) return null
     return { label: label.slice(0, 80), say: `${label.slice(0, 80)} is ${spoken}.` }
   }
@@ -819,10 +842,11 @@ function parsePriceLine(line: string, columns: string[]): { label: string; say: 
     const spoken = moneyPhrase(cell)
     if (!spoken) {
       const bare = cell.replace(/[—–-]/g, '').trim()
-      if (bare && !/^(senior|stylist|price|service|n\/a)?$/i.test(bare)) labelParts.push(cell.trim())
+      const notOffered = bare !== cell.trim() && columns.includes(roleName(bare))
+      if (bare && !notOffered && !/^(senior|stylist|price|service|n\/a)?$/i.test(bare)) labelParts.push(cell.trim())
       continue
     }
-    const column = roleName(cell.replace(/£\s*\d+(?:\s*[–—-]\s*£?\s*\d+)?/g, ' ').replace(/[+—–-]/g, ' '))
+    const column = roleName(cell.replace(/£\s*\d+(?:\s*[–—-]\s*£?\s*\d+)?/g, ' ').replace(/\b(up to|from)\b/gi, ' ').replace(/[+—–-]/g, ' '))
     bits.push({ column, text: spoken })
   }
   if (bits.every((bit) => !bit.column) && columns.length >= bits.length) {
@@ -830,6 +854,9 @@ function parsePriceLine(line: string, columns: string[]): { label: string; say: 
   }
   const label = labelParts.join(' ').replace(/\s+/g, ' ').trim()
   if (label.length < 2 || bits.length === 0) return null
+  if (bits.length > 1 && bits.every((bit) => bit.text === bits[0]!.text)) {
+    return { label: label.slice(0, 80), say: `${label} is ${bits[0]!.text}.` }
+  }
   const said = bits.map((bit) => (bit.column ? `${bit.text} with a ${bit.column}` : bit.text))
   const say = said.length === 1
     ? `${label} is ${said[0]}.`
