@@ -314,4 +314,8 @@ test('the fallback menu reads as tasks for job names and as topics otherwise', (
     menuLine([topic('Make a complaint'), topic('Fix TV/radio reception'), topic('Watch or listen'), topic('Accessibility help'), topic('Delivery and returns'), topic('Talk to a person')]),
     'I can help you make a complaint, fix TV/radio reception, watch or listen, get accessibility help, get help with delivery and returns, or talk to a person.',
   )
+  assert.equal(
+    menuLine([topic('Find a bakery'), topic('Browse menu'), topic('Allergen information')]),
+    'I can help you find a bakery, browse menu, get help with allergen information, or talk to a person.',
+  )
 })
