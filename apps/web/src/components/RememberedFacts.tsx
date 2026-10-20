@@ -29,7 +29,7 @@ export function RememberedFacts({ contactId, facts, loading, error, onRetry, com
       </div>
       {confirming && contactId && (
         <div className="rounded-[var(--radius-md)] border border-[var(--error)]/40 bg-[var(--error-muted)] p-2 text-[11px] text-[var(--text-primary)]">
-          Delete all {rows.length} remembered answer{rows.length === 1 ? '' : 's'}? The bot asks again next time.
+          {rows.length === 1 ? 'Delete the remembered answer?' : `Delete all ${rows.length} remembered answers?`} The bot asks again next time.
           <div className="mt-1.5 flex gap-1.5">
             <Button size="sm" variant="destructive" disabled={forget.isPending} onClick={() => forget.mutate({ contactId }, { onSuccess: () => setConfirming(false) })}>Forget everything</Button>
             <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>Cancel</Button>
@@ -45,7 +45,7 @@ export function RememberedFacts({ contactId, facts, loading, error, onRetry, com
       ) : !contactId ? (
         <p className="text-xs text-[var(--text-muted)]">This chat has no contact, so nothing is remembered.</p>
       ) : rows.length === 0 ? (
-        <p className="text-xs text-[var(--text-muted)]">Nothing remembered yet. Turn on Contact memory under Safety to keep answers between chats.</p>
+        <p className="text-xs text-[var(--text-muted)]">Nothing remembered yet. Bots keep the answers listed under Safety → Contact memory.</p>
       ) : (
         <ul className="space-y-1.5">
           {rows.map((fact) => (
