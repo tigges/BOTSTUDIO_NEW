@@ -4,8 +4,10 @@
  *   LIVE_URL=https://app.botstudio.uk TARGET=harbour-dental KIND=traffic \
  *   QA_EMAIL=qa@acme.com QA_PASSWORD=... pnpm --filter @ybot/api exec tsx src/scripts/test-run.ts
  *
- * Bella signs in with BELLA_EMAIL / BELLA_PASSWORD. Writes the JSON report to
- * REPORT_FILE when set and the Markdown scorecard to $GITHUB_STEP_SUMMARY.
+ * Bella signs in with BELLA_EMAIL / BELLA_PASSWORD. MAX_COST_USD (default 0.25)
+ * fails the run when its model calls cost more. Writes the JSON report to
+ * REPORT_FILE, the Markdown scorecard to SCORECARD_FILE when set,
+ * and to $GITHUB_STEP_SUMMARY.
  * Exits 1 when any check fails.
  */
 
@@ -31,6 +33,9 @@ async function main() {
   const generated = process.env.GENERATED ? Number(process.env.GENERATED) : undefined
   if (generated !== undefined && !(Number.isInteger(generated) && generated >= 0)) throw new Error(`GENERATED must be a whole number; got "${process.env.GENERATED}".`)
 
+  const maxCostUsd = Number(process.env.MAX_COST_USD || 0.25)
+  if (!(maxCostUsd > 0)) throw new Error(`MAX_COST_USD must be a positive number of dollars; got "${process.env.MAX_COST_USD}".`)
+
   const report = await runTestRun({
     baseUrl,
     target,
@@ -40,12 +45,14 @@ async function main() {
     ...(generated !== undefined ? { generated } : {}),
     ...(process.env.ONLY ? { only: process.env.ONLY.split(',').map((id) => id.trim()).filter(Boolean) } : {}),
     ...(process.env.PUBLIC_GAP_MS ? { publicGapMs: Number(process.env.PUBLIC_GAP_MS) } : {}),
+    maxCostUsd,
     log: (line) => console.log(line),
   })
 
   const markdown = scorecard(report)
   console.log(`\n${markdown}`)
   if (process.env.REPORT_FILE) writeFileSync(process.env.REPORT_FILE, JSON.stringify(report, null, 2))
+  if (process.env.SCORECARD_FILE) writeFileSync(process.env.SCORECARD_FILE, markdown)
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${markdown}\n`)
   if (report.status !== 'passed') process.exit(1)
 }

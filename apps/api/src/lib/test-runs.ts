@@ -271,13 +271,27 @@ export async function pruneTestRuns(botId: string, now = new Date()) {
   return ids.length
 }
 
-export async function finishTestRun(runId: string, input: { checks: RunCheck[]; summary: Record<string, unknown>; conversationIds: string[] }) {
+/** Chat and simulator model cost together must stay under the ceiling, so a prompt or model change that gets expensive fails the run. */
+export function costCheck(summary: Record<string, unknown>, maxCostUsd: number): RunCheck {
+  const chat = typeof summary['chatCostUsd'] === 'number' ? summary['chatCostUsd'] : 0
+  const simulator = typeof summary['simulatorCostUsd'] === 'number' ? summary['simulatorCostUsd'] : 0
+  const total = chat + simulator
+  return {
+    name: `The run's model cost stays under $${maxCostUsd.toFixed(2)}`,
+    ok: total <= maxCostUsd,
+    detail: `$${total.toFixed(4)} (chats $${chat.toFixed(4)}, simulated visitors $${simulator.toFixed(4)})`,
+    by: 'server',
+  }
+}
+
+export async function finishTestRun(runId: string, input: { checks: RunCheck[]; summary: Record<string, unknown>; conversationIds: string[]; maxCostUsd?: number }) {
   const run = await runningRun(runId)
   if (run.status !== 'running') throw new TestRunError(409, 'This test run has already finished.', 'FINISHED')
   const server = await serverChecks(run.id, run.botId, input.conversationIds, run.startedAt)
   const userId = await auditUser(run.tenantId, run.startedBy ?? undefined)
   const pruned = await asSystem(run.tenantId, userId, () => pruneTestRuns(run.botId))
   const checks = [...input.checks.map((check) => ({ ...check, by: 'runner' as const })), ...server.checks]
+  if (input.maxCostUsd !== undefined) checks.push(costCheck(server.summary, input.maxCostUsd))
   const passed = checks.every((check) => check.ok)
   const summary = { ...input.summary, ...server.summary, pruned, failed: checks.filter((check) => !check.ok).length, total: checks.length }
   const saved = await prisma.testRun.update({

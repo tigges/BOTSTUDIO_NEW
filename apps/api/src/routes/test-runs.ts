@@ -3,7 +3,7 @@
  *
  * POST /api/v1/system/test-runs                 { target, kind, seed?, baseUrl? } start a run
  * POST /api/v1/system/test-runs/:id/visitor     { persona, goal, transcript } a generated visitor's next line
- * POST /api/v1/system/test-runs/:id/finish      { checks, summary, conversationIds } add server checks and save
+ * POST /api/v1/system/test-runs/:id/finish      { checks, summary, conversationIds, maxCostUsd? } add server checks and save
  * GET  /api/v1/system/test-runs?target=         recent runs for a target bot
  *
  * GET  /api/v1/public/practice-sandbox/harbour-dental/v1/slots?type=&date=
@@ -115,6 +115,7 @@ export async function testRunRoutes(app: FastifyInstance) {
       checks: z.array(CHECK).max(500).default([]),
       summary: z.record(z.unknown()).default({}),
       conversationIds: z.array(z.string().max(64)).max(200).default([]),
+      maxCostUsd: z.number().positive().max(100).optional(),
     }).safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Send the runner checks as { name, ok, detail? }.', details: body.error.flatten() } })
     try {

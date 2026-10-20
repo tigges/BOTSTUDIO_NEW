@@ -32,6 +32,8 @@ export interface RunOptions {
   /** Only these fixed scenarios, by id. */
   only?: string[]
   publicGapMs?: number
+  /** Fail the run when chats plus simulated visitors cost more than this. */
+  maxCostUsd?: number
   log?: (line: string) => void
 }
 
@@ -128,7 +130,7 @@ export async function runTestRun(opts: RunOptions): Promise<RunReport> {
   }
   const finished = (await client.json<{ status: 'passed' | 'failed'; summary: Record<string, unknown>; checks: RunCheck[] }>(
     'POST', `/api/v1/system/test-runs/${started.runId}/finish`,
-    { checks, summary: { target: opts.target, kind: opts.kind }, conversationIds },
+    { checks, summary: { target: opts.target, kind: opts.kind }, conversationIds, ...(opts.maxCostUsd !== undefined ? { maxCostUsd: opts.maxCostUsd } : {}) },
   )).data
   return {
     runId: started.runId,
