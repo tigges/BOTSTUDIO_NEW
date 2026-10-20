@@ -641,22 +641,33 @@ function conversationFlow(input: {
     }
   }
   tally(spokes)
+  const nameOf = (title: string) => title.toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const nameCounts = new Map<string, number>()
+  for (const item of new Map([...spokes, ...leaves].map((entry) => [entry.handle, entry])).values()) {
+    nameCounts.set(nameOf(item.title), (nameCounts.get(nameOf(item.title)) ?? 0) + 1)
+  }
   const seenOpen = new Set<string>()
   const openItems: BuiltSpoke[] = []
   for (const item of [...spokes, ...leaves]) {
     if (seenOpen.has(item.handle)) continue
     seenOpen.add(item.handle)
-    const phrases = item.phrases.filter((phrase) => (phraseCounts.get(phrase) ?? 0) < 2)
+    // A shared word stays with the one item named exactly that ("roots" is Roots, not In-between roots).
+    const ownName = nameOf(item.title)
+    const phrases = item.phrases.filter((phrase) => (phraseCounts.get(phrase) ?? 0) < 2 || (phrase === ownName && nameCounts.get(ownName) === 1))
     if (phrases.length === 0) continue
     openItems.push({ ...item, phrases })
   }
   const openHandles = new Set(openItems.map((item) => item.handle))
+  // "Full head" in both Colour and Highlights asks which, instead of "In-between full head" hearing its words.
+  const sharedNames = [...nameCounts].filter(([name, count]) => count > 1 && name.length >= 3).map(([name]) => name)
+  const sharedRoutes = sharedNames.map((name, index) => ({ handle: `same-name-${index + 1}`, phrases: [name] }))
 
   nodes.push(flowNode('start', 'trigger_start', 'Start', {}, 40, 80))
-  nodes.push(flowNode('open', 'route_topic', 'If they already said', { routes: routesFor(openItems) }, 280, 80))
+  nodes.push(flowNode('open', 'route_topic', 'If they already said', { routes: [...routesFor(openItems), ...sharedRoutes] }, 280, 80))
   link('e-start', 'start', 'open')
   nodes.push(flowNode('intro', 'ask_question', 'Ask', { question: input.intro, variable: 'request' }, 560, 80))
   link('e-open-other', 'open', 'intro', 'other')
+  for (const route of sharedRoutes) link(`e-open-${route.handle}`, 'open', 'intro', route.handle)
   nodes.push(flowNode('pick', 'route_topic', 'Which one', { routes: routesFor(spokes) }, 860, 80))
   link('e-intro', 'intro', 'pick')
   link('e-pick-other', 'pick', 'intro', 'other')

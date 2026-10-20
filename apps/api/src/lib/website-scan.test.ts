@@ -351,6 +351,39 @@ test('a price table with a tier header row and "—" cells reads as one clean li
   assert.equal(/conditioner \+/.test(all), false)
 })
 
+test('"roots" opens Roots, not In-between roots, and a name in two groups still asks which', async () => {
+  const prices = `<title>Price list</title>
+<h2>Colour</h2><table>
+<thead><tr><th>Service</th><th>Senior</th><th>Stylist</th></tr></thead>
+<tr><th>Full head</th><td data-label="Senior">£97</td><td data-label="Stylist">£90</td></tr>
+<tr><th>Roots</th><td data-label="Senior">£85</td><td data-label="Stylist">£80</td></tr>
+<tr><th>In-between roots</th><td data-label="Senior">£102</td><td data-label="Stylist">£90</td></tr>
+</table>
+<h2>Highlights</h2><table>
+<thead><tr><th>Service</th><th>Senior</th><th>Stylist</th></tr></thead>
+<tr><th>Full head</th><td data-label="Senior">£127</td><td data-label="Stylist">£100</td></tr>
+<tr><th>Pre-lighten roots</th><td data-label="Senior">£165</td><td data-label="Stylist">£145</td></tr>
+</table>`
+  const draft = draftWebsiteChat({
+    pages: [pageFromHtml('https://yuzu.hair/', '<title>Yuzu</title><p>Yuzu Hair and Beauty, Ealing. A Japanese hair salon for cuts and colour.</p>'), pageFromHtml('https://yuzu.hair/prices/', prices)],
+    companyName: 'Yuzu',
+    personaName: 'Bella',
+  })
+  const graph = draft.flows.find((flow) => flow.name === 'Services and prices')!.graph as unknown as FlowGraph
+  const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
+  const say = async (text: string) => {
+    const session = topicSession(text)
+    session.variables.flow['_last_user_message'] = text
+    const run = await machine.run(session, graph, text)
+    return run.newMessages.map((message) => message.content.text).join('\n')
+  }
+  assert.match(await say('How much are roots?'), /^Roots is £85 with a senior/m)
+  assert.match(await say('How much are in-between roots?'), /In-between roots is £102/)
+  const fullHead = await say('How much is a full head?')
+  assert.equal(/full head is/i.test(fullHead), false)
+  assert.match(fullHead, /\?/)
+})
+
 test('a shop sitemap of single products does not crowd out the questions, menu and contact pages', () => {
   const links = ['/pages/faqs', '/pages/menu', '/pages/contact', '/pages/ealing', '/cart', '/checkout', '/pages/login', '/collections/bread']
     .map((href) => ({ href, text: '' }))

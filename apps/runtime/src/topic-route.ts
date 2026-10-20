@@ -160,21 +160,51 @@ function phraseHit(hay: string, needle: string): 'exact' | 'fuzzy' | null {
   return null
 }
 
-/** Longest matching phrase wins, so "cancel my order" beats "order". A one-letter slip still counts. "other" when nothing fits. */
+/**
+ * Longest matching phrase wins, so "cancel my order" beats "order". A one-letter slip still counts.
+ * Other single words the route also hears add to it, so "sim only plans" goes to the route that
+ * hears "sim" and "only", not the one that hears "plans". A slip on a single word ("there" for
+ * "where") counts half. "other" when nothing fits.
+ */
 export function matchTopic(text: string, routes: TopicRoute[]): string {
   const hay = text.toLowerCase()
-  let best: { handle: string; score: number } | undefined
+  const heardWords = tokens(hay)
+  let best: { handle: string; score: number; fit: number } | undefined
   for (const route of routes) {
+    let top: { heard: string[]; score: number } | undefined
+    const words: Array<{ heard: string; score: number }> = []
     for (const phrase of listenables(route.phrases)) {
       const needle = phrase.toLowerCase().trim()
       if (!needle) continue
       const hit = phraseHit(hay, needle)
       if (!hit) continue
-      const score = hit === 'exact' ? needle.length : needle.length - 0.5
-      if (!best || score > best.score) best = { handle: route.handle, score }
+      const parts = tokens(needle)
+      const single = parts.length === 1
+      const score = hit === 'exact' ? needle.length : single ? needle.length / 2 : needle.length - 0.5
+      const heard = single && hit === 'fuzzy' ? [heardWords.find((word) => closeWord(needle, word)) ?? needle] : parts
+      if (single) words.push({ heard: heard[0]!, score })
+      if (!top || score > top.score) top = { heard, score }
     }
+    if (!top) continue
+    const counted = new Set(top.heard)
+    let extra = 0
+    for (const word of words.sort((a, b) => b.score - a.score)) {
+      if (counted.has(word.heard)) continue
+      counted.add(word.heard)
+      extra += word.score
+    }
+    const score = top.score + extra
+    const fit = nameFit(route.phrases[0] ?? '', heardWords)
+    if (!best || score > best.score || (score === best.score && fit > best.fit)) best = { handle: route.handle, score, fit }
   }
   return best?.handle ?? 'other'
+}
+
+/** How much of a route's first phrase the guest said: "roots" fits Roots fully and In-between roots a third. */
+function nameFit(name: string, heard: string[]): number {
+  const words = tokens(name.toLowerCase())
+  if (words.length === 0) return 0
+  return words.filter((word) => heard.includes(word)).length / words.length
 }
 
 const CLASSIFY_MS = 6_000
