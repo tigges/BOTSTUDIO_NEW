@@ -145,6 +145,8 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
     'Salon hours',
     'Services and prices',
     'Book an appointment',
+    'Cancel appointment',
+    'Reschedule',
   ])
   assert.equal(welcomeGreeting(welcome.graph), greeting)
 
@@ -171,8 +173,10 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   assert.equal(where.jumpToFlow, 'Location')
 
   const cancel = await afterName('Please cancel my booking')
-  assert.equal(cancel.jumpToFlow, undefined)
-  assert.equal(spoken(cancel), 'Are you after a price, the hours, or to book?')
+  assert.equal(cancel.jumpToFlow, 'Cancel appointment')
+
+  const move = await afterName('Can I move my appointment to Friday?')
+  assert.equal(move.jumpToFlow, 'Reschedule')
 
   const hello = await machine.run(session('hello', 'Ada'), graph, 'hello')
   assert.equal(spoken(hello), greeting)
