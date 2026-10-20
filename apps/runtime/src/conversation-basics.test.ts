@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { FlowGraph } from './engine.js'
 import { basicAct, basicsReply } from './conversation-basics.js'
+import { choiceAlreadyHeard } from './nodes/executors.js'
 
 const welcome = {
   nodes: [
@@ -43,4 +44,14 @@ test('the chart keeps words it has its own route for, and an AI step keeps the c
   assert.equal(basicsReply({ text: 'thanks', graph: welcome, nodeId: 'ask', question: 'Anything else?' }), undefined)
   assert.equal(basicsReply({ text: 'hi', graph: welcome, nodeId: 'ask', question: 'Which plan?', waitingType: 'ai' }), undefined)
   assert.equal(basicsReply({ text: 'I need a check-up', graph: welcome, nodeId: 'ask', question: 'What can I help with?' }), undefined)
+})
+
+test('a question whose answer the guest already gave is not asked again', () => {
+  const choices = ['a check-up', 'a hygiene clean', 'a treatment', "I'm new"]
+  assert.equal(choiceAlreadyHeard(choices, 'I need a check-up'), 'a check-up')
+  assert.equal(choiceAlreadyHeard(choices, 'can I book a checkup please'), 'a check-up')
+  assert.equal(choiceAlreadyHeard(choices, 'I want to book'), undefined)
+  assert.equal(choiceAlreadyHeard(choices, 'a check-up and a hygiene clean'), undefined)
+  assert.equal(choiceAlreadyHeard(choices, "I'm new here"), undefined)
+  assert.equal(choiceAlreadyHeard(undefined, 'I need a check-up'), undefined)
 })

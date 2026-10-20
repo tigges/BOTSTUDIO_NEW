@@ -515,7 +515,7 @@ function bookChapter(): StarterFlow {
   const tail = bookingTail(680, 200, 'Booking request: {{visit_type}}', '{{guest_name}} ({{phone}}) would like {{visit_type}}. Suits: {{preferred_times}}.')
   return chapter(C.book, 'Asks what the visit is for, when suits, a name and a number, then leaves reception a booking request to confirm by phone.', [
     n('start', 0, 120, 'trigger_start', 'Start'),
-    n('what', 220, 120, 'ask_question', 'Visit type', { question: 'What is the visit for: a check-up, a hygiene clean, a treatment, or are you new to us?', variable: 'visit_type' }),
+    n('what', 220, 120, 'ask_question', 'Visit type', { question: 'What is the visit for: a check-up, a hygiene clean, a treatment, or are you new to us?', variable: 'visit_type', choices: ['a check-up', 'a hygiene clean', 'a treatment', "I'm new"] }),
     n('kind', 440, 120, 'route_topic', 'New or in pain?', {
       routes: [
         { handle: 'new', label: 'New patient', intent: 'The guest is not a patient here yet.', phrases: ['new', 'new patient', 'new to you', 'first visit', 'first time', 'register', 'never been', 'not registered'], flowName: C.newPatients },
@@ -613,7 +613,7 @@ function changeChapter(): StarterFlow {
     n('name', 660, 120, 'ask_question', 'Name', { question: 'What name is the appointment under?', variable: 'guest_name' }),
     n('when', 880, 120, 'ask_question', 'When', { question: 'Which day and time is the appointment?', variable: 'appointment_time' }),
     n('what', 1100, 120, 'ask_question', 'Cancel or move', { question: 'Would you like to cancel it or move it?', variable: 'change' }),
-    n('ticket', 1320, 120, 'create_ticket', 'Change request', { subject: 'Change or cancel: {{change}}', description: '{{guest_name}}: appointment on {{appointment_time}}. Wants to {{change}}.' }),
+    n('ticket', 1320, 120, 'create_ticket', 'Change request', { subject: 'Appointment change for {{guest_name}}', description: '{{guest_name}}: appointment on {{appointment_time}}. Wants to {{change}}.' }),
     n('done', 1540, 120, 'send_message', 'Confirm', { text: "Thanks {{guest_name}}. I've passed this to reception and they'll confirm by phone." }),
     n('end', 1760, 120, 'end_flow', 'End'),
   ], [
