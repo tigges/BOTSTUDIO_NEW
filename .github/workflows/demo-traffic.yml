@@ -1,8 +1,8 @@
 name: Demo traffic
 
+# Canned chats, by hand only. Scheduled traffic for Harbour Dental, Bella and
+# Acme goes through the real public chat in test-runs.yml.
 on:
-  schedule:
-    - cron: "20 */4 * * *"
   workflow_dispatch:
 
 permissions:

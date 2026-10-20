@@ -1,0 +1,111 @@
+name: Test runs
+
+# Visitors through the public chat, a person through the Inbox, releases through
+# the release API, against the live site. Run chats are marked as test traffic
+# and removed after 14 days. The scorecard is in each job's summary.
+
+on:
+  schedule:
+    - cron: "20 */4 * * *"
+    - cron: "40 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Which bot
+        type: choice
+        options: [all, harbour-dental, bella, acme]
+        default: harbour-dental
+      kind:
+        description: traffic plays visitors and the Inbox; release publishes, rolls back and forward
+        type: choice
+        options: [traffic, release]
+        default: traffic
+      generated:
+        description: Generated visitors on top of the fixed ones (blank for the default)
+        required: false
+      only:
+        description: Only these fixed scenarios, comma-separated ids (blank for all)
+        required: false
+      seed:
+        description: Seed for visitor picks (blank for the current hour)
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-runs-${{ github.event.schedule || github.event.inputs.kind || 'traffic' }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.plan.outputs.targets }}
+      kind: ${{ steps.plan.outputs.kind }}
+    steps:
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          TARGET: ${{ github.event.inputs.target }}
+          KIND: ${{ github.event.inputs.kind }}
+        run: |
+          if [ "$EVENT" = "schedule" ] && [ "$SCHEDULE" = "40 6 * * 1" ]; then
+            echo 'targets=["harbour-dental"]' >> "$GITHUB_OUTPUT"
+            echo 'kind=release' >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT" = "schedule" ] || [ "$TARGET" = "all" ]; then
+            echo 'targets=["harbour-dental","bella","acme"]' >> "$GITHUB_OUTPUT"
+            echo "kind=${KIND:-traffic}" >> "$GITHUB_OUTPUT"
+          else
+            echo "targets=[\"$TARGET\"]" >> "$GITHUB_OUTPUT"
+            echo "kind=$KIND" >> "$GITHUB_OUTPUT"
+          fi
+
+  run:
+    needs: plan
+    name: ${{ matrix.target }} (${{ needs.plan.outputs.kind }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        target: ${{ fromJson(needs.plan.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Play the run
+        working-directory: apps/api
+        env:
+          LIVE_URL: https://app.botstudio.uk
+          TARGET: ${{ matrix.target }}
+          KIND: ${{ needs.plan.outputs.kind }}
+          GENERATED: ${{ github.event.inputs.generated }}
+          ONLY: ${{ github.event.inputs.only }}
+          SEED: ${{ github.event.inputs.seed }}
+          QA_EMAIL: qa@acme.com
+          QA_PASSWORD: ${{ secrets.QA_ACCOUNT_PASSWORD }}
+          BELLA_EMAIL: demo@bella.com
+          BELLA_PASSWORD: ${{ secrets.BELLA_DEMO_PASSWORD }}
+          REPORT_FILE: ${{ runner.temp }}/test-run.json
+        run: pnpm exec tsx src/scripts/test-run.ts
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-run-${{ matrix.target }}-${{ needs.plan.outputs.kind }}
+          path: ${{ runner.temp }}/test-run.json
+          if-no-files-found: ignore
+          retention-days: 14
