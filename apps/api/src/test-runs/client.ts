@@ -10,6 +10,8 @@ export interface ChatTurn {
   /** A person holds the chat; the bot stayed quiet. */
   live: boolean
   ended: boolean
+  /** The server had already handled this message id and did not answer again. */
+  duplicate: boolean
   status: number
   ms: number
 }
@@ -78,13 +80,14 @@ export class RunClient {
   }
 
   /** One visitor turn through the public chat, read to the end of the stream. */
-  async chat(channelId: string, input: { sessionId: string; conversationId?: string; message?: string; runToken: string }): Promise<ChatTurn> {
+  async chat(channelId: string, input: { sessionId: string; conversationId?: string; message?: string; messageId?: string; runToken: string }): Promise<ChatTurn> {
     await this.pacePublic()
     const started = Date.now()
     const body = {
       sessionId: input.sessionId,
       ...(input.conversationId ? { conversationId: input.conversationId } : {}),
       ...(input.message === undefined ? { opening: true } : { message: input.message }),
+      ...(input.messageId ? { messageId: input.messageId } : {}),
     }
     for (let attempt = 0; ; attempt++) {
       const res = await fetch(`${this.baseUrl}/api/v1/public/chat/${channelId}`, {
@@ -97,23 +100,25 @@ export class RunClient {
         continue
       }
       if (!res.ok || !res.body) {
-        return { conversationId: input.conversationId ?? '', text: '', live: false, ended: false, status: res.status, ms: Date.now() - started }
+        return { conversationId: input.conversationId ?? '', text: '', live: false, ended: false, duplicate: false, status: res.status, ms: Date.now() - started }
       }
       const raw = await res.text()
       let conversationId = input.conversationId ?? ''
       let text = ''
       let live = false
       let ended = false
+      let duplicate = false
       for (const line of raw.split('\n')) {
         if (!line.startsWith('data: ')) continue
         try {
-          const event = JSON.parse(line.slice(6)) as { conversationId?: string; chunk?: string; done?: boolean; live?: boolean; ended?: boolean }
+          const event = JSON.parse(line.slice(6)) as { conversationId?: string; chunk?: string; done?: boolean; live?: boolean; ended?: boolean; duplicate?: boolean }
           if (event.conversationId) conversationId = event.conversationId
+          if (event.duplicate) duplicate = true
           if (event.chunk) text += event.chunk
           if (event.done) { live = Boolean(event.live); ended = Boolean(event.ended) }
         } catch { /* partial line */ }
       }
-      return { conversationId, text, live, ended, status: res.status, ms: Date.now() - started }
+      return { conversationId, text, live, ended, duplicate, status: res.status, ms: Date.now() - started }
     }
   }
 
