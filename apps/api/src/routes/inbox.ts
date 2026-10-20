@@ -5,11 +5,11 @@ import { processInboundMessage } from '../runtime-bridge.js'
 import { enqueueConversationAnalysis } from '../queues.js'
 import { triggerRules } from '../lib/automation-engine.js'
 import { attachSlaLabels, onOutboundReply } from '../lib/sla.js'
-import { presentConversation, presentMessages } from '../lib/present-chat.js'
+import { agentViewFor, agentViewsFor, presentConversation, presentMessages } from '../lib/present-chat.js'
 import { outcomeAfterStatus } from '../lib/chat-outcome.js'
 import { costByConversation } from '../lib/llm-ledger.js'
 import { deliverAgentReply, HELD_WHERE, returnChat, withHeldChats } from '../lib/handover.js'
-import { RETURN_OUTCOMES, toolChangesData } from '@ybot/shared'
+import { renderPersonalDataDeep, RETURN_OUTCOMES, toolChangesData } from '@ybot/shared'
 import { findTool, presentTool, runAndRecord } from '../lib/tools-store.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
@@ -109,7 +109,8 @@ export async function conversationsRoutes(app: FastifyInstance) {
     const conversations = withHeldChats(recent, held)
     const data = await attachSlaLabels(conversations).catch(() => conversations.map((c) => ({ ...c, sla: null as string | null })))
     const costs = await costByConversation(data.map((c) => c.id)).catch(() => new Map())
-    return { data: data.map((conversation) => ({ ...presentConversation(conversation), llm: costs.get(conversation.id) ?? null })) }
+    const viewOf = await agentViewsFor(data.map((c) => c.botId), tenantId)
+    return { data: data.map((conversation) => ({ ...presentConversation(conversation, viewOf(conversation.botId)), llm: costs.get(conversation.id) ?? null })) }
   })
 
   // GET /conversations/:id
@@ -123,7 +124,8 @@ export async function conversationsRoutes(app: FastifyInstance) {
     if (!convo) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
     const [labeled] = await attachSlaLabels([convo]).catch(() => [{ ...convo, sla: null as string | null }])
     const costs = await costByConversation([convo.id]).catch(() => new Map())
-    return { data: { ...(labeled ? presentConversation(labeled) : convo), llm: costs.get(convo.id) ?? null } }
+    const view = await agentViewFor(convo.botId, tenantId)
+    return { data: { ...presentConversation(labeled ?? convo, view), llm: costs.get(convo.id) ?? null } }
   })
 
   // PATCH /conversations/:id  (assign, resolve, escalate, etc.)
@@ -181,7 +183,7 @@ export async function conversationsRoutes(app: FastifyInstance) {
     })
     if (!exists) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
     const messages = await prisma.message.findMany({ where: { conversationId: id, tenantId }, orderBy: { createdAt: 'asc' } })
-    return { data: presentMessages(messages, exists.contact?.displayName) }
+    return { data: presentMessages(messages, exists.contact?.displayName, await agentViewFor(exists.botId, tenantId)) }
   })
 
   // GET /conversations/:id/tools — the bot's tools, for a person in the Inbox
@@ -223,7 +225,8 @@ export async function conversationsRoutes(app: FastifyInstance) {
         content: { text: summary, internal: true, tool: { id: tool.id, name: tool.name, runId: result.runId, ok: result.ok, args: body.data.args, output: result.output ?? null, error: result.error ?? null } } as object,
       },
     })
-    return { data: { ...result, noteId: note.id } }
+    const view = await agentViewFor(convo.botId, tenantId)
+    return { data: { ...renderPersonalDataDeep(result, view), noteId: note.id } }
   })
 
   // POST /conversations/:id/messages  (agent reply or inbound user message)

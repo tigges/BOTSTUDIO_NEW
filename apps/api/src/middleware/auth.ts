@@ -1,4 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
+import { setAuditActor } from '@ybot/db'
 
 // ── Role hierarchy (lowest to highest privilege) ──────────────────────────────
 // AGENT      — inbox only: conversations, tickets, contacts
@@ -17,6 +18,10 @@ export async function authMiddleware(
 ): Promise<void> {
   try {
     await request.jwtVerify()
+    const user = request.user as { sub?: string; tenantId?: string; role?: string }
+    if (user?.sub && user.tenantId) {
+      setAuditActor({ tenantId: user.tenantId, userId: user.sub, role: user.role, ip: request.ip, source: 'console', requestId: request.id })
+    }
   } catch {
     reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Invalid or expired token' } })
   }

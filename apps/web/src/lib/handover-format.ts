@@ -10,7 +10,9 @@ export function priorityTone(priority: HandoverPriority | undefined): Tone {
 }
 
 export function sourceLine(source: HandoverContract['source'] | undefined): string {
-  return source === 'always_human' ? 'Always-human word' : 'Journey step'
+  if (source === 'always_human') return 'Always-human word'
+  if (source === 'guardrail') return 'Guardrail'
+  return 'Journey step'
 }
 
 export function routingLine(routing: HandoverContract['routing'] | undefined): string {

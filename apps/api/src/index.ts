@@ -33,6 +33,12 @@ import { toolsRoutes, authProfilesRoutes } from './routes/tools.js'
 import { authMiddleware } from './middleware/auth.js'
 import { wsRoutes, broadcastToTenant } from './ws.js'
 import { initQueues } from './queues.js'
+import { runWithAuditContext } from '@ybot/db'
+import { installConsoleScrubbing, scrubbingLoggerOptions } from './lib/log-scrub.js'
+import { installLlmPrivacy } from './lib/privacy.js'
+import { safetyRoutes } from './routes/safety.js'
+
+installConsoleScrubbing()
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10)
 const HOST = process.env['HOST'] ?? '0.0.0.0'
@@ -45,9 +51,12 @@ const app = Fastify({
   // so that request.protocol returns "https" when the user reaches us via HTTPS.
   trustProxy: true,
   logger: isDev
-    ? { transport: { target: 'pino-pretty', options: { colorize: true } } }
-    : true,
+    ? { ...scrubbingLoggerOptions(), transport: { target: 'pino-pretty', options: { colorize: true } } }
+    : scrubbingLoggerOptions(),
 })
+
+// Each request gets its own context, so the audit actor and LLM scope set later never leak into another request.
+app.addHook('onRequest', (_request, _reply, done) => { runWithAuditContext(done) })
 
 // Reflect the caller's origin. The website widget is embedded on the marketing
 // site and on customer sites, so a single FRONTEND_URL blocks those chats in the
@@ -123,6 +132,7 @@ await app.register(workflowsRoutes, { prefix: '/api/v1/bots' })
 await app.register(toolsRoutes, { prefix: '/api/v1/bots' })
 await app.register(authProfilesRoutes, { prefix: '/api/v1/auth-profiles' })
 await app.register(dashboardsRoutes, { prefix: '/api/v1/bots' })
+await app.register(safetyRoutes, { prefix: '/api/v1/bots' })
 await app.register(reportsRoutes, { prefix: '/api/v1/bots' })
 await app.register(cannedRoutes, { prefix: '/api/v1/canned-replies' })
 await app.register(databaseRoutes, { prefix: '/api/v1/database' })
@@ -130,6 +140,7 @@ await app.register(integrationsRoutes, { prefix: '/api/v1/integrations' })
 await app.register(systemRoutes, { prefix: '/api/v1/system' })
 
 installLlmLedger()
+installLlmPrivacy()
 setTurnBroadcast(broadcastToTenant)
 
 try {

@@ -20,6 +20,7 @@ import {
   Server,
   Sparkles,
   Wrench,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -142,6 +143,12 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Webhooks',
         icon: Repeat2,
         path: '/configure/webhooks',
+      },
+      {
+        id: 'safety',
+        label: 'Safety',
+        icon: ShieldCheck,
+        path: '/configure/safety',
       },
     ],
   },

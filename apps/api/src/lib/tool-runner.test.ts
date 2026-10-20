@@ -1,6 +1,6 @@
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { checkToolArgs, fillJsonTemplate, toolIssues, toolParametersSchema, type ToolDraft } from '@ybot/shared'
+import { DEFAULT_PRIVACY, checkToolArgs, fillJsonTemplate, toolIssues, toolParametersSchema, type ToolDraft } from '@ybot/shared'
 import { defaultToolDeps, resetCircuitBreakers, runTool, type RunnableTool, type ToolDeps } from './tool-runner.js'
 import { sealSecret, openSecret, secretHint } from './secrets.js'
 import { applyAuthProfile } from './auth-profiles.js'
@@ -23,7 +23,7 @@ function json(body: unknown, status = 200): Response {
 }
 
 function deps(overrides: Partial<ToolDeps>): ToolDeps {
-  return defaultToolDeps({ checkUrl: async () => undefined, sleep: async () => {}, ...overrides })
+  return defaultToolDeps({ checkUrl: async () => undefined, sleep: async () => {}, privacy: async () => DEFAULT_PRIVACY, ...overrides })
 }
 
 function httpTool(overrides: Partial<RunnableTool> = {}, config: Record<string, unknown> = {}): RunnableTool {
@@ -170,6 +170,7 @@ test('private addresses are refused before any request is made', async () => {
 
   const calls: Call[] = []
   const blocked = await runTool(httpTool(), { order: '1' }, { source: 'bot' }, defaultToolDeps({
+    privacy: async () => DEFAULT_PRIVACY,
     fetch: fakeFetch([() => json({})], calls),
     checkUrl: (url) => assertPublicUrl(url, async () => ['10.0.0.5']),
   }))

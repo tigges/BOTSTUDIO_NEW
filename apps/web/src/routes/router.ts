@@ -40,6 +40,7 @@ import { OptimizationsPage } from '../pages/configure/Optimizations'
 import { IntegrationsPage } from '../pages/configure/Integrations'
 import { DatabasePage } from '../pages/configure/Database'
 import { WebhooksPage } from '../pages/configure/Webhooks'
+import { SafetyPage } from '../pages/configure/Safety'
 import { TeamPage } from '../pages/admin/Team'
 import { AuditPage } from '../pages/admin/Audit'
 import { SystemStatusPage } from '../pages/admin/SystemStatus'
@@ -162,6 +163,7 @@ const optimizationsRoute = createRoute({ getParentRoute: () => appRoute, path: '
 const integrationsRoute = createRoute({ getParentRoute: () => appRoute, path: '/configure/integrations', component: IntegrationsPage })
 const databaseRoute = createRoute({ getParentRoute: () => appRoute, path: '/configure/database', component: DatabasePage })
 const webhooksRoute = createRoute({ getParentRoute: () => appRoute, path: '/configure/webhooks', component: WebhooksPage })
+const safetyRoute = createRoute({ getParentRoute: () => appRoute, path: '/configure/safety', component: SafetyPage })
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 const teamRoute = createRoute({ getParentRoute: () => appRoute, path: '/admin/team', component: TeamPage })
@@ -210,6 +212,7 @@ const routeTree = rootRoute.addChildren([
     integrationsRoute,
     databaseRoute,
     webhooksRoute,
+    safetyRoute,
     teamRoute,
     auditRoute,
     systemStatusRoute,

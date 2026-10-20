@@ -5,7 +5,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import React from 'react'
-import type { ReturnOutcome } from '@ybot/shared'
+import type { GuardrailRule, ReturnOutcome } from '@ybot/shared'
 import * as api from './api'
 import * as demo from './demo-data'
 import { useAppStore } from '../store/app'
@@ -962,6 +962,53 @@ export function useDeleteWorkflow() {
   return useMutation({
     mutationFn: (id: string) => api.workflows.delete(bid, id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['workflows', bid] }),
+  })
+}
+
+// ── Safety ──────────────────────────────────────────────────────────────────
+
+export function useSafety() {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['safety', bid],
+    queryFn: () => api.safety.get(bid).then((r) => r.data),
+    enabled: !!bid && bid !== 'demo',
+  })
+}
+
+export function useSavePrivacy() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (body: Parameters<typeof api.safety.savePrivacy>[1]) => api.safety.savePrivacy(bid, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['safety', bid] }),
+  })
+}
+
+export function useSavePolicy() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: ({ id, body }: { id?: string; body: { name: string; rules: GuardrailRule[] } }) =>
+      (id ? api.safety.savePolicy(bid, id, body) : api.safety.createPolicy(bid, body)).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['safety', bid] }),
+  })
+}
+
+export function usePolicyAction() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: ({ id, action }: { id: string; action: 'activate' | 'deactivate' | 'delete' }) =>
+      (action === 'activate' ? api.safety.activate(bid, id) : action === 'deactivate' ? api.safety.deactivate(bid, id) : api.safety.deletePolicy(bid, id)).then(() => undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['safety', bid] }),
+  })
+}
+
+export function useSafetyTest() {
+  const bid = botId()
+  return useMutation({
+    mutationFn: (body: Parameters<typeof api.safety.test>[1]) => api.safety.test(bid, body).then((r) => r.data),
   })
 }
 

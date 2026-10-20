@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { chatPlain, draftWebsiteChat, hairStudioPack, learnedSpecFromJobs, packFromLearned, pageFromHtml } from '@ybot/shared'
+import { DEFAULT_PRIVACY, chatPlain, draftWebsiteChat, hairStudioPack, learnedSpecFromJobs, packFromLearned, pageFromHtml } from '@ybot/shared'
 import { keepFirstQuestion, type FlowGraph } from '@ybot/runtime'
 import { currentLlmScope } from './llm-ledger.js'
 import { runTestTurn, withWorkingCopy, type TestChatDeps, type TestChatState } from './test-chat.js'
+
+const noSafety: TestChatDeps['safety'] = async () => ({ rules: [], privacy: DEFAULT_PRIVACY })
 
 const noTeam = async () => ({ liveAgents: false, alwaysHuman: [] })
 
@@ -43,6 +45,7 @@ async function testTurn(input: {
     catalog: async () => undefined,
     db: {},
     now: () => input.now ?? new Date(),
+    safety: noSafety,
   })
   return { text: turn.text, chapter: turn.chapter, path: turn.path, state: turn.state }
 }
@@ -736,6 +739,7 @@ function pipelineTurn(message: string, state: TestChatState | undefined, options
     llm: async () => quietModel() as never,
     catalog: async () => undefined,
     db: {},
+    safety: noSafety,
   })
 }
 
@@ -817,6 +821,7 @@ function canvasTurn(chapter: string, graph: FlowGraph, message: string, state?: 
     llm: async () => quietModel(options.classify) as never,
     catalog: async () => undefined,
     db: {},
+    safety: noSafety,
   })
 }
 

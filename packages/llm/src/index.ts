@@ -29,11 +29,13 @@ export {
   type LlmLink,
   type LlmProviderName,
 } from './chain.js'
+export { PrivacyProvider, StreamRevealer, currentLlmPrivacy, setLlmPrivacy, type LlmPrivacy } from './privacy.js'
 
 import { LlmAdapter } from './types.js'
 import { OpenAIProvider } from './providers/openai.js'
 import { OllamaProvider } from './providers/ollama.js'
 import { RecordingProvider } from './ledger.js'
+import { PrivacyProvider } from './privacy.js'
 import {
   DEFAULT_OLLAMA_URL,
   FallbackProvider,
@@ -86,10 +88,10 @@ export function createLlmAdapterForModel(model: string, env: Env = process.env a
 export function createEmbeddingAdapter(env: Env = process.env as Env): LlmAdapter {
   const resolved = resolveLlmEnv(env)
   if (resolved['GEMINI_API_KEY']) {
-    return new LlmAdapter(new RecordingProvider('gemini', new OpenAIProvider(resolved['GEMINI_API_KEY'], GEMINI_BASE_URL)), resolved['GEMINI_EMBED_MODEL'] || 'gemini-embedding-2')
+    return new LlmAdapter(new PrivacyProvider(new RecordingProvider('gemini', new OpenAIProvider(resolved['GEMINI_API_KEY'], GEMINI_BASE_URL))), resolved['GEMINI_EMBED_MODEL'] || 'gemini-embedding-2')
   }
   if (resolved['OPENAI_API_KEY']) {
-    return new LlmAdapter(new RecordingProvider('openai', new OpenAIProvider(resolved['OPENAI_API_KEY'])), resolved['OPENAI_EMBED_MODEL'] || 'text-embedding-3-small')
+    return new LlmAdapter(new PrivacyProvider(new RecordingProvider('openai', new OpenAIProvider(resolved['OPENAI_API_KEY']))), resolved['OPENAI_EMBED_MODEL'] || 'text-embedding-3-small')
   }
-  return new LlmAdapter(new RecordingProvider('ollama', new OllamaProvider(resolved['OLLAMA_BASE_URL'] || DEFAULT_OLLAMA_URL)), resolved['OLLAMA_EMBED_MODEL'] || 'nomic-embed-text')
+  return new LlmAdapter(new PrivacyProvider(new RecordingProvider('ollama', new OllamaProvider(resolved['OLLAMA_BASE_URL'] || DEFAULT_OLLAMA_URL))), resolved['OLLAMA_EMBED_MODEL'] || 'nomic-embed-text')
 }

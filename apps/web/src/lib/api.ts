@@ -1,4 +1,7 @@
-import type { AuthProfileKind, HandoverContract, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns } from '@ybot/shared'
+import type {
+  AuthProfileKind, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
+  ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns,
+} from '@ybot/shared'
 import { messageForStatus } from './api-error'
 
 const BASE = import.meta.env.VITE_API_URL ?? '/api/v1'
@@ -630,6 +633,37 @@ export const authProfiles = {
   delete: (id: string) => apiFetch<void>(`/auth-profiles/${id}`, { method: 'DELETE' }),
 }
 
+// ── Safety: personal data and guardrails ────────────────────────────────────
+export interface GuardrailPolicyRow {
+  id: string
+  name: string
+  active: boolean
+  rules: GuardrailRule[]
+  updatedAt: string
+}
+
+export interface SafetyTestResult {
+  found: Array<{ kind: string; start: number; end: number }>
+  model: string
+  readers: Record<PrivacyReader, string>
+  guardrails: GuardrailDecision
+}
+
+export const safety = {
+  get: (botId: string) => apiFetch<{ data: { privacy: PrivacySettings; policies: GuardrailPolicyRow[] } }>(`/bots/${botId}/safety`),
+  savePrivacy: (botId: string, body: PrivacySettings & { confirmReveal?: boolean }) =>
+    apiFetch<{ data: PrivacySettings }>(`/bots/${botId}/safety/privacy`, { method: 'PUT', body: JSON.stringify(body) }),
+  createPolicy: (botId: string, body: { name: string; rules: GuardrailRule[] }) =>
+    apiFetch<{ data: GuardrailPolicyRow }>(`/bots/${botId}/safety/policies`, { method: 'POST', body: JSON.stringify(body) }),
+  savePolicy: (botId: string, id: string, body: { name: string; rules: GuardrailRule[] }) =>
+    apiFetch<{ data: GuardrailPolicyRow }>(`/bots/${botId}/safety/policies/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  activate: (botId: string, id: string) => apiFetch<{ data: GuardrailPolicyRow[] }>(`/bots/${botId}/safety/policies/${id}/activate`, { method: 'POST' }),
+  deactivate: (botId: string, id: string) => apiFetch<{ data: GuardrailPolicyRow }>(`/bots/${botId}/safety/policies/${id}/deactivate`, { method: 'POST' }),
+  deletePolicy: (botId: string, id: string) => apiFetch<void>(`/bots/${botId}/safety/policies/${id}`, { method: 'DELETE' }),
+  test: (botId: string, body: { text: string; side: 'input' | 'output'; privacy?: PrivacySettings; rules?: GuardrailRule[] }) =>
+    apiFetch<{ data: SafetyTestResult }>(`/bots/${botId}/safety/test`, { method: 'POST', body: JSON.stringify(body) }),
+}
+
 export const inboxTools = {
   list: (conversationId: string) => apiFetch<{ data: InboxTool[] }>(`/conversations/${conversationId}/tools`),
   run: (conversationId: string, toolId: string, args: Record<string, unknown>, confirmed = false) =>
@@ -677,7 +711,7 @@ export interface Conversation { id: string; status: string; assignedTo?: string;
 /** Model calls made for one chat. costUsd is null when a model had no known price. */
 export interface ConversationLlmCost { costUsd: number | null; calls: number }
 export interface ToolNote { id: string; name: string; runId?: string; ok: boolean; args?: Record<string, unknown>; output?: unknown; error?: string | null }
-export interface Message { id: string; direction: string; authorKind: string; content: { text: string; internal?: boolean; tool?: ToolNote }; createdAt: string }
+export interface Message { id: string; direction: string; authorKind: string; content: { text: string; internal?: boolean; tool?: ToolNote; guardrails?: GuardrailHit[] }; createdAt: string }
 export interface Ticket { id: string; subject: string; description?: string | null; status: string; priority: string; assignedTo?: string; tags: string[]; createdAt: string; conversation?: { contact?: Contact } }
 export interface Contact { id: string; displayName?: string; email?: string; phone?: string; metadata: Record<string, unknown>; createdAt: string }
 export interface Campaign { id: string; name: string; channel: string; status: string; direction: string; subject?: string; body?: string; scheduledAt?: string; sentAt?: string; sent?: number; delivered?: number }
