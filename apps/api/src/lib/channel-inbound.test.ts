@@ -45,15 +45,19 @@ test('Twilio SMS matches the destination number with or without spaces', () => {
 test('Telegram secret header picks the bot, and text comes from the update', () => {
   assert.equal(findTelegramBySecret([tg], 'tg-secret')?.id, 'tg1')
   const heard = telegramText({
-    message: { chat: { id: 99 }, from: { id: 7, first_name: 'Sam' }, text: 'hours?' },
+    update_id: 501,
+    message: { message_id: 12, chat: { id: 99 }, from: { id: 7, first_name: 'Sam' }, text: 'hours?' },
   })
-  assert.deepEqual(heard, { chatId: '99', fromId: '7', name: 'Sam', text: 'hours?' })
+  assert.deepEqual(heard, { chatId: '99', fromId: '7', name: 'Sam', text: 'hours?', messageId: 'update:501' })
+  assert.equal(telegramText({ message: { message_id: 12, chat: { id: 99 }, text: 'hi' } })?.messageId, '99:12')
 })
 
 test('email inbound needs from, text, and secret', () => {
   assert.equal(emailInbound({ from: 'a@b.c', text: 'hi' }), null)
   const row = emailInbound({ from: 'a@b.c', to: 'hello@studio.com', text: 'hi', secret: 'secret12' })
   assert.equal(row?.from, 'a@b.c')
+  assert.equal(row?.messageId, '')
+  assert.equal(emailInbound({ from: 'a@b.c', text: 'hi', secret: 'secret12', messageId: '<m1@mail>' })?.messageId, '<m1@mail>')
 })
 
 test('TwiML escapes the spoken line', () => {

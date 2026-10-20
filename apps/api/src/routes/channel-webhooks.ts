@@ -25,6 +25,7 @@ import {
   type InboundChannel,
 } from '../lib/channel-inbound.js'
 import { parseWhatsAppConfig, sendText as sendWhatsAppText, markRead } from '../lib/whatsapp-client.js'
+import { firstDelivery } from '../lib/inbound-dedupe.js'
 import { sendChannelReply, twimlGather, twimlHangup, twimlMessage } from '../lib/channel-outbound.js'
 
 interface WATextMessage {
@@ -101,6 +102,7 @@ export async function channelWebhookRoutes(app: FastifyInstance) {
     if (!channel.isActive) return reply.status(200).send({ ok: true, idle: true })
     const heard = telegramText(request.body)
     if (!heard) return reply.status(200).send({ ok: true })
+    if (!firstDelivery(channel.id, heard.messageId)) return reply.status(200).send({ ok: true, duplicate: true })
     const row = await prisma.channel.findFirst({ where: { id: channel.id } })
     if (!row) return reply.status(200).send({ ok: true })
     try {
@@ -129,6 +131,7 @@ export async function channelWebhookRoutes(app: FastifyInstance) {
     if (!channel) return reply.type('text/xml').send(twimlHangup('This number is not set up.'))
     if (!channel.isActive) return reply.type('text/xml').send(twimlMessage('This number is not taking texts right now.'))
     if (!text || !from) return reply.type('text/xml').send(twimlMessage('I did not catch that.'))
+    if (!firstDelivery(channel.id, form['MessageSid'] || form['SmsSid'])) return reply.type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>')
     const row = await prisma.channel.findFirst({ where: { id: channel.id } })
     if (!row) return reply.type('text/xml').send(twimlHangup('This number is not set up.'))
     try {
@@ -185,6 +188,7 @@ export async function channelWebhookRoutes(app: FastifyInstance) {
     const channel = findEmailInbound(channels, inbound.secret, inbound.to)
     if (!channel) return reply.status(403).send({ error: { code: 'FORBIDDEN' } })
     if (!channel.isActive) return reply.status(200).send({ ok: true, idle: true })
+    if (!firstDelivery(channel.id, inbound.messageId)) return reply.status(200).send({ ok: true, duplicate: true })
     const row = await prisma.channel.findFirst({ where: { id: channel.id } })
     if (!row) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
     try {
@@ -224,6 +228,7 @@ async function processWhatsApp(payload: WAPayload): Promise<void> {
       const waConfig = parseWhatsAppConfig(row.config)
       if (!waConfig) continue
       for (const msg of value.messages) {
+        if (!firstDelivery(row.id, msg.id)) continue
         if (msg.type !== 'text') {
           await sendWhatsAppText(waConfig, msg.from, 'Thanks for your message! I can currently only process text messages.').catch(() => {})
           continue

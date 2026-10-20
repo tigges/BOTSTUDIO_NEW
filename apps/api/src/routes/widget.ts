@@ -23,6 +23,7 @@ import { loadPublicChannel } from '../lib/web-channels.js'
 import { streamDoneEvent } from '../lib/widget-rating.js'
 import { withLlmScope } from '../lib/llm-ledger.js'
 import { noteRunChat, runForChat, TEST_RUN_HEADER } from '../lib/test-runs.js'
+import { firstDelivery } from '../lib/inbound-dedupe.js'
 import { fileURLToPath } from 'node:url'
 
 /** Derive the public-facing origin robustly when running behind a reverse proxy.
@@ -144,7 +145,7 @@ const WIDGET_INLINE_JS = /* js */`
     var bi=addMsg('bot','',true);
     var body={sessionId:sessionId,history:hist};
     if(conversationId)body.conversationId=conversationId;
-    if(opening)body.opening=true; else body.message=text;
+    if(opening)body.opening=true; else {body.message=text;body.messageId=sessionId+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);}
     var res=await fetch(API_BASE+'/public/chat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!res.ok||!res.body){updMsg(bi,'Sorry, something went wrong. ('+res.status+')');return;}
     var reader=res.body.getReader(),dec=new TextDecoder(),buf='',botText='',live=false;
@@ -410,6 +411,8 @@ export async function widgetRoutes(app: FastifyInstance) {
       sessionId?: string
       conversationId?: string
       visitorName?: string
+      /** Set by the widget per message so a resent request is handled once. */
+      messageId?: string
       history?: Array<{ role: string; content: string }>
     }
     const visitor = visitorTurn({ message: body.message, opening: body.opening === true })
@@ -432,6 +435,16 @@ export async function widgetRoutes(app: FastifyInstance) {
     }
 
     const { tenantId, botId } = { tenantId: channel.tenantId, botId: channel.botId }
+
+    const messageId = typeof body.messageId === 'string' ? body.messageId.slice(0, 120) : undefined
+    if (visitor.showVisitor && !firstDelivery(channelId, messageId)) {
+      const stream = openEventStream(reply, { 'Access-Control-Allow-Origin': '*' })
+      if (body.conversationId) stream.send({ conversationId: body.conversationId })
+      stream.send({ duplicate: true })
+      stream.send(streamDoneEvent(false))
+      stream.end()
+      return
+    }
 
     // ── Resolve or create a conversation ──────────────────────────────────
     let conversationId = body.conversationId ?? null
