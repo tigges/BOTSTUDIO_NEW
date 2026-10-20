@@ -154,6 +154,7 @@ function FitAfterLayout({ tick }: { tick: number }) {
 }
 
 import { useFlows, useSaveCanvas, useFlowCanvas, usePublishFlow, useTools, useUpdateFlow } from '../../../lib/hooks'
+import { ApiError } from '../../../lib/api'
 import { useAppStore } from '../../../store/app'
 import { PublishCheckDialog, reviewFlow } from '../PublishCheck'
 
@@ -178,6 +179,7 @@ export function FlowCanvasPage() {
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<string[]>([])
   const [status, setStatus] = useState<'draft' | 'saved' | 'published'>('draft')
   const [saving, setSaving] = useState(false)
+  const [publishError, setPublishError] = useState<{ message: string; gate: boolean } | null>(null)
   const { data: flows } = useFlows()
   const flow = (flows ?? []).find((item) => item.id === flowId)
   const trail = useMemo(() => {
@@ -422,20 +424,23 @@ export function FlowCanvasPage() {
   async function publishGraph(graph: { nodes: Node[]; edges: Edge[] }) {
     if (!environmentId) return
     setSaving(true)
+    setPublishError(null)
     try {
-      await saveCanvas.mutateAsync({
+      const saved = await saveCanvas.mutateAsync({
         flowId: flowId ?? '',
         version: canvasVersion,
         graph: { nodes: graph.nodes as unknown as import('../../../lib/api').FlowNode[], edges: graph.edges as unknown as import('../../../lib/api').FlowEdge[] },
       })
-      await publishFlow.mutateAsync({ flowId: flowId ?? '', environmentId, version: canvasVersion })
+      await publishFlow.mutateAsync({ flowId: flowId ?? '', environmentId, version: saved?.version ?? canvasVersion })
       setStatus('published')
       setSaving(false)
       setCheckOpen(false)
       navigate({ to: '/build/flows' })
       return
-    } catch {
+    } catch (err) {
       setStatus('saved')
+      setCheckOpen(false)
+      setPublishError(err instanceof ApiError ? { message: err.message, gate: err.body?.code === 'GATE_FAILED' } : { message: 'Publishing did not go through. Try again.', gate: false })
     }
     setSaving(false)
   }
@@ -534,6 +539,16 @@ export function FlowCanvasPage() {
           </Button>
         </div>
       </div>
+
+      {publishError && (
+        <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] bg-[var(--error-muted)] px-3 py-2 text-xs text-[var(--text-primary)]">
+          <span className="min-w-0 flex-1">{publishError.message}</span>
+          {publishError.gate && (
+            <button type="button" className="font-medium text-[var(--accent)] hover:underline" onClick={() => navigate({ to: '/build/evals' })}>Open Evals</button>
+          )}
+          <button type="button" aria-label="Dismiss" className="p-1 text-[var(--text-muted)]" onClick={() => setPublishError(null)}><X size={12} /></button>
+        </div>
+      )}
 
       {trail.path.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-xs">

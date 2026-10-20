@@ -48,6 +48,7 @@ const NOT_AUDITED = new Set([
   'Message',
   'StepLog',
   'LlmCall',
+  'EvalRun',
   'FlowSession',
   'ToolRun',
   'UserSession',

@@ -1,6 +1,6 @@
 import type {
-  AuthProfileKind, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
-  ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns,
+  AuthProfileKind, EvalScenario, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
+  ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns,
 } from '@ybot/shared'
 import { messageForStatus } from './api-error'
 
@@ -18,7 +18,7 @@ function getToken(): string | null {
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, public body?: { code?: string; message?: string }) {
+  constructor(public status: number, public body?: { code?: string; message?: string; [detail: string]: unknown }) {
     super(messageForStatus(status, body))
     this.name = 'ApiError'
   }
@@ -118,7 +118,7 @@ export const flows = {
   getCanvas: (botId: string, flowId: string, version: number) =>
     apiFetch<{ data: FlowVersion }>(`/bots/${botId}/flows/${flowId}/versions/${version}/canvas`),
   saveCanvas: (botId: string, flowId: string, version: number, graph: FlowGraph) =>
-    apiFetch<{ data: unknown }>(`/bots/${botId}/flows/${flowId}/versions/${version}/canvas`, { method: 'PUT', body: JSON.stringify({ graph }) }),
+    apiFetch<{ data: FlowVersion & { forked: boolean } }>(`/bots/${botId}/flows/${flowId}/versions/${version}/canvas`, { method: 'PUT', body: JSON.stringify({ graph }) }),
   publish: (botId: string, flowId: string, environmentId: string, version?: number) =>
     apiFetch<{ data: FlowVersion }>(`/bots/${botId}/flows/${flowId}/publish`, { method: 'POST', body: JSON.stringify({ environmentId, ...(version ? { version } : {}) }) }),
   traffic: (botId: string, environmentId?: string) =>
@@ -662,6 +662,103 @@ export const safety = {
   deletePolicy: (botId: string, id: string) => apiFetch<void>(`/bots/${botId}/safety/policies/${id}`, { method: 'DELETE' }),
   test: (botId: string, body: { text: string; side: 'input' | 'output'; privacy?: PrivacySettings; rules?: GuardrailRule[] }) =>
     apiFetch<{ data: SafetyTestResult }>(`/bots/${botId}/safety/test`, { method: 'POST', body: JSON.stringify(body) }),
+}
+
+// ── Control loop: evals, releases, export/import ────────────────────────────
+export interface EvalRunRow {
+  id: string
+  suiteId: string
+  trigger: 'manual' | 'publish'
+  status: 'passed' | 'failed' | 'error'
+  passed: number
+  failed: number
+  costUsd: number | null
+  durationMs: number
+  target: { kind?: 'working_copy' | 'release_candidate'; chapters?: Array<{ name: string; version: number }> }
+  createdAt: string
+  results?: EvalScenarioResult[]
+  suiteName?: string
+}
+
+export interface EvalSuiteRow {
+  id: string
+  name: string
+  gate: boolean
+  scenarios: EvalScenario[]
+  updatedAt: string
+  latestRun: EvalRunRow | null
+}
+
+export interface ReleaseRow {
+  id: string
+  number: number
+  note: string | null
+  createdAt: string
+  createdBy: string | null
+  live: boolean
+  chapters: Array<{ name: string; version: number }>
+  evalRunIds: string[]
+  diff: ReleaseDiff
+}
+
+export interface ReleasesView {
+  environmentId: string
+  liveReleaseId: string | null
+  plays: 'release' | 'working_copy'
+  releases: ReleaseRow[]
+  pending: ReleaseDiff
+  gateSuites: number
+}
+
+export interface ImportPlanItem {
+  kind: 'chapter' | 'tool' | 'guardrail_policy' | 'privacy' | 'eval_suite'
+  name: string
+  action: 'create' | 'update' | 'unchanged' | 'keep' | 'delete' | 'invalid'
+  note?: string
+}
+
+export interface ImportPlanView {
+  applied: boolean
+  from: string
+  mode: 'skip' | 'merge' | 'replace'
+  items: ImportPlanItem[]
+  warnings: string[]
+}
+
+export const evals = {
+  list: (botId: string) => apiFetch<{ data: { suites: EvalSuiteRow[]; chapters: string[] } }>(`/bots/${botId}/evals`),
+  create: (botId: string, body: { name: string; gate: boolean; scenarios: EvalScenario[] }) =>
+    apiFetch<{ data: EvalSuiteRow }>(`/bots/${botId}/evals`, { method: 'POST', body: JSON.stringify(body) }),
+  save: (botId: string, id: string, body: { name: string; gate: boolean; scenarios: EvalScenario[] }) =>
+    apiFetch<{ data: EvalSuiteRow }>(`/bots/${botId}/evals/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  delete: (botId: string, id: string) => apiFetch<void>(`/bots/${botId}/evals/${id}`, { method: 'DELETE' }),
+  run: (botId: string, id: string) => apiFetch<{ data: EvalRunRow }>(`/bots/${botId}/evals/${id}/run`, { method: 'POST', body: '{}' }),
+  runs: (botId: string, id: string) => apiFetch<{ data: EvalRunRow[] }>(`/bots/${botId}/evals/${id}/runs`),
+}
+
+export const releases = {
+  list: (botId: string) => apiFetch<{ data: ReleasesView }>(`/bots/${botId}/releases`),
+  publish: (botId: string, note?: string) =>
+    apiFetch<{ data: { releaseId: string; number: number; diff: ReleaseDiff; runs: EvalRunRow[] } }>(`/bots/${botId}/releases`, { method: 'POST', body: JSON.stringify({ note }) }),
+  rollback: (botId: string, id: string) => apiFetch<{ data: { releaseId: string; number: number } }>(`/bots/${botId}/releases/${id}/rollback`, { method: 'POST' }),
+}
+
+export const bundle = {
+  async download(botId: string, format: 'json' | 'yaml'): Promise<{ text: string; fileName: string }> {
+    const token = getToken()
+    const res = await fetch(`${BASE}/bots/${botId}/bundle?format=${format}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
+    })
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({})) as { error?: { code?: string; message?: string } }
+      throw new ApiError(res.status, json.error)
+    }
+    const fileName = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? `bot.botstudio.${format}`
+    return { text: await res.text(), fileName }
+  },
+  import: (botId: string, body: { content: string; mode: 'skip' | 'merge' | 'replace'; dryRun: boolean }) =>
+    apiFetch<{ data: ImportPlanView }>(`/bots/${botId}/bundle/import`, { method: 'POST', body: JSON.stringify(body) }),
 }
 
 export const inboxTools = {
