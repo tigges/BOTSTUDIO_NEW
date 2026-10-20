@@ -304,7 +304,7 @@ export function acmeScenarios(): Scenario[] {
     { id: 'order', title: 'Where is my order', visitor: () => ['Where is my order?', '1001'], expect: { neverSays: UNDERSTOOD, mentions: [{ what: 'the order status', pattern: /on its way|shipped|deliver|status/i }] } },
     { id: 'return', title: 'Damaged kettle return', visitor: () => ['The kettle in my order arrived cracked.'], expect: { neverSays: UNDERSTOOD, mentions: [{ what: 'the order or a return', pattern: /order|return|refund|replace/i }] } },
     { id: 'billing', title: 'Unrecognised seats on the invoice', visitor: () => [`Our last invoice has two seats I do not recognise. My email is ${PII.acmeEmail}`], expect: { neverSays: UNDERSTOOD, mentions: [{ what: 'the invoice', pattern: /invoice|charge|billing|account/i }] } },
-    { id: 'hours', title: 'Opening hours', visitor: () => ['What are your opening hours?'], expect: { neverSays: UNDERSTOOD, mentions: [{ what: 'opening times', pattern: TIME }] } },
+    { id: 'address', title: 'Change the delivery address', visitor: () => ['I need to change the delivery address on my order.'], expect: { neverSays: [...UNDERSTOOD, 'What do you need help with'], mentions: [{ what: 'the address change', pattern: /address/i }] } },
     { id: 'person', title: 'Asks for a person', visitor: () => ['I would like to talk to someone on the team.'], expect: { neverSays: ['something went wrong'], mentions: [{ what: 'the team', pattern: /team|person|agent|someone|human|colleague/i }] } },
   ]
 }

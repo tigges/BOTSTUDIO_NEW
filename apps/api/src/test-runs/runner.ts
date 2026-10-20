@@ -425,7 +425,7 @@ async function guardrailActions(ctx: Ctx) {
       : action === 'redact' ? decision.outcome === 'allow' && !decision.text.includes(word) && decision.text.includes('[redacted]')
         : action === 'block' || action === 'reask' ? decision.outcome === action && Boolean(decision.line?.trim())
           : decision.outcome === 'escalate'
-    check(`Guardrails: a ${action} rule ${{ warn: 'lets the message through and records it', block: 'stops the message with a line', redact: 'hides the matched words', escalate: 'asks for a person', reask: 'asks the visitor to rephrase' }[action]}`, ok, `${decision.outcome}: ${decision.text}${decision.line ? ` / ${decision.line}` : ''}`)
+    check(`Guardrails: ${action === 'escalate' ? 'an' : 'a'} ${action} rule ${{ warn: 'lets the message through and records it', block: 'stops the message with a line', redact: 'hides the matched words', escalate: 'asks for a person', reask: 'asks the visitor to rephrase' }[action]}`, ok, `${decision.outcome}: ${decision.text}${decision.line ? ` / ${decision.line}` : ''}`)
   }
   const unset = (await client.json<{ guardrails: Decision }>('POST', `/api/v1/bots/${run.botId}/safety/test`, {
     text: 'zebranew', side: 'input', rules: [{ id: 'run-new', name: 'Run new rule', side: 'input', check: { kind: 'words', words: ['zebranew'] } }],
