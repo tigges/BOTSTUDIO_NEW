@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify'
 import { prisma } from '@ybot/db'
 import { z } from 'zod'
+import { CONNECTORS, isConnector } from '@ybot/shared'
 import { requireRole } from '../middleware/auth.js'
+import { IntegrationError, connectIntegration, connectionGaps, disconnectIntegration, installConnectorTools } from '../lib/integrations.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -13,7 +15,7 @@ const DEFAULT_CANNED = [
   { shortcut: 'bye', title: 'Goodbye', text: 'Glad I could help. Reply here if you need anything else.' },
 ]
 
-const INTEGRATION_CATALOG = [
+export const INTEGRATION_CATALOG = [
   { id: 'hubspot', name: 'HubSpot', description: 'Sync contacts and conversations to HubSpot CRM', category: 'CRM' },
   { id: 'salesforce', name: 'Salesforce', description: 'Push leads and cases to Salesforce automatically', category: 'CRM' },
   { id: 'zendesk', name: 'Zendesk', description: 'Create and sync Zendesk tickets from conversations', category: 'Ticketing' },
@@ -258,45 +260,80 @@ export async function integrationsRoutes(app: FastifyInstance) {
 
   app.get('/', async (request) => {
     const { tenantId } = request.user as JWT
-    const saved = await prisma.integrationConnection.findMany({ where: { tenantId } })
+    const saved = await prisma.integrationConnection.findMany({
+      where: { tenantId },
+      include: { authProfile: { select: { id: true, name: true, secretEnc: true, secretHint: true } } },
+    })
     const byProvider = new Map(saved.map((row) => [row.provider, row]))
     return {
       data: INTEGRATION_CATALOG.map((item) => {
         const row = byProvider.get(item.id)
         const comingSoon = COMING_SOON.has(item.id)
+        const hasKey = Boolean(row?.authProfile?.secretEnc)
+        const gaps = row ? connectionGaps(item.id, row.settings, hasKey) : []
+        const spec = isConnector(item.id) ? CONNECTORS[item.id] : null
         return {
           ...item,
-          status: comingSoon ? 'coming_soon' : row ? 'connected' : 'available',
+          status: comingSoon ? 'coming_soon' : !row ? 'available' : gaps.length ? 'needs_details' : 'connected',
           connectedAt: row?.connectedAt.toISOString() ?? null,
-          hasKey: Boolean(row?.apiKey),
+          hasKey,
+          gaps,
+          settings: (row?.settings ?? {}) as Record<string, unknown>,
+          authProfile: row?.authProfile ? { id: row.authProfile.id, name: row.authProfile.name, secretHint: row.authProfile.secretHint } : null,
+          connector: spec ? { fields: spec.fields, secretLabel: spec.secretLabel, secretHelp: spec.secretHelp, hasTools: true } : null,
         }
       }),
     }
   })
 
   app.post('/:provider/connect', async (request, reply) => {
-    const { tenantId } = request.user as JWT
+    const { tenantId, sub } = request.user as JWT
     const { provider } = request.params as { provider: string }
-    if (!INTEGRATION_CATALOG.some((item) => item.id === provider)) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
-    }
+    const item = INTEGRATION_CATALOG.find((entry) => entry.id === provider)
+    if (!item) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'This connection is not in the catalog.' } })
     if (COMING_SOON.has(provider)) {
       return reply.status(409).send({ error: { code: 'COMING_SOON', message: 'This connection will become a real feature.' } })
     }
-    const body = z.object({ apiKey: z.string().min(1) }).safeParse(request.body)
+    const body = z.object({
+      secret: z.string().max(8_000).optional(),
+      apiKey: z.string().max(8_000).optional(),
+      settings: z.record(z.unknown()).default({}),
+    }).safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
-    const row = await prisma.integrationConnection.upsert({
-      where: { tenantId_provider: { tenantId, provider } },
-      create: { tenantId, provider, apiKey: body.data.apiKey },
-      update: { apiKey: body.data.apiKey, connectedAt: new Date() },
-    })
-    return { data: { provider: row.provider, status: 'connected', connectedAt: row.connectedAt.toISOString() } }
+    try {
+      const { connection, profile } = await connectIntegration({
+        tenantId, userId: sub, item, secret: body.data.secret ?? body.data.apiKey, settings: body.data.settings,
+      })
+      return {
+        data: {
+          provider: connection.provider,
+          status: 'connected',
+          connectedAt: connection.connectedAt.toISOString(),
+          authProfile: { id: profile.id, name: profile.name, secretHint: profile.secretHint },
+        },
+      }
+    } catch (err) {
+      if (err instanceof IntegrationError) return reply.status(err.status).send({ error: { code: err.code, message: err.message, issues: err.issues } })
+      throw err
+    }
   })
 
-  app.delete('/:provider', async (request, reply) => {
+  app.post('/:provider/install', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { provider } = request.params as { provider: string }
-    await prisma.integrationConnection.deleteMany({ where: { tenantId, provider } })
-    return reply.status(204).send()
+    const body = z.object({ botId: z.string().min(1) }).safeParse(request.body ?? {})
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Choose the bot to add the tools to.' } })
+    try {
+      return reply.status(201).send({ data: await installConnectorTools(tenantId, body.data.botId, provider) })
+    } catch (err) {
+      if (err instanceof IntegrationError) return reply.status(err.status).send({ error: { code: err.code, message: err.message, issues: err.issues } })
+      throw err
+    }
+  })
+
+  app.delete('/:provider', async (request) => {
+    const { tenantId } = request.user as JWT
+    const { provider } = request.params as { provider: string }
+    return { data: await disconnectIntegration(tenantId, provider) }
   })
 }
