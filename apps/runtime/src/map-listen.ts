@@ -252,20 +252,33 @@ export function chapterRoutes(input: {
   for (const chapter of input.chapters) {
     if (isWelcomeName(chapter.name) || chapter.name === input.current) continue
     if (/^offers?$/i.test(chapter.name) && !wantsOffer(input.text)) continue
-    const facts = catalogPhrases(input.catalog, chapter.name)
-    const route = {
-      handle: chapter.name,
-      phrases: [
-        chapter.name,
-        ...facts,
-        ...incomingPhrases(input.chapters, chapter.name),
-        ...phrasesFromGraph(chapter.graph),
-      ],
-    }
-    if (facts.length > 0) withFacts.push(route)
-    else withoutFacts.push(route)
+    const route = chapterRoute(input.chapters, input.catalog, chapter)
+    if (route.facts > 0) withFacts.push(route.route)
+    else withoutFacts.push(route.route)
   }
   return [...withFacts, ...withoutFacts]
+}
+
+function chapterRoute(
+  chapters: Array<{ name: string; graph: FlowGraph }>,
+  catalog: StudioCatalog | undefined,
+  chapter: { name: string; graph: FlowGraph },
+): { route: TopicRoute; facts: number } {
+  const facts = catalogPhrases(catalog, chapter.name)
+  return {
+    facts: facts.length,
+    route: {
+      handle: chapter.name,
+      phrases: [chapter.name, ...facts, ...incomingPhrases(chapters, chapter.name), ...phrasesFromGraph(chapter.graph)],
+    },
+  }
+}
+
+/** "cancel it" inside Change or cancel is an answer there, not a reason to ask the model for another chapter. */
+function heardCurrent(input: Parameters<typeof listenForChapter>[0]): boolean {
+  const current = input.current ? input.chapters.find((chapter) => chapter.name === input.current) : undefined
+  if (!current || isWelcomeName(current.name)) return false
+  return matchTopic(input.text.trim(), [chapterRoute(input.chapters, input.catalog, current).route]) !== 'other'
 }
 
 /**
@@ -301,6 +314,7 @@ export async function hearChapter(
   const hit = listenForChapter(input)
   if (hit) return hit
   if (isSmallTalk(input.text)) return undefined
+  if (heardCurrent(input)) return undefined
   const routes = chapterRoutes(input)
   if (routes.length === 0) return undefined
   const picked = await pickTopic(input.text, routes, llm)
