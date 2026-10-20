@@ -95,7 +95,7 @@ test('the sample compiles to catalog facts, Knowledge documents, guardrails and 
   assert.ok(bundle.documents.every((doc) => doc.title.startsWith('Harbour Dental: ')))
   assert.deepEqual(guardrailIssues(bundle.guardrails.rules), [])
   assert.deepEqual(evalIssues(bundle.evals.scenarios), [])
-  assert.equal(bundle.evals.scenarios.length, 18)
+  assert.equal(bundle.evals.scenarios.length, 23)
   assert.deepEqual(bundle.queueHours, { start: '08:00', end: '18:00', timezone: 'Europe/London' })
   assert.deepEqual(profileIssues(bp.fields, sample), [])
 })
@@ -276,6 +276,23 @@ async function failedScenarios(profile: BusinessProfile, scenarios?: EvalScenari
 
 test('the Harbour Dental eval suite passes on the blueprint chapters without a model', async () => {
   assert.deepEqual(await failedScenarios(sample), [])
+})
+
+test('conversation basics: a hello mid-booking keeps the booking question, thanks after an answer is taken kindly', async () => {
+  assert.deepEqual(await failedScenarios(sample, [
+    {
+      id: 'hello-mid-booking', name: 'Hello mid-booking', turns: ['I want to book a check-up', 'hello'],
+      checks: [{ kind: 'says', text: 'Hi! ' }, { kind: 'never_says', text: "didn't catch" }, { kind: 'reaches_chapter', chapter: 'Book a visit' }],
+    },
+    {
+      id: 'thanks-after-answer', name: 'Thanks after an answer', turns: ['What are your opening hours?', 'thanks'],
+      checks: [{ kind: 'says', text: "You're welcome" }, { kind: 'never_says', text: "didn't catch" }],
+    },
+    {
+      id: 'bot-then-book', name: 'Asks if it is a bot, then books', turns: ['are you a bot?', 'I want to book'],
+      checks: [{ kind: 'says', text: 'virtual assistant' }, { kind: 'reaches_chapter', chapter: 'Book a visit' }],
+    },
+  ]), [])
 })
 
 test('demo walks: a follow-up stays on its subject, a new patient books once, a nervous guest reaches a person', async () => {

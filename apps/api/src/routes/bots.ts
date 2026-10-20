@@ -5,6 +5,8 @@ import { normalizedBotName } from '../lib/bot-name.js'
 import { deleteBotRecords } from '../lib/delete-bot.js'
 import {
   BOT_STARTS,
+  CONVERSATION_BASICS,
+  CONVERSATION_BASICS_SUITE,
   START_CLUSTERS,
   bakedPack,
   blueprintById,
@@ -299,6 +301,11 @@ export async function botsRoutes(app: FastifyInstance) {
       await installBlueprint(tenantId, bot.id, sandbox?.id ?? null, blueprint, business)
     } else if (start === 'sample' || start === 'blank') {
       await installDraftWelcome(tenantId, bot.id, start === 'sample' ? (body.sample ?? '') : '')
+    }
+    if (start !== 'blueprint') {
+      await prisma.evalSuite.create({
+        data: { tenantId, botId: bot.id, name: CONVERSATION_BASICS_SUITE, gate: false, scenarios: CONVERSATION_BASICS as unknown as object },
+      })
     }
 
     return reply.status(201).send({ data: bot })
