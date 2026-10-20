@@ -25,6 +25,7 @@ import { createRelease, productionEnvironment, releaseCandidate, workingCopy } f
 import { runGate, runSuite } from '../lib/evals.js'
 import { runTestTurn } from '../lib/test-chat.js'
 import { findTool, runAndRecord } from '../lib/tools-store.js'
+import { parseInboxPolicy, type InboxPolicy } from '../lib/sla.js'
 import { enqueueKnowledgeSync } from '../queues.js'
 import { REFERENCE_CHATS, playReferenceChat, referenceJourney, type ReferenceChat } from './dental-reference-chats.js'
 
@@ -371,16 +372,18 @@ async function ensureChats(tenantId: string, ownerId: string, journey: Journey, 
   const production = await prisma.environment.findFirst({ where: { botId: DENTAL_REF_BOT_ID, kind: 'production' }, select: { id: true } })
   const channel = await prisma.channel.findFirst({ where: { botId: DENTAL_REF_BOT_ID, environmentId: production?.id, kind: 'web' }, select: { id: true } })
   if (!production) return 0
+  const config = await prisma.botConfig.findUnique({ where: { botId: DENTAL_REF_BOT_ID }, select: { inboxConfig: true } })
+  const policy = parseInboxPolicy(config?.inboxConfig)
   let added = 0
   for (const chat of REFERENCE_CHATS) {
     if (await prisma.conversation.findUnique({ where: { id: chat.id }, select: { id: true } })) continue
-    await saveChat(chat, { tenantId, ownerId, environmentId: production.id, channelId: channel?.id ?? null, journey, now })
+    await saveChat(chat, { tenantId, ownerId, environmentId: production.id, channelId: channel?.id ?? null, journey, now, policy })
     added++
   }
   return added
 }
 
-async function saveChat(chat: ReferenceChat, ctx: { tenantId: string; ownerId: string; environmentId: string; channelId: string | null; journey: Journey; now: Date }) {
+async function saveChat(chat: ReferenceChat, ctx: { tenantId: string; ownerId: string; environmentId: string; channelId: string | null; journey: Journey; now: Date; policy: InboxPolicy }) {
   const { tenantId, ownerId } = ctx
   const started = startOf(chat, ctx.now)
   const played = await playReferenceChat(chat, ctx.journey, { tenantId, botId: DENTAL_REF_BOT_ID }, started)
@@ -449,6 +452,8 @@ async function saveChat(chat: ReferenceChat, ctx: { tenantId: string; ownerId: s
       updatedAt: lastAt,
       resolvedAt,
       firstRespondedAt: messages.find((m) => m.authorKind !== 'user')?.at ?? null,
+      firstResponseDueAt: new Date(started.getTime() + ctx.policy.sla.firstResponseHours * 3_600_000),
+      resolutionDueAt: new Date(started.getTime() + ctx.policy.sla.resolutionHours * 3_600_000),
     },
   })
   await prisma.message.createMany({
