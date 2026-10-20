@@ -12,6 +12,8 @@ export {
   costFor,
   priceFor,
   setLlmRecorder,
+  setLlmOutboundWatch,
+  type LlmOutboundWatch,
   type LlmCallRecord,
   type LlmOperation,
   type LlmRecorder,

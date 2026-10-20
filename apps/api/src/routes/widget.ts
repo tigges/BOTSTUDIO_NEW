@@ -22,7 +22,7 @@ import { visitorTurn } from '../lib/widget-open.js'
 import { loadPublicChannel } from '../lib/web-channels.js'
 import { streamDoneEvent } from '../lib/widget-rating.js'
 import { withLlmScope } from '../lib/llm-ledger.js'
-import { runForChat, TEST_RUN_HEADER } from '../lib/test-runs.js'
+import { noteRunChat, runForChat, TEST_RUN_HEADER } from '../lib/test-runs.js'
 import { fileURLToPath } from 'node:url'
 
 /** Derive the public-facing origin robustly when running behind a reverse proxy.
@@ -467,6 +467,7 @@ export async function widgetRoutes(app: FastifyInstance) {
           })
           conversationId = convo.id
         }
+        if (testRunId && conversationId) noteRunChat(testRunId, conversationId)
       }
     }
 

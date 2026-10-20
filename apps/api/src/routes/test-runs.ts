@@ -80,6 +80,7 @@ export async function testRunRoutes(app: FastifyInstance) {
       kind: z.enum(TEST_RUN_KINDS).default('traffic'),
       seed: z.string().max(80).optional(),
       baseUrl: z.string().url().refine((value) => /^https?:/.test(value), 'baseUrl must be http or https').optional(),
+      sentinels: z.array(z.string().min(5).max(120)).max(30).optional(),
     }).safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'target must be harbour-dental, bella or acme; kind traffic or release.', details: body.error.flatten() } })
     try {
