@@ -891,7 +891,9 @@ export interface Conversation { id: string; status: string; assignedTo?: string;
 /** Model calls made for one chat. costUsd is null when a model had no known price. */
 export interface ConversationLlmCost { costUsd: number | null; calls: number }
 export interface ToolNote { id: string; name: string; runId?: string; ok: boolean; args?: Record<string, unknown>; output?: unknown; error?: string | null }
-export interface Message { id: string; direction: string; authorKind: string; content: { text: string; internal?: boolean; tool?: ToolNote; guardrails?: GuardrailHit[] }; createdAt: string }
+/** A knowledge document a bot answer was written from. */
+export interface KnowledgeSourceRef { documentId: string; title: string; source: string }
+export interface Message { id: string; direction: string; authorKind: string; content: { text: string; internal?: boolean; tool?: ToolNote; guardrails?: GuardrailHit[]; sources?: KnowledgeSourceRef[] }; createdAt: string }
 export interface Ticket { id: string; subject: string; description?: string | null; status: string; priority: string; assignedTo?: string; tags: string[]; createdAt: string; conversation?: { contact?: Contact } }
 export interface Contact { id: string; displayName?: string; email?: string; phone?: string; metadata: Record<string, unknown>; createdAt: string }
 export interface Campaign { id: string; name: string; channel: string; status: string; direction: string; subject?: string; body?: string; scheduledAt?: string; sentAt?: string; sent?: number; delivered?: number }
