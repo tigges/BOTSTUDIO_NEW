@@ -86,6 +86,10 @@ test('a change only counts as moved when it clears the margin of both periods', 
   assert.equal(movement(big(400, 1000), big(6, 10)), 'flat')
   assert.equal(movement(measure('rate', []), big(4, 10)), 'unknown')
   assert.equal(movement(measure('sum', [1, 2]), measure('sum', [5])), 'unknown')
+  assert.equal(movement(big(2, 2), big(1, 2)), 'flat')
+  assert.ok(measure('rate', [1, 1]).margin! > 0.3)
+  assert.equal(movement(measure('count', Array(19).fill(1)), measure('count', [])), 'up')
+  assert.equal(movement(measure('count', [1, 1]), measure('count', [])), 'flat')
 })
 
 test('test runs, environment and channel narrow the chats', () => {

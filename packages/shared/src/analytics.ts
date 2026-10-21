@@ -174,15 +174,21 @@ export function timeBucket(at: Date, granularity: AnalyticsGranularity): string 
 
 const Z95 = 1.96
 
-/** Value, denominator and 95% margin for one group of samples. */
+/**
+ * Value, denominator and 95% margin for one group of samples. Rates use the Agresti-Coull
+ * interval so 2 of 2 does not claim a zero margin; counts use a Poisson margin, so zero is a measured value.
+ */
 export function measure(kind: MetricKind, values: number[]): AggregateCell {
   const n = values.length
-  if (n === 0) return { value: kind === 'count' ? 0 : null, denominator: 0, margin: null }
   const total = values.reduce((sum, v) => sum + v, 0)
-  if (kind === 'count') return { value: total, denominator: n, margin: Z95 * Math.sqrt(total) }
+  if (kind === 'count') return { value: total, denominator: n, margin: Z95 * Math.sqrt(Math.max(total, 1)) }
+  if (n === 0) return { value: null, denominator: 0, margin: null }
   if (kind === 'sum') return { value: total, denominator: n, margin: null }
   const mean = total / n
-  if (kind === 'rate') return { value: mean, denominator: n, margin: Z95 * Math.sqrt((mean * (1 - mean)) / n) }
+  if (kind === 'rate') {
+    const adjusted = (total + 2) / (n + 4)
+    return { value: mean, denominator: n, margin: Z95 * Math.sqrt((adjusted * (1 - adjusted)) / (n + 4)) }
+  }
   if (n < 2) return { value: mean, denominator: n, margin: null }
   const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (n - 1)
   return { value: mean, denominator: n, margin: Z95 * Math.sqrt(variance / n) }
@@ -217,15 +223,14 @@ export function aggregateSamples(query: AnalyticsQuery, samples: AnalyticsSample
 export type Movement = 'up' | 'down' | 'flat' | 'unknown'
 
 /**
- * A change counts as moved only when it is bigger than the margin of both periods.
- * Without a margin on either side, or without a value, it is unknown, never "moved".
+ * A change counts as moved only when it clears the margin of both periods together,
+ * so the two intervals do not overlap. Without a margin or a value on either side it is unknown, never "moved".
  */
 export function movement(current: AggregateCell, previous: AggregateCell): Movement {
   if (current.value == null || previous.value == null) return 'unknown'
   if (current.margin == null || previous.margin == null) return 'unknown'
-  if (current.denominator === 0 || previous.denominator === 0) return 'unknown'
   const change = current.value - previous.value
-  if (Math.abs(change) <= Math.max(current.margin, previous.margin)) return 'flat'
+  if (Math.abs(change) <= current.margin + previous.margin) return 'flat'
   return change > 0 ? 'up' : 'down'
 }
 

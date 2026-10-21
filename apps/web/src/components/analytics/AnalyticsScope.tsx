@@ -110,12 +110,12 @@ function Change({ metric, current, previous }: { metric: AnalyticsMetric; curren
     return <p className="mt-1 text-[11px] text-[var(--text-muted)]" data-move="unknown" title="Not enough data in one of the two periods to tell a real change from noise.">{before} · too little data to compare</p>
   }
   if (move === 'flat') {
-    return <p className="mt-1 flex items-center gap-1 text-[11px] text-[var(--text-muted)]" data-move="flat" title="The change is inside the margin of error of at least one period."><Minus size={11} /> {before} · no real change</p>
+    return <p className="mt-1 flex items-center gap-1 text-[11px] text-[var(--text-muted)]" data-move="flat" title="The change fits inside the margins of error of the two periods."><Minus size={11} /> {before} · no real change</p>
   }
   const better = METRIC_INFO[metric].higherIsBetter
   const tone = better == null ? 'neutral' : (move === 'up') === better ? 'good' : 'bad'
   return (
-    <p className={cn('mt-1 flex items-center gap-1 text-[11px] font-medium', MOVE_STYLE[tone])} data-move={move} title="The change is bigger than the margin of error of both periods.">
+    <p className={cn('mt-1 flex items-center gap-1 text-[11px] font-medium', MOVE_STYLE[tone])} data-move={move} title="The change is bigger than the margins of error of both periods added together.">
       {move === 'up' ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />} {before} · {move === 'up' ? 'up' : 'down'}
     </p>
   )
