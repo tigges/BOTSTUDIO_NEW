@@ -144,7 +144,7 @@ export function BotSettingsPage() {
               )}
               {group && !connected[group.envVar] && (
                 <p className="mt-2 text-xs text-[var(--text-secondary)]" data-testid="bot-settings-not-connected">
-                  This BotStudio has no key for {group.label}. Replies fail until an admin sets <code className="rounded bg-[var(--bg-elevated)] px-1 font-mono">{group.envVar}</code> on the server.
+                  This BotStudio has no key for {group.label}, so replies come from the next connected provider. To use this model, an admin sets <code className="rounded bg-[var(--bg-elevated)] px-1 font-mono">{group.envVar}</code> on the server.
                 </p>
               )}
               <FieldError message={errors.model} />
