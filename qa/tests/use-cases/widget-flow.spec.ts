@@ -40,6 +40,6 @@ test('the Bella widget still walks the published journey', { tag: '@smoke' }, as
   await expect(page.getByText("Hi, I'm Bella at Bella Hair Studio.").first()).toBeVisible()
 
   await page.goto('/overview')
-  await expect(page.getByRole('heading', { name: 'Recent Conversations' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Latest chats' })).toBeVisible()
   await expect(page.getByText("Hi, I'm Bella at Bella Hair Studio.").first()).toBeVisible()
 })
