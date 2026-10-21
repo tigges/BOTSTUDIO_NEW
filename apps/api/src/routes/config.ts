@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { prisma, type Prisma } from '@ybot/db'
+import { prisma } from '@ybot/db'
 import { requireRole } from '../middleware/auth.js'
 import { z } from 'zod'
 import { sendEmail, inviteEmail } from '../lib/email.js'
 import { canRemoveWebChannel, ensureWebChannels } from '../lib/web-channels.js'
 import { parseChannelConfig, channelWebhookPath, mergeChannelConfig } from '@ybot/shared'
 import { registerTelegramWebhook, verifyChannelCredentials, type VerifyResult } from '../lib/channel-verify.js'
-import { channelAudit, publicChannel } from '../lib/channel-audit.js'
+import { publicChannel } from '../lib/channel-public.js'
 import { summariseOutcomes } from '../lib/outcome-summary.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
@@ -34,7 +34,7 @@ export async function channelsRoutes(app: FastifyInstance) {
   })
 
   app.post('/:botId/channels', async (request, reply) => {
-    const { tenantId, sub } = request.user as JWT
+    const { tenantId } = request.user as JWT
     const { botId } = request.params as { botId: string }
     const body = z.object({ name: z.string().min(1), kind: z.string(), environmentId: z.string(), config: z.record(z.any()).default({}) }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
@@ -55,14 +55,11 @@ export async function channelsRoutes(app: FastifyInstance) {
       const parsed = parseChannelConfig(created.kind, created.config)
       if (parsed) await registerTelegramWebhook(parsed, `${webhookBase(request)}${channelWebhookPath('telegram')}`)
     }
-    await prisma.activity.create({
-      data: { tenantId, userId: sub, action: 'channel.connected', resource: 'channel', resourceId: created.id, metadata: channelAudit(null, created) as Prisma.InputJsonValue },
-    })
     return reply.status(201).send({ data: publicChannel(created) })
   })
 
   app.patch('/:botId/channels/:id', async (request, reply) => {
-    const { tenantId, sub } = request.user as JWT
+    const { tenantId } = request.user as JWT
     const { botId, id } = request.params as { botId: string; id: string }
     const body = z.object({ name: z.string().optional(), config: z.record(z.any()).optional(), isActive: z.boolean().optional(), allowedDomains: z.array(z.string()).optional() }).parse(request.body)
     const existing = await prisma.channel.findFirst({ where: { id, botId, tenantId } })
@@ -79,12 +76,6 @@ export async function channelsRoutes(app: FastifyInstance) {
     if (existing.kind === 'telegram' && body.config) {
       const parsed = parseChannelConfig('telegram', body.config)
       if (parsed) await registerTelegramWebhook(parsed, `${webhookBase(request)}${channelWebhookPath('telegram')}`)
-    }
-    const audit = channelAudit(existing, updated)
-    if (audit.changes.length) {
-      await prisma.activity.create({
-        data: { tenantId, userId: sub, action: 'channel.updated', resource: 'channel', resourceId: id, metadata: audit as Prisma.InputJsonValue },
-      })
     }
     return { data: publicChannel(updated) }
   })
@@ -109,18 +100,13 @@ export async function channelsRoutes(app: FastifyInstance) {
   })
 
   app.delete('/:botId/channels/:id', async (request, reply) => {
-    const { tenantId, sub } = request.user as JWT
+    const { tenantId } = request.user as JWT
     const { botId, id } = request.params as { botId: string; id: string }
     const channels = await prisma.channel.findMany({ where: { botId, tenantId }, select: { id: true, kind: true, environmentId: true } })
     if (!canRemoveWebChannel(channels, id)) {
       return reply.status(409).send({ error: { code: 'WEBCHAT_REQUIRED', message: 'Website chat stays on so guests can walk the journey.' } })
     }
-    const existing = await prisma.channel.findFirst({ where: { id, botId, tenantId } })
-    if (!existing) return reply.status(204).send()
-    await prisma.channel.delete({ where: { id: existing.id } })
-    await prisma.activity.create({
-      data: { tenantId, userId: sub, action: 'channel.disconnected', resource: 'channel', resourceId: id, metadata: channelAudit(existing, null) as Prisma.InputJsonValue },
-    })
+    if (channels.some((channel) => channel.id === id)) await prisma.channel.delete({ where: { id } })
     return reply.status(204).send()
   })
 }

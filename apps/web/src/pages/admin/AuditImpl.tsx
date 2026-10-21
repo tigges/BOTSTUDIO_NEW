@@ -22,7 +22,7 @@ type AuditAction =
   | 'bot.published' | 'bot.created'
   | 'flow.updated' | 'flow.published'
   | 'template.submitted' | 'template.approved'
-  | 'channel.connected' | 'channel.updated' | 'channel.disconnected'
+  | 'channel.connected' | 'channel.disconnected'
   | 'webhook.created' | 'webhook.deleted'
   | 'settings.updated' | 'api_key.created' | 'api_key.revoked'
   | 'knowledge.synced' | 'contact.deleted'
@@ -64,7 +64,6 @@ const ACTION_CFG: Record<AuditAction, ActionConfig> = {
   'template.submitted':   { icon: <FileText size={12} />,     label: 'Template submitted',     category: 'Engage' },
   'template.approved':    { icon: <CheckCircle2 size={12} />, label: 'Template approved',      category: 'Engage' },
   'channel.connected':    { icon: <Globe size={12} />,        label: 'Channel connected',      category: 'Config' },
-  'channel.updated':      { icon: <Globe size={12} />,        label: 'Channel changed',        category: 'Config' },
   'channel.disconnected': { icon: <Globe size={12} />,        label: 'Channel disconnected',   category: 'Config' },
   'webhook.created':      { icon: <Send size={12} />,         label: 'Webhook created',        category: 'Config' },
   'webhook.deleted':      { icon: <Trash2 size={12} />,       label: 'Webhook deleted',        category: 'Config' },

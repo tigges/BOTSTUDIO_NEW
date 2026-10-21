@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { channelRoutingKey, maskChannelConfig, mergeChannelConfig, statusHelp, CHANNEL_STATUS_HELP, CHANNEL_FIELDS } from '@ybot/shared'
-import { channelAudit, publicChannel } from './channel-audit.js'
+import { hideSecrets } from '@ybot/db'
+import { publicChannel } from './channel-public.js'
 import { providerRequests, twimlGather, twimlMessage } from './channel-outbound.js'
 import { whatsAppHeard } from '../routes/channel-webhooks.js'
 
@@ -25,15 +26,14 @@ test('a blank field in an edit keeps the saved value', () => {
   )
 })
 
-test('the audit row shows changes but hides secret values', () => {
-  const after = { ...wa, isActive: true, config: { ...wa.config, accessToken: 'EAAnew' } }
-  const audit = channelAudit(wa, after)
-  assert.deepEqual(audit.changes.sort(), ['accessToken', 'isActive'])
-  assert.equal(audit.before?.['accessToken'], 'saved (hidden)')
-  assert.equal(audit.after?.['accessToken'], 'saved (hidden)')
-  assert.ok(!JSON.stringify(audit).includes('EAA'))
-  assert.deepEqual(channelAudit(wa, wa).changes, [])
-  assert.equal(channelAudit(null, wa).before, null)
+test('the audit log hides every channel secret field', () => {
+  const logged = JSON.stringify(hideSecrets(wa))
+  for (const key of ['accessToken', 'webhookSecret', 'verifyToken']) assert.ok(logged.includes(`"${key}":"[hidden]"`), key)
+  for (const [kind, fields] of Object.entries(CHANNEL_FIELDS)) {
+    for (const field of fields.filter((f) => f.secret)) {
+      assert.equal((hideSecrets({ [field.key]: 'x' }) as Record<string, unknown>)[field.key], '[hidden]', `${kind}.${field.key}`)
+    }
+  }
 })
 
 test('routing keys say what picks the connection, and never show a secret', () => {
