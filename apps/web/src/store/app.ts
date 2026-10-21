@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { APP_STORAGE_KEY, migrateLegacyStorage } from '../lib/storage-keys'
 
 export interface CurrentUser {
   id: string
@@ -48,6 +49,8 @@ interface AppStore {
   setEnv: (env: 'sandbox' | 'production') => void
 }
 
+migrateLegacyStorage()
+
 export const useAppStore = create<AppStore>()(
   persist(
     (set) => ({
@@ -74,7 +77,7 @@ export const useAppStore = create<AppStore>()(
       setEnv: (env) => set({ selectedEnv: env }),
     }),
     {
-      name: 'ybot-app',
+      name: APP_STORAGE_KEY,
       partialize: (state) => ({
         token: state.token,
         user: state.user,

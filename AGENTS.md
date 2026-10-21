@@ -67,6 +67,11 @@ BotStudio is a hybrid agent workforce platform: AI agents and human agents work 
 ## Writing style for UI copy
 - Name things by what the user recognises, not how the system is built. Active voice. Errors say what went wrong and how to fix it, naming the field, node or step.
 
+## Naming
+- The product is BotStudio. Do not add YBot, Ybot or YAI to code, copy, images, containers, headers, storage keys or docs.
+- Never rename these. They are baked into stored data: the `ybot-secrets:` key salt in `apps/api/src/lib/secrets.ts` (it unseals every Auth Profile secret), the `ybot-pii:` prefix in `apps/api/src/lib/privacy.ts` (stable PII tokens), the Postgres database and user `ybot`, and the host data folder `/volume1/docker/ybot`.
+- Old names that are still accepted so live customers keep working: widget globals `window.YBot*`, the `X-YBot-*` webhook headers (sent next to `X-BotStudio-*`), the `ybot_token` cookie and the `ybot-app` and `ybot-theme` browser keys (migrated on load). New code writes only the BotStudio names. Remove an alias only in a change that says so.
+
 ## Cursor Cloud specific instructions
 - Install with `pnpm install --frozen-lockfile` (Node 22, pnpm 10). Build everything with `pnpm exec turbo run build`.
 - Build `packages/shared` and the runtime package after editing them; the API and web consume their `dist`.

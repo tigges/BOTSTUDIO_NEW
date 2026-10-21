@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import { clearSessionCookies, setSessionCookie } from '../lib/session-cookie.js'
 import { prisma } from '@ybot/db'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
@@ -52,13 +53,7 @@ export async function authRoutes(app: FastifyInstance) {
       { expiresIn: '7d' },
     )
 
-    reply.setCookie('ybot_token', token, {
-      httpOnly: true,
-      secure: process.env['NODE_ENV'] === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7,
-    })
+    setSessionCookie(reply, token)
 
     return {
       data: {
@@ -146,13 +141,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     const token = app.jwt.sign({ sub: user.id, tenantId: tenant.id, role: 'ADMIN' }, { expiresIn: '7d' })
 
-    reply.setCookie('ybot_token', token, {
-      httpOnly: true,
-      secure: process.env['NODE_ENV'] === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7,
-    })
+    setSessionCookie(reply, token)
 
     return reply.status(201).send({
       data: {
@@ -171,7 +160,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   // ── POST /logout ──────────────────────────────────────────────────────────
   app.post('/logout', async (_request, reply) => {
-    reply.clearCookie('ybot_token', { path: '/' })
+    clearSessionCookies(reply)
     return { data: { ok: true } }
   })
 
@@ -266,13 +255,7 @@ export async function authRoutes(app: FastifyInstance) {
     const role = membership?.role ?? 'AGENT'
     const token = app.jwt.sign({ sub: updatedUser.id, tenantId: updatedUser.tenantId, role }, { expiresIn: '7d' })
 
-    reply.setCookie('ybot_token', token, {
-      httpOnly: true,
-      secure: process.env['NODE_ENV'] === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7,
-    })
+    setSessionCookie(reply, token)
 
     return reply.status(200).send({
       data: {

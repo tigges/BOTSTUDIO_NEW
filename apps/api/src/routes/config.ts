@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import { webhookHeaders } from '../lib/webhook-headers.js'
 import { prisma } from '@ybot/db'
 import { requireRole } from '../middleware/auth.js'
 import { z } from 'zod'
@@ -139,7 +140,7 @@ export async function webhooksRoutes(app: FastifyInstance) {
     try {
       const res = await fetch(body.data.url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-YBot-Event': 'webhook.test' },
+        headers: webhookHeaders({ event: 'webhook.test' }),
         body: JSON.stringify({ event: 'webhook.test', data: { message: 'This is a test delivery from BotStudio.' } }),
         signal: AbortSignal.timeout(10_000),
       })
@@ -194,7 +195,7 @@ export async function webhooksRoutes(app: FastifyInstance) {
     try {
       const res = await fetch(wh.url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-YBot-Event': 'webhook.test', 'X-YBot-Signature': `sha256=${id}` },
+        headers: webhookHeaders({ event: 'webhook.test', signature: `sha256=${id}` }),
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(10_000),
       })

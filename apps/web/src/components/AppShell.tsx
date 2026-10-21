@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { THEME_STORAGE_KEY } from '../lib/storage-keys'
 import { Outlet, useNavigate } from '@tanstack/react-router'
 import { NavRail } from './NavRail'
 import { TopBar } from './TopBar'
@@ -8,7 +9,7 @@ import { apiFetch } from '../lib/api'
 import type { Bot } from '../store/app'
 
 function savedDarkMode(): boolean {
-  try { return localStorage.getItem('ybot-theme') === 'dark' } catch { return false }
+  try { return localStorage.getItem(THEME_STORAGE_KEY) === 'dark' } catch { return false }
 }
 
 export function AppShell() {
@@ -42,7 +43,7 @@ export function AppShell() {
 
   React.useEffect(() => {
     document.documentElement.classList.toggle('light', !darkMode)
-    try { localStorage.setItem('ybot-theme', darkMode ? 'dark' : 'light') } catch { /* private mode */ }
+    try { localStorage.setItem(THEME_STORAGE_KEY, darkMode ? 'dark' : 'light') } catch { /* private mode */ }
   }, [darkMode])
 
   return (

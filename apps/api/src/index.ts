@@ -42,6 +42,7 @@ import { botMemoryRoutes, contactMemoryRoutes } from './routes/memory.js'
 import { businessRoutes } from './routes/business.js'
 import { assertProductionSecrets } from './lib/production-secrets.js'
 import { KEY_PREFIX, getValkey } from './lib/valkey.js'
+import { SESSION_COOKIE, adoptLegacySessionCookie } from './lib/session-cookie.js'
 
 installConsoleScrubbing()
 assertProductionSecrets()
@@ -97,6 +98,7 @@ await app.register(rateLimit, {
 await app.register(cookie, {
   secret: JWT_SECRET,
 })
+app.addHook('onRequest', adoptLegacySessionCookie)
 
 await app.register(multipart, {
   limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
@@ -104,7 +106,7 @@ await app.register(multipart, {
 
 await app.register(jwt, {
   secret: JWT_SECRET,
-  cookie: { cookieName: 'ybot_token', signed: false },
+  cookie: { cookieName: SESSION_COOKIE, signed: false },
 })
 
 app.decorate('authenticate', authMiddleware)

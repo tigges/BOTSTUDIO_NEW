@@ -226,7 +226,7 @@ export function WidgetSetupWizard({ onClose }: WidgetSetupWizardProps) {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
 
   const embedCode = channelId
-    ? `<!-- BotStudio chat widget -->\n<script>\n  window.YBotTitle = '${widgetTitle}';\n  window.YBotAccentColor = '${accent}';\n</script>\n<script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>`
+    ? `<!-- BotStudio chat widget -->\n<script>\n  window.BotStudioTitle = '${widgetTitle}';\n  window.BotStudioAccentColor = '${accent}';\n</script>\n<script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>`
     : ''
 
   function copyCode() {

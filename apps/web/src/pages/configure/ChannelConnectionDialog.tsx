@@ -35,8 +35,8 @@ export function embedCode(channelId: string): string {
 
 <!-- Optional customisation -->
 <script>
-  window.YBotTitle = 'Chat with us';
-  window.YBotAccentColor = '#6366f1';
+  window.BotStudioTitle = 'Chat with us';
+  window.BotStudioAccentColor = '#6366f1';
 </script>`
 }
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { storedToken } from '../../lib/storage-keys'
 import {
   LayoutDashboard, Plus, MoreHorizontal, Pin, Trash2,
   BarChart3, MessageSquare, UserCheck, ThumbsUp,
@@ -322,8 +323,7 @@ export function ReportsPage() {
 
   async function downloadReport(id: string, name: string) {
     if (!botId) return
-    const raw = localStorage.getItem('ybot-app')
-    const token = raw ? (JSON.parse(raw) as { state?: { token?: string } }).state?.token : ''
+    const token = storedToken()
     const res = await fetch(`/api/v1/bots/${botId}/reports/${id}/download`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
     if (!res.ok) return
     const url = URL.createObjectURL(await res.blob())

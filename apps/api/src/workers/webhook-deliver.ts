@@ -6,6 +6,7 @@
 
 import { createHmac } from 'node:crypto'
 import { QUEUE_WEBHOOK_DELIVER } from '../queues.js'
+import { webhookHeaders } from '../lib/webhook-headers.js'
 
 export async function startWebhookWorker(): Promise<void> {
   try {
@@ -24,16 +25,11 @@ export async function startWebhookWorker(): Promise<void> {
         const { url, secret, event, data } = job.data as { url: string; secret?: string; event: string; data: object }
         const payload = JSON.stringify({ event, data, deliveredAt: new Date().toISOString() })
 
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-          'User-Agent': 'YBot-Webhook/1.0',
-          'X-YBot-Event': event,
-          'X-YBot-Delivery': String(job.id ?? ''),
-        }
-        if (secret) {
-          const sig = createHmac('sha256', secret).update(payload).digest('hex')
-          headers['X-YBot-Signature'] = `sha256=${sig}`
-        }
+        const headers = webhookHeaders({
+          event,
+          deliveryId: String(job.id ?? ''),
+          signature: secret ? `sha256=${createHmac('sha256', secret).update(payload).digest('hex')}` : undefined,
+        })
 
         const res = await fetch(url, {
           method: 'POST',

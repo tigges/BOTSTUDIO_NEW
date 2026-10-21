@@ -4,18 +4,12 @@ import type {
 } from '@ybot/shared'
 import { messageForStatus } from './api-error'
 import type { AppBuildInfo } from './version'
+import { storedToken } from './storage-keys'
 
 const BASE = import.meta.env.VITE_API_URL ?? '/api/v1'
 
 function getToken(): string | null {
-  try {
-    const raw = localStorage.getItem('ybot-app')
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as { state?: { token?: string } }
-    return parsed?.state?.token ?? null
-  } catch {
-    return null
-  }
+  return storedToken()
 }
 
 export class ApiError extends Error {
@@ -613,7 +607,7 @@ export const preview = {
     flowName?: string
     state?: TestChatState
   }): Promise<Response> => {
-    const token = (() => { try { const r = localStorage.getItem('ybot-app'); if (!r) return null; const p = JSON.parse(r) as { state?: { token?: string } }; return p?.state?.token ?? null } catch { return null } })()
+    const token = storedToken()
     return fetch(`${BASE}/bots/${botId}/preview/chat`, {
       method: 'POST',
       headers: {
