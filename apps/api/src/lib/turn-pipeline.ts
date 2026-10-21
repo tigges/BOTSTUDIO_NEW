@@ -300,11 +300,10 @@ export async function answerFromKnowledge(request: AnswerRequest): Promise<Answe
     ?? `You are a helpful assistant for ${bot?.name ?? 'this business'}. Answer using the knowledge base context.`
   const model = cfg?.model ?? undefined
   const hits = await searchKnowledgeHits(request.text, request.tenantId, request.botId)
-  const chunks = hits.map((hit) => hit.content)
   const adapter = model ? createLlmAdapterForModel(model) : defaultLlm
   await adapter.stream({
     messages: [...request.history, { role: 'user', content: request.text }],
-    systemPrompt: systemPrompt + knowledgeBlock(chunks) + (request.instruction ? `\n\n${request.instruction}` : ''),
+    systemPrompt: systemPrompt + knowledgeBlock(hits) + (request.instruction ? `\n\n${request.instruction}` : ''),
     model,
     temperature: cfg?.temperature ?? 0.3,
     maxTokens: cfg?.maxTokens ?? 2048,

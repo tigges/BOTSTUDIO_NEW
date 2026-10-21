@@ -8,6 +8,7 @@ import { extractTextFromBuffer } from '../lib/extract-text.js'
 import { rereadWebsitePages } from '../lib/reread-website.js'
 import { enterLlmScope } from '../lib/llm-ledger.js'
 import { readPublicSite } from '../lib/public-site.js'
+import { BUSINESS_SOURCE_KIND } from '../lib/install-blueprint.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -171,6 +172,10 @@ export async function knowledgeRoutes(app: FastifyInstance) {
   app.delete('/:botId/sources/:id', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { botId, id } = request.params as { botId: string; id: string }
+    const src = await prisma.knowledgeSource.findFirst({ where: { id, botId, tenantId }, select: { kind: true } })
+    if (src?.kind === BUSINESS_SOURCE_KIND) {
+      return reply.status(409).send({ error: { code: 'MANAGED_SOURCE', message: 'Business details keep this source up to date. To change or remove what it says, edit the fields in Business details.' } })
+    }
     await prisma.knowledgeSource.deleteMany({ where: { id, botId, tenantId } })
     return reply.status(204).send()
   })
