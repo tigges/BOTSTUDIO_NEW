@@ -5,11 +5,11 @@ export interface TextPart {
   hit: boolean
 }
 
-/** Splits text so the matched words can be marked; matching ignores case. */
+/** Splits text so the matched words can be marked where a word starts; matching ignores case. */
 export function highlightParts(text: string, terms: string[]): TextPart[] {
   const words = [...new Set(terms.filter((term) => term.length > 0))].sort((a, b) => b.length - a.length)
   if (words.length === 0) return [{ text, hit: false }]
-  const pattern = new RegExp(`(${words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi')
+  const pattern = new RegExp(`(?<![\\p{L}\\p{N}])(${words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'giu')
   return text.split(pattern).filter((part) => part.length > 0).map((part) => ({ text: part, hit: words.includes(part.toLowerCase()) }))
 }
 

@@ -28,7 +28,7 @@ test('each result says which engines found it, at what rank, and which words mat
   assert.equal(first?.chunkId, 'a')
   assert.deepEqual(first?.why.semantic, { rank: 1, similarity: 0.75 })
   assert.deepEqual(first?.why.keyword, { rank: 1, score: 0.6 })
-  assert.deepEqual(first?.why.matchedTerms, ['when', 'are', 'you', 'open', 'monday'].filter((w) => 'we are open monday to friday, 8am to 6pm.'.includes(w)))
+  assert.deepEqual(first?.why.matchedTerms, ['open', 'monday'])
   assert.ok(first?.why.fused != null)
   assert.equal(second?.why.keyword, null)
 })
@@ -58,6 +58,8 @@ test('top K caps the results', () => {
 test('matched terms use the same words the keyword engine searches for', () => {
   assert.deepEqual(matchedTerms('Do you do X-rays?', 'Small X-rays are £12.'), ['rays'])
   assert.deepEqual(matchedTerms('a b', 'anything'), [])
+  assert.deepEqual(matchedTerms('How do hygiene visits work?', 'The hygienist shows you how. Hygiene visits take 30 minutes.'), ['hygiene', 'visits'])
+  assert.deepEqual(matchedTerms('show prices', 'She showed us the price list'), ['show'])
 })
 
 test('a clean, split and embedded document scores good', () => {

@@ -14,6 +14,7 @@ test('matched words are marked whatever their case, the rest is kept as-is', () 
     { text: '…', hit: false },
   ])
   assert.deepEqual(highlightParts('No terms', []), [{ text: 'No terms', hit: false }])
+  assert.deepEqual(highlightParts('It shows how', ['how']), [{ text: 'It shows ', hit: false }, { text: 'how', hit: true }])
   assert.deepEqual(highlightParts('a+b (c)', ['a+b']), [{ text: 'a+b', hit: true }, { text: ' (c)', hit: false }])
 })
 

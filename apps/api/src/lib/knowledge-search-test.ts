@@ -60,11 +60,20 @@ export function hitKey(hit: Pick<EngineHit, 'chunkId' | 'documentId'>): string {
   return hit.chunkId ?? `doc:${hit.documentId}`
 }
 
-/** Query words found in the passage, as typed by the user (lower case). */
+/** Words Postgres' English search ignores, so they are not reported as matches either. */
+const STOP_WORDS = new Set([
+  'the', 'and', 'are', 'you', 'your', 'our', 'how', 'what', 'when', 'where', 'who', 'why', 'which', 'for', 'with',
+  'can', 'does', 'did', 'this', 'that', 'these', 'those', 'from', 'have', 'has', 'had', 'was', 'were', 'will', 'would',
+  'there', 'their', 'they', 'them', 'then', 'than', 'its', 'into', 'about', 'any', 'all', 'but', 'not', 'out', 'too',
+  'very', 'just', 'some', 'such', 'only', 'own', 'same', 'more', 'most', 'other', 'should', 'could', 'been', 'being',
+  'here', 'over', 'under', 'again', 'once', 'each', 'few', 'both', 'between', 'through', 'during', 'before', 'after',
+  'above', 'below', 'off', 'yours', 'him', 'her', 'his', 'hers', 'she', 'myself', 'yourself', 'whom', 'while', 'because',
+])
+
+/** Query words found in the passage at the start of a word, lower case, stop words left out. */
 export function matchedTerms(query: string, content: string): string[] {
-  const terms = keywordQuery(query).split(' | ').filter(Boolean)
-  const text = content.toLowerCase()
-  return terms.filter((term) => text.includes(term))
+  const terms = keywordQuery(query).split(' | ').filter((term) => term && !STOP_WORDS.has(term))
+  return terms.filter((term) => new RegExp(`(?<![\\p{L}\\p{N}])${term}`, 'iu').test(content))
 }
 
 /** Reciprocal rank fusion: each engine adds 1 / (60 + rank). Ties keep semantic order. */

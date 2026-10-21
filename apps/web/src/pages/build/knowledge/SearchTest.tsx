@@ -40,7 +40,7 @@ function Why({ result, mode }: { result: SearchTestReport['results'][number]; mo
   else if (mode !== 'semantic') lines.push('Keyword search did not return it.')
   lines.push(why.matchedTerms.length ? `Words from the question it contains: ${why.matchedTerms.join(', ')}.` : 'It shares no words with the question; only its meaning matched.')
   if (why.fused != null) lines.push(`Hybrid score ${why.fused.toFixed(4)}: each engine adds 1 ÷ (60 + its rank), so passages both engines found rise to the top.`)
-  if (why.businessFirst) lines.push('Moved up because Business details outrank other sources: when a web page disagrees, the bot uses the Business details.')
+  if (why.businessFirst) lines.push('Moved up because Business details outrank other sources: when another source disagrees, the bot uses the Business details.')
   return (
     <ul className="mt-2 space-y-1 rounded-[var(--radius)] bg-[var(--bg-overlay)] p-3 text-xs text-[var(--text-secondary)]" data-testid="why">
       {lines.map((line) => <li key={line}>{line}</li>)}
@@ -58,7 +58,7 @@ function ResultCard({ result, mode }: { result: SearchTestReport['results'][numb
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <Link to="/build/knowledge/documents" search={{ doc: result.documentId }} className="truncate text-sm font-medium text-[var(--text-primary)] hover:underline">{result.title}</Link>
-            <span className="text-xs text-[var(--text-muted)]">{result.source}</span>
+            {result.sourceKind !== 'business' && <span className="text-xs text-[var(--text-muted)]">{result.source}</span>}
             {result.sourceKind === 'business' && <Badge variant="info"><Building2 size={10} /> Business details</Badge>}
             {!result.chunkId && <Badge variant="muted">Whole document</Badge>}
           </div>

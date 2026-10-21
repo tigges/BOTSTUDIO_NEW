@@ -14,7 +14,7 @@ const LEVEL_VARIANT: Record<QualityLevel, 'success' | 'warning' | 'error' | 'mut
 
 function QualityBadge({ doc }: { doc: KnowledgeDocument }) {
   const { level, score } = doc.quality
-  return <Badge variant={LEVEL_VARIANT[level]}>{LEVEL_LABEL[level]}{score != null ? ` · ${score}` : ''}</Badge>
+  return <Badge variant={LEVEL_VARIANT[level]} className="whitespace-nowrap">{LEVEL_LABEL[level]}{score != null ? ` · ${score}` : ''}</Badge>
 }
 
 function DocumentPanel({ doc, onClose }: { doc: KnowledgeDocument; onClose: () => void }) {
