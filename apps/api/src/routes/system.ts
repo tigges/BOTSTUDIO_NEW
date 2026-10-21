@@ -4,6 +4,7 @@ import { requireRole } from '../middleware/auth.js'
 import * as os from 'node:os'
 import * as http from 'node:http'
 import { DEFAULT_MODELS, currentModelId, llmChain } from '@ybot/llm'
+import { isKnownDefault, productionSecretProblems } from '../lib/production-secrets.js'
 
 function llmOrder(): string {
   const links = llmChain()
@@ -170,6 +171,9 @@ async function statusHandler() {
     return {
       data: {
         services: { database: db, redis },
+        secretProblems: process.env['NODE_ENV'] === 'production'
+          ? productionSecretProblems(process.env).map(({ key, message }) => ({ key, message }))
+          : [],
         containers,
         rag: {
           sources: sources.length,
@@ -200,7 +204,7 @@ async function statusHandler() {
 
 async function configHandler() {
     const e = process.env
-    function isSet(key: string) { return !!e[key] && e[key] !== 'change-me-in-production' }
+    function isSet(key: string) { return !!e[key] && !isKnownDefault(e[key]) }
     function maskUrl(url: string | undefined) {
       if (!url) return null
       try {

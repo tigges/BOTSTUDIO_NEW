@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react'
 import {
   Server, Database, Radio, HardDrive, Cpu, MemoryStick,
   RefreshCw, CheckCircle2, XCircle, Clock, Box,
-  BookOpen, FileText, Layers, Activity, ChevronRight, Tag,
+  BookOpen, FileText, Layers, Activity, ChevronRight, Tag, AlertTriangle,
 } from 'lucide-react'
 import { Badge, Button } from '@ybot/ui'
 import { cn } from '@ybot/ui'
@@ -133,6 +133,7 @@ export function SystemStatusPage() {
     : '—'
 
   const release = data?.version ?? buildInfo
+  const attention = data?.secretProblems ?? []
   const runningCount = data?.containers.filter((c) => c.state === 'running').length ?? 0
   const totalCount = data?.containers.length ?? 0
 
@@ -185,6 +186,18 @@ export function SystemStatusPage() {
         </div>
       ) : (
         <div className="flex-1 overflow-auto p-6 space-y-6">
+
+          {attention.length > 0 && (
+            <div role="alert" className="rounded-[var(--radius-lg)] border border-[var(--warning)] bg-[var(--warning-muted)] p-4 space-y-2">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-primary)]">
+                <AlertTriangle size={13} className="text-[var(--warning)]" />
+                Needs attention
+              </p>
+              <ul className="space-y-1 text-xs text-[var(--text-secondary)] list-disc list-inside">
+                {attention.map((item) => <li key={item.key}>{item.message}</li>)}
+              </ul>
+            </div>
+          )}
 
           {/* Summary pills */}
           <div className="flex flex-wrap gap-3">

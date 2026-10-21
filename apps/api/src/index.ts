@@ -45,8 +45,10 @@ import { bundleRoutes } from './routes/bundle.js'
 import { botMemoryRoutes, contactMemoryRoutes } from './routes/memory.js'
 import { businessRoutes } from './routes/business.js'
 import { sweepExpiredMemory } from './lib/contact-memory.js'
+import { assertProductionSecrets } from './lib/production-secrets.js'
 
 installConsoleScrubbing()
+assertProductionSecrets()
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10)
 const HOST = process.env['HOST'] ?? '0.0.0.0'
