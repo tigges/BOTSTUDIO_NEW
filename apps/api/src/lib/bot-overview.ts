@@ -71,7 +71,7 @@ export async function loadBotOverview(tenantId: string, botId: string, opts: { c
   const [documents, faqs, flows, tools, productionChannels, sandboxChats, prodChats, cost, releases, liveRelease] = await Promise.all([
     prisma.document.count({ where: { tenantId, knowledgeSource: { botId } } }),
     prisma.faq.count({ where: { tenantId, botId } }),
-    prisma.flow.findMany({ where: { tenantId, botId }, select: { id: true, name: true, versions: { select: { version: true, status: true, createdAt: true, updatedAt: true } } } }),
+    prisma.flow.findMany({ where: { tenantId, botId }, select: { id: true, name: true, versions: { select: { version: true, status: true, environmentId: true, createdAt: true, updatedAt: true } } } }),
     prisma.tool.count({ where: { tenantId, botId } }),
     production ? prisma.channel.count({ where: { tenantId, botId, environmentId: production.id, isActive: true } }) : 0,
     sandbox ? prisma.conversation.count({ where: { tenantId, botId, environmentId: sandbox.id, testRunId: null } }) : 0,
@@ -105,6 +105,9 @@ export async function loadBotOverview(tenantId: string, botId: string, opts: { c
     sandboxChats,
     productionChats7d: chats,
     liveRelease: liveRelease?.number ?? null,
+    publishedFlows: production
+      ? flows.filter((flow) => flow.versions.some((v) => v.status === 'published' && v.environmentId === production.id)).length
+      : 0,
   }
 
   let activity: OverviewActivity[] | null = null

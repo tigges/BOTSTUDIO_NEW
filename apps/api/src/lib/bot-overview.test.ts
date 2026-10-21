@@ -12,6 +12,7 @@ const blank: BotFootprint = {
   sandboxChats: 0,
   productionChats7d: 0,
   liveRelease: null,
+  publishedFlows: 0,
 }
 
 test('a bot with nothing built is empty, anything built makes it building', () => {
@@ -24,6 +25,13 @@ test('a bot with nothing built is empty, anything built makes it building', () =
 test('a live Production release makes it live, even with no chats yet', () => {
   assert.equal(botStage({ ...blank, liveRelease: 1 }), 'live')
   assert.equal(botStage({ ...blank, flows: 2, liveRelease: 4, productionChats7d: 0 }), 'live')
+})
+
+test('published flows on an active Production channel are live without a release', () => {
+  assert.equal(botStage({ ...blank, flows: 4, publishedFlows: 4, productionChannels: 1 }), 'live')
+  assert.equal(botStage({ ...blank, flows: 4, publishedFlows: 4 }), 'building')
+  const publish = setupChecklist({ ...blank, flows: 4, publishedFlows: 4, productionChannels: 1 }).find((item) => item.id === 'publish')
+  assert.equal(publish?.done, true)
 })
 
 test('the checklist ticks off what the footprint shows, in setup order', () => {

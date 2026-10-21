@@ -10,7 +10,10 @@ const screens = [
   '/build/knowledge/entities',
   '/build/knowledge/faqs',
   '/build/knowledge/sources',
+  '/build/knowledge/documents',
+  '/build/knowledge/search',
   '/build/knowledge/training',
+  '/build/settings',
   '/inbox/chats',
   '/inbox/tasks',
   '/inbox/contacts',
@@ -33,18 +36,27 @@ const screens = [
   '/bots',
 ]
 
+/** Old addresses that now open another screen. */
+const redirects: Record<string, string> = {
+  '/build/knowledge/training': '/build/settings',
+}
+
 test('every screen opens', { tag: '@smoke' }, async ({ page }) => {
   test.setTimeout(180_000)
   await signIn(page, qaEmail, qaPassword)
   for (const path of screens) {
     await page.goto(path)
-    await expect(page).toHaveURL(new RegExp(path.replaceAll('/', '\\/')))
+    const lands = redirects[path] ?? path
+    await expect(page).toHaveURL(new RegExp(lands.replaceAll('/', '\\/')))
     await expectNoCrash(page)
     if (path === '/build/journey') {
       await expect(page.getByRole('heading', { name: 'Journey' })).toBeVisible()
     }
     if (path === '/build/flows') {
       await expect(page.getByText('Flows').first()).toBeVisible()
+    }
+    if (path === '/build/settings') {
+      await expect(page.getByRole('heading', { name: 'Bot settings' })).toBeVisible()
     }
     if (path === '/build/workflows') {
       await expect(page.getByRole('heading', { name: 'Workflows' })).toBeVisible()

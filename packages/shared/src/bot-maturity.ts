@@ -12,13 +12,20 @@ export interface BotFootprint {
   productionChats7d: number
   /** The release number live in Production, if any. */
   liveRelease: number | null
+  /** Flows with a version published to Production. With no release, Production plays these. */
+  publishedFlows: number
 }
 
-/** empty: nothing built yet. building: something built, nothing live. live: a release runs in Production. */
+/** empty: nothing built yet. building: something built, nothing live. live: Production is answering chats. */
 export type BotStage = 'empty' | 'building' | 'live'
 
+/** A live release, or published flows on an active Production channel (what Production plays without a release). */
+export function servesProduction(f: BotFootprint): boolean {
+  return f.liveRelease != null || (f.publishedFlows > 0 && f.productionChannels > 0)
+}
+
 export function botStage(f: BotFootprint): BotStage {
-  if (f.liveRelease != null) return 'live'
+  if (servesProduction(f)) return 'live'
   const built = f.businessFields + f.knowledgeItems + f.flows + f.tools
   return built > 0 ? 'building' : 'empty'
 }
@@ -54,6 +61,6 @@ export function setupChecklist(f: BotFootprint): ChecklistItem[] {
     { id: 'journey', label: 'Build the first journey', hint: 'The welcome, the routes and when to hand over to a person.', path: '/build/journey', done: f.flows > 0 },
     { id: 'sandbox', label: 'Try it in Sandbox', hint: 'Chat with the bot yourself before anyone else does.', path: '/build/journey', done: f.sandboxChats > 0 },
     { id: 'channel', label: 'Connect a channel', hint: 'Website chat, WhatsApp or another channel bound to Production.', path: '/configure/channels', done: f.productionChannels > 0 },
-    { id: 'publish', label: 'Publish to Production', hint: 'Releases are frozen; rolling back is one click.', path: '/build/releases', done: f.liveRelease != null },
+    { id: 'publish', label: 'Publish to Production', hint: 'Releases are frozen; rolling back is one click.', path: '/build/releases', done: f.liveRelease != null || f.publishedFlows > 0 },
   ]
 }
