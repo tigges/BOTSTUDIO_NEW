@@ -29,6 +29,7 @@ import { PublicSiteError, readPublicSite } from '../lib/public-site.js'
 import { draftSiteSpecWithModel, draftWebsiteChatWithModel, type ImportReport } from '../lib/site-jobs.js'
 import { ensureOptionalChannels, ensureWebChannels } from '../lib/web-channels.js'
 import { enterLlmScope } from '../lib/llm-ledger.js'
+import { loadBotOverview } from '../lib/bot-overview.js'
 
 
 interface JwtPayload {
@@ -186,6 +187,14 @@ export async function botsRoutes(app: FastifyInstance) {
 
     if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
     return { data: bot }
+  })
+
+  app.get('/:botId/overview', async (request, reply) => {
+    const { tenantId, role } = request.user as JwtPayload
+    const { botId } = request.params as { botId: string }
+    const overview = await loadBotOverview(tenantId, botId, { canSeeActivity: role === 'ADMIN' || role === 'SUPERVISOR' })
+    if (!overview) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
+    return { data: overview }
   })
 
   app.post('/', { preHandler: canBuild }, async (request, reply) => {

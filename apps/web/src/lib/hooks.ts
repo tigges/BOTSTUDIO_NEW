@@ -327,6 +327,16 @@ export function useSaveInboxConfig() {
 }
 
 // ── Conversations ─────────────────────────────────────────────────────────────
+export function useBotOverview() {
+  const bid = useAppStore((s) => s.selectedBotId)
+  return useQuery({
+    queryKey: ['bot-overview', bid],
+    enabled: !!bid && !isDemoMode(),
+    queryFn: () => api.bots.overview(bid!).then((r) => r.data),
+    refetchInterval: 30_000,
+  })
+}
+
 export function useConversations(params?: Record<string, string>) {
   return useQuery({
     queryKey: ['conversations', params],

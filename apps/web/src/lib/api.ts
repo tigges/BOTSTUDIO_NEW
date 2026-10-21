@@ -1,6 +1,6 @@
 import type {
   AuthProfileKind, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
-  ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns,
+  BotFootprint, BotStage, ChecklistItem, ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns,
 } from '@ybot/shared'
 import { messageForStatus } from './api-error'
 
@@ -65,10 +65,20 @@ export const me = {
     apiFetch<{ data: unknown }>('/me/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
 }
 
+export interface BotOverview {
+  stage: BotStage
+  footprint: BotFootprint
+  checklist: ChecklistItem[]
+  production: { chats: number; handedOver: number; open: number; costUsd: number | null; costPerChatUsd: number | null }
+  releases: Array<{ number: number; note: string | null; createdAt: string; live: boolean }>
+  activity: Array<{ id: string; action: string; who: string | null; createdAt: string }> | null
+}
+
 // ── Bots ──────────────────────────────────────────────────────────────────────
 export const bots = {
   list: () => apiFetch<{ data: BotSummary[] }>('/bots'),
   get: (id: string) => apiFetch<{ data: BotSummary }>(`/bots/${id}`),
+  overview: (id: string) => apiFetch<{ data: BotOverview }>(`/bots/${id}/overview`),
   create: (body: {
     name: string
     description?: string
