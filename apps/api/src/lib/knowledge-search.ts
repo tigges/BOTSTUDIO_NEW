@@ -76,7 +76,7 @@ const BUSINESS_SLOTS = 2
  * rest in search order. A website page that still shows old hours cannot push the
  * confirmed hours out of the answer.
  */
-export function preferBusiness(candidates: KnowledgeHit[], topK: number): KnowledgeHit[] {
+export function preferBusiness<T extends Pick<KnowledgeHit, 'sourceKind'>>(candidates: T[], topK: number): T[] {
   const business = candidates.filter((hit) => hit.sourceKind === BUSINESS_KIND).slice(0, BUSINESS_SLOTS)
   const rest = candidates.filter((hit) => !business.includes(hit))
   return [...business, ...rest].slice(0, topK)

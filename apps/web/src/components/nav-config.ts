@@ -1,7 +1,7 @@
 import React from 'react'
 import {
   LayoutDashboard,
-  Workflow,
+  SlidersHorizontal,
   Route,
   Brain,
   MessageSquare,
@@ -55,23 +55,21 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: 'journey', label: 'Journey', icon: Route, path: '/build/journey' },
       { id: 'business', label: 'Business details', icon: Building2, path: '/build/business' },
-      { id: 'flows', label: 'Flows', icon: Workflow, path: '/build/flows' },
       { id: 'workflows', label: 'Workflows', icon: Repeat2, path: '/build/workflows' },
       { id: 'tools', label: 'Tools', icon: Wrench, path: '/build/tools' },
       { id: 'evals', label: 'Evals', icon: FlaskConical, path: '/build/evals' },
       { id: 'releases', label: 'Releases', icon: Rocket, path: '/build/releases' },
+      { id: 'bot-settings', label: 'Bot settings', icon: SlidersHorizontal, path: '/build/settings' },
       {
         id: 'knowledge',
         label: 'Knowledge',
         icon: Brain,
-        path: '/build/knowledge/intents',
+        path: '/build/knowledge/sources',
         match: '/build/knowledge',
         subItems: [
-          { id: 'kb-intents', label: 'Intents', path: '/build/knowledge/intents' },
-          { id: 'kb-entities', label: 'Entities', path: '/build/knowledge/entities' },
-          { id: 'kb-faqs', label: 'FAQs', path: '/build/knowledge/faqs' },
           { id: 'kb-sources', label: 'Sources', path: '/build/knowledge/sources' },
-          { id: 'kb-training', label: 'Training', path: '/build/knowledge/training' },
+          { id: 'kb-documents', label: 'Documents', path: '/build/knowledge/documents' },
+          { id: 'kb-search', label: 'Search & Test', path: '/build/knowledge/search' },
         ],
       },
     ],

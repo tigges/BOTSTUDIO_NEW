@@ -2,16 +2,9 @@ import React, { useState } from 'react'
 import { Tag, Plus, Trash2, ChevronRight, Search, X, CheckCircle, Save } from 'lucide-react'
 import { Button, Input, Badge, EmptyState, Skeleton } from '@ybot/ui'
 import { cn } from '@ybot/ui'
-import { SubNav } from '../../../components/SubNav'
+import { KnowledgeSubNav } from './subnav'
 import { useEntities, useCreateEntity, useDeleteEntity, useUpdateEntity } from '../../../lib/hooks'
 
-const SUBNAV = [
-  { label: 'Intents', path: '/build/knowledge/intents' },
-  { label: 'Entities', path: '/build/knowledge/entities' },
-  { label: 'FAQs', path: '/build/knowledge/faqs' },
-  { label: 'Sources', path: '/build/knowledge/sources' },
-  { label: 'Training', path: '/build/knowledge/training' },
-]
 
 interface EntityValue { value: string; synonyms: string[] }
 interface Entity { id: string; name: string; kind: 'list' | 'regex' | 'composite'; values: EntityValue[] }
@@ -99,7 +92,7 @@ export function EntitiesPage() {
             <Plus size={13} /> New Entity
           </Button>
         </div>
-        <SubNav items={SUBNAV} />
+        <KnowledgeSubNav />
       </div>
 
       <div className="flex flex-1 overflow-hidden">

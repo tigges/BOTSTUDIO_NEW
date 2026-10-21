@@ -67,6 +67,10 @@ export interface ExecutionServices {
   now?: () => Date
   /** Runs a tool from the bot's Tools list. Absent where tools cannot run. */
   runTool?: (toolId: string, args: Record<string, unknown>) => Promise<ToolCallResult>
+  /** Bot setting: hand the chat to a person when a tool has not answered after this many seconds. */
+  toolWaitSeconds?: number | null
+  /** The tool's name as the team knows it, for the handover reason. */
+  toolName?: (toolId: string) => Promise<string | null>
 }
 
 export interface ToolCallResult {

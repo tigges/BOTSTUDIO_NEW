@@ -68,7 +68,7 @@ async function crawlWebsite(url: string, depth = 2): Promise<Array<{ url: string
   return results
 }
 
-/** Business details are already one document per field; embed them as they are so each chunk keeps its source page. */
+/** Business details and FAQs are already one document per field or question; embed them as they are so each chunk keeps its source page. */
 async function embedSavedDocuments(sourceId: string, tenantId: string): Promise<void> {
   const documents = await prisma.document.findMany({ where: { knowledgeSourceId: sourceId, tenantId }, select: { id: true, content: true, metadata: true } })
   await prisma.$executeRawUnsafe(
@@ -104,13 +104,13 @@ export async function ingestKnowledgeSource(jobData: {
   sourceId: string
   tenantId: string
   botId: string
-  kind: 'website' | 'file' | 'notion' | 'gdocs' | 'business'
+  kind: 'website' | 'file' | 'notion' | 'gdocs' | 'business' | 'faq'
   config?: Record<string, unknown>
 }): Promise<void> {
   const { sourceId, tenantId, kind } = jobData
   const config = jobData.config ?? {}
 
-  if (kind === 'business') {
+  if (kind === 'business' || kind === 'faq') {
     await embedSavedDocuments(sourceId, tenantId)
     return
   }

@@ -102,10 +102,13 @@ export function FlowsPage() {
   return (
     <div className="flex flex-col h-full">
       <PageHeader
-        title="Flows"
-        description="Each flow is one chapter. Publish, rename, and open them here."
+        title="All flows"
+        description="Every chapter of the Journey in one list. Publish, rename, and open them here."
         actions={
           <div className="flex items-center gap-2">
+            <Button size="md" variant="ghost" onClick={() => navigate({ to: '/build/journey' })}>
+              Back to Journey
+            </Button>
             <Button size="md" variant="secondary" onClick={() => { setPackChoice(null); setPackResult(null); setPackRemoved(null); setConfirmRemove(false); setPackError(''); setShowPack(true) }}>
               Starter packs
             </Button>

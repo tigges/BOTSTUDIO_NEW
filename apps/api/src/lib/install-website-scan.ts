@@ -1,6 +1,7 @@
 import { prisma } from '@ybot/db'
 import { emptyCatalog, type WebsiteChatDraft } from '@ybot/shared'
 import { upsertStudioCatalog } from './studio-catalog.js'
+import { syncFaqKnowledge } from './faq-knowledge.js'
 
 async function upsertBookingWorkflow(tenantId: string, botId: string, draft: WebsiteChatDraft) {
   const booking = draft.booking
@@ -83,6 +84,7 @@ export async function installWebsiteScan(tenantId: string, botId: string, draft:
       data: { tenantId, botId, question: faq.question, answer: faq.answer, tags: faq.tags },
     })
   }
+  if (draft.faqs.length) await syncFaqKnowledge(tenantId, botId)
 
   let host = draft.url
   try { host = new URL(draft.url).hostname.replace(/^www\./, '') } catch { host = draft.url }

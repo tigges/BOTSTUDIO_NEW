@@ -7,7 +7,7 @@ import type {
   Flow, FlowVersion, Intent, Entity, Faq, KnowledgeSource,
   Conversation, Message, Contact, Campaign, Template,
   Webhook, TeamMember, AnalyticsOverview, ConversationTrend, AuditEvent,
-  LlmConfig, SystemStatus, SystemConfig, Channel,
+  BotSettingsView, SystemStatus, SystemConfig, Channel,
 } from './api'
 
 // ── Flows ─────────────────────────────────────────────────────────────────────
@@ -133,9 +133,9 @@ export const DEMO_CHANNELS: Channel[] = [
   { id: 'ch_demo_email', name: 'Email', kind: 'email', environmentId: 'demo-env-sandbox', config: { fromAddress: 'support@acme.com' }, secretsSet: ['inboundSecret'], isActive: false, botId: 'demo', createdAt: new Date(Date.now() - 30 * 86400_000).toISOString() },
 ]
 
-export const DEMO_TRAINING: LlmConfig = {
-  model: 'gpt-4o', temperature: 0.3, maxTokens: 2048,
-  systemPrompt: 'You are a helpful support assistant for Acme Corp. Be concise, friendly, and professional.',
+export const DEMO_BOT_SETTINGS: BotSettingsView = {
+  settings: { model: 'gemini-flash-latest', responseLength: 'medium', toolWaitEscalateSeconds: 20 },
+  connected: { GEMINI_API_KEY: true },
 }
 
 // ── Conversations ─────────────────────────────────────────────────────────────
