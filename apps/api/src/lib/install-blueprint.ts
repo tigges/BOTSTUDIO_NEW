@@ -15,6 +15,7 @@ export interface BlueprintInstallResult {
   chapters: string[]
   facts: number
   documents: number
+  websiteSource: WebsiteSourceRef | null
   guardrailPolicy: string
   evalSuite: string
 }
@@ -49,6 +50,40 @@ export async function syncBusinessKnowledge(tenantId: string, botId: string, blu
   }
   await enqueueKnowledgeSync({ tenantId, sourceId: source.id, botId, kind: BUSINESS_SOURCE_KIND }).catch(() => {})
   return documents.length
+}
+
+/** "https://www.Harbour.example/fees" and "harbour.example" are the same site. */
+export function siteHost(url: string): string | null {
+  const raw = url.trim()
+  if (!raw) return null
+  try {
+    return new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`).hostname.toLowerCase().replace(/^www\./, '') || null
+  } catch {
+    return null
+  }
+}
+
+export interface WebsiteSourceRef {
+  id: string
+  name: string
+  created: boolean
+}
+
+/**
+ * The website Business details were read from also feeds Knowledge: its pages
+ * answer the questions no field covers. The Knowledge crawler reads the site on
+ * its own schedule; this only makes sure the source exists, once per site.
+ */
+export async function ensureWebsiteSource(tenantId: string, botId: string, url: string | undefined): Promise<WebsiteSourceRef | null> {
+  const host = url ? siteHost(url) : null
+  if (!url || !host) return null
+  const sources = await prisma.knowledgeSource.findMany({ where: { tenantId, botId, kind: 'website' }, select: { id: true, name: true, config: true } })
+  const existing = sources.find((source) => siteHost(String((source.config as { url?: unknown } | null)?.url ?? '')) === host)
+  if (existing) return { id: existing.id, name: existing.name, created: false }
+  const config = { url, depth: 2, addedFrom: 'business_details' }
+  const source = await prisma.knowledgeSource.create({ data: { tenantId, botId, name: host, kind: 'website', config } })
+  await enqueueKnowledgeSync({ tenantId, sourceId: source.id, botId, kind: 'website', config }).catch(() => {})
+  return { id: source.id, name: host, created: true }
 }
 
 /**
@@ -126,11 +161,13 @@ export async function installBlueprint(
     update: { systemPrompt: bundle.systemPrompt, inboxConfig },
   })
   const saved = await saveBusinessProfile(tenantId, botId, blueprint, profile)
+  const websiteSource = await ensureWebsiteSource(tenantId, botId, profile.websiteUrl)
 
   return {
     chapters,
     facts: saved.facts,
     documents: saved.documents,
+    websiteSource,
     guardrailPolicy: bundle.guardrails.name,
     evalSuite: bundle.evals.name,
   }

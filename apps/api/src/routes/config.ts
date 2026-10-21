@@ -1,13 +1,14 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { prisma } from '@ybot/db'
 import { requireRole } from '../middleware/auth.js'
 import { z } from 'zod'
 import { sendEmail, inviteEmail } from '../lib/email.js'
 import { canRemoveWebChannel, ensureWebChannels } from '../lib/web-channels.js'
-import { parseChannelConfig, channelWebhookPath, mergeChannelConfig } from '@ybot/shared'
+import { parseChannelConfig, channelWebhookPath, mergeChannelConfig, readAnalyticsQuery } from '@ybot/shared'
 import { registerTelegramWebhook, verifyChannelCredentials, type VerifyResult } from '../lib/channel-verify.js'
 import { publicChannel } from '../lib/channel-public.js'
 import { summariseOutcomes } from '../lib/outcome-summary.js'
+import { runAggregate } from '../lib/analytics-aggregate.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -320,6 +321,15 @@ export async function teamRoutes(app: FastifyInstance) {
 export async function analyticsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
   app.addHook('preHandler', requireRole('SUPERVISOR', 'ADMIN'))
+
+  // GET or POST /analytics/aggregate: metric, dimensions[], filters, range, granularity. Backs every dashboard widget.
+  const aggregate = async (raw: Record<string, unknown>, tenantId: string, reply: FastifyReply) => {
+    const query = readAnalyticsQuery(raw)
+    if ('error' in query) return reply.status(400).send({ error: { code: 'VALIDATION', message: query.error } })
+    return { data: await runAggregate(tenantId, query) }
+  }
+  app.get('/aggregate', async (request, reply) => aggregate(request.query as Record<string, unknown>, (request.user as JWT).tenantId, reply))
+  app.post('/aggregate', async (request, reply) => aggregate((request.body ?? {}) as Record<string, unknown>, (request.user as JWT).tenantId, reply))
 
   // GET /analytics/overview?botId=...
   app.get('/overview', async (request) => {

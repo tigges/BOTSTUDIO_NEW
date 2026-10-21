@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Building2, CheckCircle2, Loader2, RefreshCw, Save } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import { Button, EmptyState, PageHeader, cn } from '@ybot/ui'
-import type { BusinessProfile, FieldChange } from '@ybot/shared'
+import type { BusinessProfile, FieldChange, KnowledgeConflict } from '@ybot/shared'
 import { BusinessFieldRow, takeAlternative, withValue } from '../../components/BusinessFields'
 import { useAcceptBusiness, useBusiness, useRereadBusiness, useSaveBusiness } from '../../lib/hooks'
 
@@ -54,7 +55,8 @@ export function BusinessPage() {
   async function onAccept(fresh: BusinessProfile) {
     const result = await accept.mutateAsync({ fresh, keys: ticked }).catch(() => null)
     if (result) {
-      setSaved(`Kept ${result.accepted.length} change${result.accepted.length === 1 ? '' : 's'} from the website.`)
+      const pages = result.websiteSource?.created ? ` Knowledge now also reads the pages of ${result.websiteSource.name}, for questions these details do not cover.` : ''
+      setSaved(`Kept ${result.accepted.length} change${result.accepted.length === 1 ? '' : 's'} from the website.${pages}`)
       setRereading(false)
       reread.reset()
     }
@@ -92,9 +94,12 @@ export function BusinessPage() {
         ) : (
           <div className="mx-auto grid max-w-4xl gap-4">
             <p className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-[11px] text-[var(--text-secondary)]">
-              {data.blueprint.name} blueprint. Chapters look these details up on every turn, and Knowledge keeps {data.documents} document{data.documents === 1 ? '' : 's'} built from them, so answers name their source.
-              {draft.websiteUrl ? ` Read from ${draft.websiteUrl}.` : ' These are the sample business’s details.'}
+              {data.blueprint.name} blueprint. Chapters look these details up on every turn. Each filled detail is also one document in the “Business details” Knowledge source ({data.documents} now), so answers name their source. When another Knowledge source says something different, answers use these details.
+              {draft.websiteUrl ? ` Read from ${draft.websiteUrl}.` : ' These are the sample business’s details.'}{' '}
+              <Link to="/build/knowledge/sources" className="font-medium text-[var(--accent)] hover:underline">Open Knowledge sources</Link>
             </p>
+
+            {data.conflicts.length > 0 && <KnowledgeConflicts conflicts={data.conflicts} />}
 
             {rereading && (
               <RereadPanel
@@ -163,6 +168,31 @@ export function BusinessPage() {
         )}
       </div>
     </div>
+  )
+}
+
+function KnowledgeConflicts({ conflicts }: { conflicts: KnowledgeConflict[] }) {
+  return (
+    <section className="rounded-[var(--radius-lg)] border border-amber-300 bg-amber-50 p-3" aria-label="Knowledge that disagrees">
+      <h2 className="flex items-center gap-1.5 text-xs font-semibold text-amber-900">
+        <AlertCircle size={13} /> {conflicts.length} {conflicts.length === 1 ? 'passage' : 'passages'} in Knowledge {conflicts.length === 1 ? 'disagrees' : 'disagree'} with these details
+      </h2>
+      <p className="mt-1 text-[11px] text-amber-900/80">
+        Answers already use Business details. Fix the old text where it lives (for a website, change the page, then sync it again in Knowledge), or change the detail here if the page is right.
+      </p>
+      <ul className="mt-2 grid gap-1.5">
+        {conflicts.map((conflict) => (
+          <li key={`${conflict.documentId}-${conflict.field}-${conflict.says}`} className="rounded border border-amber-200 bg-white px-2 py-1.5 text-xs">
+            <span className="font-semibold text-[var(--text-primary)]">{conflict.label}</span>
+            <span className="text-[var(--text-muted)]"> · {conflict.source} · {conflict.documentTitle}</span>
+            <span className="mt-0.5 grid gap-1 sm:grid-cols-2">
+              <span className="text-[var(--text-secondary)]">Knowledge says: “{conflict.says}”</span>
+              <span className="text-[var(--text-primary)]">Business details: {conflict.expected}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 

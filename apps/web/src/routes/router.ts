@@ -30,7 +30,7 @@ import { FaqsPage } from '../pages/build/knowledge/Faqs'
 import { SourcesPage } from '../pages/build/knowledge/Sources'
 import { TrainingPage } from '../pages/build/knowledge/Training'
 import { ChatsPage } from '../pages/inbox/Chats'
-import { TicketsPage } from '../pages/inbox/Tickets'
+import { TasksPage } from '../pages/inbox/Tasks'
 import { ContactsPage } from '../pages/inbox/Contacts'
 import { InboxSettingsPage } from '../pages/inbox/Settings'
 import { CampaignsPage } from '../pages/engage/Campaigns'
@@ -38,6 +38,7 @@ import { TemplatesPage } from '../pages/engage/Templates'
 import { AnalyticsOverviewPage } from '../pages/analytics/Overview'
 import { DashboardsPage } from '../pages/analytics/Dashboards'
 import { ReportsPage } from '../pages/analytics/Reports'
+import { readAnalyticsSearch } from '../lib/analytics-filters'
 import { ChannelsPage } from '../pages/configure/Channels'
 import { OptimizationsPage } from '../pages/configure/Optimizations'
 import { IntegrationsPage } from '../pages/configure/Integrations'
@@ -163,7 +164,8 @@ const trainingRoute = createRoute({ getParentRoute: () => appRoute, path: '/buil
 
 // ── Inbox ─────────────────────────────────────────────────────────────────────
 const chatsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/chats', component: ChatsPage })
-const ticketsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/tickets', component: TicketsPage })
+const tasksRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/tasks', component: TasksPage })
+const ticketsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/tickets', beforeLoad: () => { throw redirect({ to: '/inbox/tasks' }) }, component: () => null })
 const contactsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/contacts', component: ContactsPage })
 const inboxSettingsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/settings', component: InboxSettingsPage })
 const inboxRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox', beforeLoad: () => { throw redirect({ to: '/inbox/chats' }) }, component: () => null })
@@ -174,8 +176,8 @@ const templatesRoute = createRoute({ getParentRoute: () => appRoute, path: '/eng
 const engageRoute = createRoute({ getParentRoute: () => appRoute, path: '/engage', beforeLoad: () => { throw redirect({ to: '/engage/campaigns' }) }, component: () => null })
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
-const analyticsRoute = createRoute({ getParentRoute: () => appRoute, path: '/analytics', component: AnalyticsOverviewPage })
-const dashboardsRoute = createRoute({ getParentRoute: () => appRoute, path: '/analytics/dashboards', component: DashboardsPage })
+const analyticsRoute = createRoute({ getParentRoute: () => appRoute, path: '/analytics', validateSearch: readAnalyticsSearch, component: AnalyticsOverviewPage })
+const dashboardsRoute = createRoute({ getParentRoute: () => appRoute, path: '/analytics/dashboards', validateSearch: readAnalyticsSearch, component: DashboardsPage })
 const reportsRoute = createRoute({ getParentRoute: () => appRoute, path: '/analytics/reports', component: ReportsPage })
 
 // ── Configure ─────────────────────────────────────────────────────────────────
@@ -222,6 +224,7 @@ const routeTree = rootRoute.addChildren([
     knowledgeRedirectRoute,
     inboxRoute,
     chatsRoute,
+    tasksRoute,
     ticketsRoute,
     contactsRoute,
     inboxSettingsRoute,

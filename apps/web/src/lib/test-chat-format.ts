@@ -16,7 +16,7 @@ export function testChatNote(before: TestChatState | undefined, after: TestChatS
   }
   if (after.outcome === before?.outcome) return undefined
   if (after.outcome === 'contained_unresolved') {
-    return 'Asked for a person, but nobody is on chat now, so the bot kept the chat. Turn on working hours in Inbox Settings to hand over.'
+    return 'Asked for a person, but nobody is on chat now, so the bot kept the chat. Turn on working hours in Inbox settings to hand over.'
   }
   if (after.outcome === 'contained_resolved') return 'Resolved by the bot.'
   return undefined
