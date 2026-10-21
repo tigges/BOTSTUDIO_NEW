@@ -50,7 +50,7 @@ export function NavRail({ collapsed = false, onToggleCollapse }: NavRailProps) {
               </p>
             )}
             {group.items.map((item) => {
-              const isActive = itemActive(item.id, item.path, pathname, fromJourney)
+              const isActive = itemActive(item.id, item.match ?? item.path, pathname, fromJourney)
               const Icon = item.icon
               return (
                 <Link
