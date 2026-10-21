@@ -105,7 +105,7 @@ export function knowledgeBlock(hits: Array<Pick<KnowledgeHit, 'content' | 'sourc
   if (hits.length === 0) return ''
   const passages = hits.map((hit, i) => `[${i + 1}]${hit.sourceKind === BUSINESS_KIND ? ' (Business details, confirmed by the business)' : ''} ${hit.content}`)
   const precedence = hits.some((hit) => hit.sourceKind === BUSINESS_KIND)
-    ? ' If a Business details passage and another passage disagree (hours, phone number, prices), use the Business details passage.'
+    ? ' If a Business details passage and another passage disagree (hours, phone number, prices), use the Business details passage. Do not mention these labels in the reply.'
     : ''
   return `\n\n--- KNOWLEDGE BASE ---\n${passages.join('\n\n')}\n--- END KNOWLEDGE BASE ---\n\nAnswer using only this context. If unknown, say so.${precedence}`
 }
