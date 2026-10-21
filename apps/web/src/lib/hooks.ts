@@ -338,6 +338,19 @@ export function useConversations(params?: Record<string, string>) {
   })
 }
 
+/** The Inbox list with its search and test-run filter, plus how many test-run chats the filter hides. */
+export function useInboxChats(params: Record<string, string>) {
+  return useQuery<{ chats: api.Conversation[]; testRunChats: number }>({
+    queryKey: ['conversations', 'inbox', params],
+    queryFn: withDemoFallback(
+      () => api.conversations.list(params).then((r) => ({ chats: r.data, testRunChats: r.meta?.testRunChats ?? 0 })),
+      { chats: demo.DEMO_CONVERSATIONS, testRunChats: 0 },
+    ),
+    refetchInterval: isDemoMode() ? false : 10_000,
+    placeholderData: keepPreviousData,
+  })
+}
+
 export function useCreateConversation() {
   const qc = useQueryClient()
   return useMutation({
@@ -1298,6 +1311,22 @@ export function useCannedReplies() {
   })
 }
 
+export function useCreateCannedReply() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { shortcut: string; title: string; text: string }) => api.cannedReplies.create(body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['canned-replies'] }),
+  })
+}
+
+export function useDeleteCannedReply() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.cannedReplies.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['canned-replies'] }),
+  })
+}
+
 export function useLabels() {
   return useQuery({
     queryKey: ['labels'],
@@ -1441,6 +1470,7 @@ export function useSaveBusiness() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['business'] })
       qc.invalidateQueries({ queryKey: ['evals'] })
+      qc.invalidateQueries({ queryKey: ['sources'] })
     },
   })
 }
@@ -1458,6 +1488,7 @@ export function useAcceptBusiness() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['business'] })
       qc.invalidateQueries({ queryKey: ['evals'] })
+      qc.invalidateQueries({ queryKey: ['sources'] })
     },
   })
 }

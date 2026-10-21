@@ -4,7 +4,7 @@ import {
   MoreHorizontal, ChevronDown, Upload, Download, Star,
   Clock, MessageCircle, CheckCircle2,
 } from 'lucide-react'
-import { Avatar, Badge, Button, Input } from '@ybot/ui'
+import { Avatar, Badge, Button, Input, Skeleton } from '@ybot/ui'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
 } from '@ybot/ui'
@@ -21,6 +21,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { chatText } from '../../lib/chat-text'
 import { claimContact, queueChat } from '../../lib/inbox-nav'
 import * as api from '../../lib/api'
+import { InboxTabs } from './InboxTabs'
 
 interface Contact {
   id: string
@@ -46,19 +47,6 @@ function formatRelativeContact(iso?: string) {
   if (h < 24) return `${h}h ago`
   return `${Math.floor(h / 24)}d ago`
 }
-
-const MOCK_CONTACTS: Contact[] = [
-  { id: '1', name: 'Alice Johnson', email: 'alice@example.com', phone: '+44 7700 900123', location: 'London, UK', channel: 'web', conversations: 4, lastSeen: '2m ago', status: 'active', tags: ['vip', 'enterprise'], company: 'Acme Corp' },
-  { id: '2', name: 'Bob Smith', email: 'bob@example.com', phone: '+44 7700 900456', channel: 'whatsapp', conversations: 2, lastSeen: '8m ago', status: 'active', company: 'Globex Ltd' },
-  { id: '3', name: 'Carol White', email: 'carol@example.com', channel: 'web', conversations: 6, lastSeen: '1h ago', status: 'active', tags: ['vip'] },
-  { id: '4', name: 'David Lee', email: 'david@example.com', phone: '+44 7700 900789', location: 'Manchester, UK', channel: 'sms', conversations: 3, lastSeen: '3h ago', status: 'inactive', company: 'Initech' },
-  { id: '5', name: 'Eve Brown', email: 'eve@example.com', channel: 'web', conversations: 1, lastSeen: '1d ago', status: 'inactive' },
-  { id: '6', name: 'Frank Moore', email: 'frank@example.com', phone: '+1 555 0100', location: 'New York, US', channel: 'email', conversations: 2, lastSeen: '2d ago', status: 'inactive', company: 'Umbrella Inc' },
-  { id: '7', name: 'Grace Park', email: 'grace@example.com', channel: 'web', conversations: 5, lastSeen: '3d ago', status: 'inactive', tags: ['enterprise'], company: 'Initech' },
-  { id: '8', name: 'Henry Kim', email: 'henry@example.com', phone: '+1 555 0200', channel: 'web', conversations: 10, lastSeen: '4d ago', status: 'inactive', tags: ['vip', 'beta'] },
-  { id: '9', name: 'Iris Chen', email: 'iris@example.com', channel: 'email', conversations: 4, lastSeen: '5d ago', status: 'inactive', company: 'Globex Ltd' },
-  { id: '10', name: 'James Liu', email: 'james@example.com', phone: '+852 9876 5432', location: 'Hong Kong', channel: 'whatsapp', conversations: 7, lastSeen: '1w ago', status: 'inactive', tags: ['enterprise'] },
-]
 
 function ChannelBadge({ ch }: { ch: string }) {
   const map: Record<string, string> = { web: 'info', whatsapp: 'success', sms: 'warning', email: 'muted' }
@@ -168,7 +156,8 @@ function ContactDetail({ contact, onClose, onOpenChat, onStart, starting }: Cont
 
 export function ContactsPage() {
   const [search, setSearch] = useState('')
-  const { data: rawContacts = [], isLoading } = useContacts(search || undefined)
+  const contactsQuery = useContacts(search || undefined)
+  const rawContacts = contactsQuery.data ?? []
   const createContact = useCreateContact()
   const deleteContact = useDeleteContact()
   const [selected, setSelected] = useState<Contact | null>(null)
@@ -243,15 +232,13 @@ export function ContactsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 py-4 shrink-0">
-        <h1 className="text-base font-semibold text-[var(--text-primary)]">Contacts</h1>
-      </div>
+      <InboxTabs />
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-surface)] shrink-0">
         <Input
           placeholder="Search contacts…"
+          aria-label="Search contacts"
           leftIcon={<Search size={13} />}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -285,7 +272,7 @@ export function ContactsPage() {
             })
           }}><Download size={13} /> Export</Button>
           <Button size="sm" className="gap-1.5" onClick={() => setShowNew(true)}>
-            <Plus size={14} /> New Contact
+            <Plus size={14} /> New contact
           </Button>
         </div>
       </div>
@@ -294,7 +281,6 @@ export function ContactsPage() {
       <div className="flex items-center gap-6 px-6 py-2.5 bg-[var(--bg-overlay)] border-b border-[var(--border)] shrink-0">
         {[
           { label: 'Total', value: filtered.length },
-          { label: 'Active today', value: filtered.filter((c) => c.status === 'active').length },
           { label: 'With email', value: filtered.filter((c) => c.email).length },
           { label: 'VIP', value: filtered.filter((c) => c.tags?.includes('vip')).length },
         ].map((s) => (
@@ -306,12 +292,26 @@ export function ContactsPage() {
         <span className="ml-auto text-xs text-[var(--text-muted)]">{filtered.length} results</span>
       </div>
 
-      {/* Table */}
+      {contactsQuery.isLoading ? (
+        <div className="space-y-2 p-6">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+      ) : contactsQuery.isError ? (
+        <ContactsMessage title="Contacts could not be loaded" body="Check your connection, then try again.">
+          <Button size="sm" variant="secondary" onClick={() => void contactsQuery.refetch()}>Retry</Button>
+        </ContactsMessage>
+      ) : filtered.length === 0 && (search || emailOnly) ? (
+        <ContactsMessage title="No contacts match" body={search ? `Nothing for “${search}”.` : 'No contact has an email address yet.'}>
+          <Button size="sm" variant="secondary" onClick={() => { setSearch(''); setEmailOnly(false) }}>Show all contacts</Button>
+        </ContactsMessage>
+      ) : filtered.length === 0 ? (
+        <ContactsMessage title="No contacts yet" body="People are added when they chat with the bot. You can also import a CSV (name, email, phone) or add one by hand.">
+          <Button size="sm" onClick={() => setShowNew(true)}>New contact</Button>
+        </ContactsMessage>
+      ) : (
       <div className="flex-1 overflow-y-auto">
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-[var(--bg-surface)] border-b border-[var(--border)] z-10">
             <tr>
-              {['Name', 'Email', 'Phone', 'Channel', 'Company', 'Conversations', 'Last seen', ''].map((h) => (
+              {['Name', 'Email', 'Phone', 'Channel', 'Company', 'Chats', 'Added', ''].map((h) => (
                 <th key={h} className="px-4 py-2.5 text-left text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -346,10 +346,7 @@ export function ContactsPage() {
                   <span className="text-xs font-medium text-[var(--text-primary)]">{c.conversations}</span>
                 </td>
                 <td className="px-4 py-2.5 text-xs text-[var(--text-muted)] whitespace-nowrap">
-                  <span className={cn('flex items-center gap-1', c.status === 'active' && 'text-[var(--success)]')}>
-                    {c.status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] inline-block" />}
-                    {c.lastSeen}
-                  </span>
+                  {c.lastSeen}
                 </td>
                 <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
@@ -364,9 +361,9 @@ export function ContactsPage() {
                       <DropdownMenuItem onClick={() => {
                         if (!botId) return
                         void createConversation.mutateAsync({ botId, contactId: c.id }).then((convo) =>
-                          createTicket.mutateAsync({ subject: `Ticket for ${c.name}`, priority: 'normal', conversationId: convo.id })
+                          createTicket.mutateAsync({ subject: `Follow up with ${c.name}`, priority: 'medium', conversationId: convo.id })
                         )
-                      }}>Create ticket</DropdownMenuItem>
+                      }}>Add a task</DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem destructive onClick={() => handleDelete(c.id)}>Delete contact</DropdownMenuItem>
                     </DropdownMenuContent>
@@ -377,6 +374,7 @@ export function ContactsPage() {
           </tbody>
         </table>
       </div>
+      )}
 
       {/* Contact detail dialog */}
       <Dialog open={!!selected} onOpenChange={(o) => { if (!o) setSelected(null) }}>
@@ -436,6 +434,16 @@ export function ContactsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function ContactsMessage(props: { title: string; body: string; children?: React.ReactNode }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-16 text-center">
+      <p className="text-sm font-medium text-[var(--text-primary)]">{props.title}</p>
+      <p className="max-w-sm text-xs text-[var(--text-muted)]">{props.body}</p>
+      {props.children}
     </div>
   )
 }

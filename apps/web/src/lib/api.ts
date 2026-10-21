@@ -1,5 +1,5 @@
 import type {
-  AggregateResult, AuthProfileKind, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
+  AggregateResult, AuthProfileKind, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, KnowledgeConflict, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
   ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns,
 } from '@ybot/shared'
 import { messageForStatus } from './api-error'
@@ -265,7 +265,7 @@ export const knowledge = {
 
 // ── Conversations ─────────────────────────────────────────────────────────────
 export const conversations = {
-  list: (params?: Record<string, string>) => apiFetch<{ data: Conversation[] }>(`/conversations?${new URLSearchParams(params ?? {})}`),
+  list: (params?: Record<string, string>) => apiFetch<{ data: Conversation[]; meta?: { testRunChats: number } }>(`/conversations?${new URLSearchParams(params ?? {})}`),
   get: (id: string) => apiFetch<{ data: Conversation }>(`/conversations/${id}`),
   create: (body: { botId: string; channelId?: string; contactId?: string; environmentId?: string; message?: string }) =>
     apiFetch<{ data: Conversation }>('/conversations', { method: 'POST', body: JSON.stringify(body) }),
@@ -438,7 +438,11 @@ export interface BusinessView {
   profile: BusinessProfile | null
   issues: ProfileIssue[]
   documents: number
+  /** Other Knowledge documents that say something different from these details. */
+  conflicts: KnowledgeConflict[]
 }
+
+export interface WebsiteSourceRef { id: string; name: string; created: boolean }
 
 export interface BusinessRead {
   profile: BusinessProfile
@@ -456,7 +460,7 @@ export const business = {
   reread: (botId: string, url?: string) =>
     apiFetch<{ data: { changes: FieldChange[]; fresh: BusinessProfile } }>(`/bots/${botId}/business/reread`, { method: 'POST', body: JSON.stringify(url ? { url } : {}) }),
   accept: (botId: string, fresh: BusinessProfile, keys: string[]) =>
-    apiFetch<{ data: BusinessRead & { accepted: string[] } }>(`/bots/${botId}/business/accept`, { method: 'POST', body: JSON.stringify({ fresh, keys }) }),
+    apiFetch<{ data: BusinessRead & { accepted: string[]; websiteSource: WebsiteSourceRef | null } }>(`/bots/${botId}/business/accept`, { method: 'POST', body: JSON.stringify({ fresh, keys }) }),
 }
 
 export const memory = {
@@ -903,7 +907,7 @@ export interface ToolNote { id: string; name: string; runId?: string; ok: boolea
 /** A knowledge document a bot answer was written from. */
 export interface KnowledgeSourceRef { documentId: string; title: string; source: string }
 export interface Message { id: string; direction: string; authorKind: string; content: { text: string; internal?: boolean; tool?: ToolNote; guardrails?: GuardrailHit[]; sources?: KnowledgeSourceRef[] }; createdAt: string }
-export interface Ticket { id: string; subject: string; description?: string | null; status: string; priority: string; assignedTo?: string; tags: string[]; createdAt: string; conversation?: { contact?: Contact } }
+export interface Ticket { id: string; subject: string; description?: string | null; status: string; priority: string; assignedTo?: string; tags: string[]; createdAt: string; conversationId?: string | null; conversation?: { contact?: Contact } }
 export interface Contact { id: string; displayName?: string; email?: string; phone?: string; metadata: Record<string, unknown>; createdAt: string }
 export interface Campaign { id: string; name: string; channel: string; status: string; direction: string; subject?: string; body?: string; scheduledAt?: string; sentAt?: string; sent?: number; delivered?: number }
 export interface CampaignDelivery { id: string; contactId: string; email?: string; status: string; sentAt?: string; error?: string }

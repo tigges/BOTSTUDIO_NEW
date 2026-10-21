@@ -15,7 +15,7 @@ interface HandoverCardProps {
 const ACTIONS: Array<{ outcome: ReturnOutcome; icon: React.ReactNode; hint: string }> = [
   { outcome: 'resolved', icon: <CheckCheck size={12} />, hint: 'Close the chat as solved by the team.' },
   { outcome: 'needs_bot', icon: <Bot size={12} />, hint: 'The bot answers the guest’s next message.' },
-  { outcome: 'needs_follow_up', icon: <ClipboardList size={12} />, hint: 'Close the chat and open a follow-up ticket.' },
+  { outcome: 'needs_follow_up', icon: <ClipboardList size={12} />, hint: 'Close the chat and add a follow-up task.' },
 ]
 
 export function HandoverCard({ chat, memberName, busy, error, onHandBack }: HandoverCardProps) {

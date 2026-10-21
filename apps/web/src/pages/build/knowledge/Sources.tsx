@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import {
   BookOpen, Plus, Globe, FileText, Link2, RefreshCw,
-  CheckCircle, AlertCircle, Clock, Trash2, Loader2, Upload,
+  CheckCircle, AlertCircle, Clock, Trash2, Loader2, Upload, Building2,
 } from 'lucide-react'
 import { Button, Badge, EmptyState, Card } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
@@ -10,7 +11,9 @@ import {
   Input,
 } from '@ybot/ui'
 import { cn } from '@ybot/ui'
-import { useSources, useCreateSource, useUploadSource, useSyncSource, useDeleteSource } from '../../../lib/hooks'
+import { useSources, useCreateSource, useUploadSource, useSyncSource, useDeleteSource, useBusiness } from '../../../lib/hooks'
+
+const BUSINESS_KIND = 'business'
 
 const SUBNAV = [
   { label: 'Intents', path: '/build/knowledge/intents' },
@@ -24,6 +27,7 @@ const KIND_ICON: Record<string, React.ElementType> = {
   website: Globe,
   url: Link2,
   file: FileText,
+  [BUSINESS_KIND]: Building2,
 }
 
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error'> = {
@@ -46,6 +50,9 @@ export function SourcesPage() {
   const uploadSource = useUploadSource()
   const syncSource = useSyncSource()
   const deleteSource = useDeleteSource()
+  const { data: businessView } = useBusiness()
+  const conflictsBySource = new Map<string, number>()
+  for (const conflict of businessView?.conflicts ?? []) conflictsBySource.set(conflict.source, (conflictsBySource.get(conflict.source) ?? 0) + 1)
 
   const [showAdd, setShowAdd] = useState(false)
   const [newUrl, setNewUrl] = useState('')
@@ -148,6 +155,8 @@ export function SourcesPage() {
             const KindIcon = (KIND_ICON[src.kind] ?? Globe) as React.ElementType
             const status = src.lastSyncAt ? 'indexed' : 'processing'
             const StatusIcon = (STATUS_ICON[status] ?? Clock) as React.ElementType
+            const managed = src.kind === BUSINESS_KIND
+            const conflicts = managed ? 0 : (conflictsBySource.get(src.name) ?? 0)
             return (
               <div
                 key={src.id}
@@ -160,7 +169,18 @@ export function SourcesPage() {
                   <div className="flex items-center gap-2">
                     <p className="font-medium text-[var(--text-primary)] text-sm truncate">{src.name}</p>
                     <Badge variant={STATUS_VARIANT[status] ?? 'muted'} dot>{status}</Badge>
+                    {managed && <Badge variant="muted">Managed by Business details</Badge>}
+                    {conflicts > 0 && (
+                      <Link to="/build/business" className="text-xs font-medium text-amber-700 hover:underline">
+                        {conflicts} {conflicts === 1 ? 'passage disagrees' : 'passages disagree'} with Business details
+                      </Link>
+                    )}
                   </div>
+                  {managed && (
+                    <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                      One document per filled field, rebuilt every time Business details are saved. When another source disagrees, answers use these.
+                    </p>
+                  )}
                   <div className="flex items-center gap-3 mt-0.5">
                     {(src.config as { url?: string })?.url && (
                       <span className="text-xs text-[var(--text-muted)] truncate max-w-[200px]">
@@ -182,20 +202,26 @@ export function SourcesPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => syncSource.mutate(src.id)}
-                    title="Re-sync / Re-index"
-                    disabled={syncSource.isPending}
-                  >
-                    <RefreshCw size={13} className={cn(syncSource.isPending && 'animate-spin')} />
-                  </Button>
-                  <Button variant="ghost" size="icon-sm" onClick={() => deleteSource.mutate(src.id)} title="Delete">
-                    <Trash2 size={13} />
-                  </Button>
-                </div>
+                {managed ? (
+                  <Link to="/build/business" className="shrink-0 text-xs font-medium text-[var(--accent)] hover:underline">
+                    Edit in Business details
+                  </Link>
+                ) : (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => syncSource.mutate(src.id)}
+                      title="Re-sync / Re-index"
+                      disabled={syncSource.isPending}
+                    >
+                      <RefreshCw size={13} className={cn(syncSource.isPending && 'animate-spin')} />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" onClick={() => deleteSource.mutate(src.id)} title="Delete">
+                      <Trash2 size={13} />
+                    </Button>
+                  </div>
+                )}
               </div>
             )
           })}

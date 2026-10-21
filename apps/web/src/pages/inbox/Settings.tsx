@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { Clock, Save, ToggleLeft, ToggleRight, Loader2, Users, Zap, MessageSquare, Hand } from 'lucide-react'
 import { Button, Card } from '@ybot/ui'
 import { PlannedBadge } from '../../components/PlannedFeature'
-import { useInboxConfig, useSaveInboxConfig } from '../../lib/hooks'
+import { useCannedReplies, useCreateCannedReply, useDeleteCannedReply, useInboxConfig, useSaveInboxConfig } from '../../lib/hooks'
 import { useAppStore } from '../../store/app'
+import { InboxTabs } from './InboxTabs'
 
 interface ToggleRowProps { label: string; description: string; value: boolean; onChange: (v: boolean) => void }
 function PlannedRow({ label, description }: { label: string; description: string }) {
@@ -40,6 +41,66 @@ const DEFAULTS = {
 
 function alwaysHumanWords(text: string): string[] {
   return [...new Set(text.split('\n').map((line) => line.trim()).filter(Boolean))]
+}
+
+/** Replies agents insert by typing "/" and the shortcut in the composer. Shared by the whole team. */
+function SavedReplies() {
+  const { data: replies = [], isLoading, isError, refetch } = useCannedReplies()
+  const create = useCreateCannedReply()
+  const remove = useDeleteCannedReply()
+  const [shortcut, setShortcut] = useState('')
+  const [text, setText] = useState('')
+  const cleanShortcut = shortcut.trim().replace(/^\//, '').replace(/\s+/g, '-')
+  const taken = replies.some((reply) => reply.shortcut.replace(/^\//, '') === cleanShortcut)
+
+  async function add() {
+    if (!cleanShortcut || !text.trim() || taken) return
+    await create.mutateAsync({ shortcut: cleanShortcut, title: cleanShortcut, text: text.trim() }).catch(() => null)
+    setShortcut('')
+    setText('')
+  }
+
+  return (
+    <Card>
+      <p className="text-xs text-[var(--text-muted)] mb-3">Type “/” in a reply to insert one. Everyone on the team sees the same list.</p>
+      {isLoading ? (
+        <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><Loader2 size={12} className="animate-spin" /> Loading saved replies…</p>
+      ) : isError ? (
+        <p className="text-xs text-[var(--error)]">Saved replies could not be loaded. <button type="button" className="underline" onClick={() => refetch()}>Retry</button></p>
+      ) : replies.length === 0 ? (
+        <p className="text-xs text-[var(--text-muted)]">No saved replies yet. Add the first one below.</p>
+      ) : (
+        <div className="space-y-2">
+          {replies.map((reply) => (
+            <div key={reply.id} className="flex items-start gap-3 p-2.5 rounded-[var(--radius-md)] border border-[var(--border)]">
+              <span className="text-xs font-mono font-semibold text-[var(--accent)] bg-[var(--accent-muted)] px-1.5 py-0.5 rounded shrink-0">/{reply.shortcut.replace(/^\//, '')}</span>
+              <p className="text-xs text-[var(--text-secondary)] flex-1">{reply.text}</p>
+              <button type="button" className="text-[11px] text-[var(--text-muted)] hover:text-[var(--error)]" onClick={() => remove.mutate(reply.id)} aria-label={`Delete /${reply.shortcut}`}>Delete</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="mt-3 grid grid-cols-[140px_1fr_auto] items-start gap-2">
+        <input
+          aria-label="Shortcut"
+          placeholder="/shortcut"
+          value={shortcut}
+          onChange={(e) => setShortcut(e.target.value)}
+          className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-2 py-1.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none"
+        />
+        <input
+          aria-label="Reply text"
+          placeholder="The reply agents will send"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-2 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none"
+        />
+        <Button size="sm" variant="secondary" disabled={!cleanShortcut || !text.trim() || taken || create.isPending} onClick={() => void add()}>Add</Button>
+      </div>
+      {taken && <p className="mt-1 text-[11px] text-[var(--error)]">Shortcut: /{cleanShortcut} is already used. Pick another.</p>}
+      {create.error instanceof Error && <p className="mt-1 text-[11px] text-[var(--error)]">{create.error.message}</p>}
+    </Card>
+  )
 }
 
 const DEFAULT_AWAY = "Thanks for your message. We're currently outside our working hours and will reply when the team is back."
@@ -95,10 +156,11 @@ export function InboxSettingsPage() {
 
   return (
     <div className="flex flex-col h-full">
+      <InboxTabs />
       <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 py-4 shrink-0">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-base font-semibold text-[var(--text-primary)]">Inbox Settings</h1>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Inbox settings</h2>
             <p className="mt-0.5 text-xs text-[var(--text-muted)]">Your inbox, {displayName}. These choices apply to you on this account.</p>
           </div>
           <Button size="sm" className="gap-1.5" onClick={save} disabled={saveConfig.isPending}>
@@ -243,28 +305,12 @@ export function InboxSettingsPage() {
             </Card>
           </section>
 
-          {/* Canned responses */}
           <section>
             <div className="flex items-center gap-2 mb-3">
               <MessageSquare size={15} className="text-[var(--accent)]" />
-              <h2 className="text-sm font-semibold text-[var(--text-primary)]">Canned Responses</h2>
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">Saved replies</h2>
             </div>
-            <Card>
-              <div className="space-y-2">
-                {[
-                  { shortcut: '/greet', text: 'Hi there! Welcome to Acme Support. How can I help you today?' },
-                  { shortcut: '/thanks', text: 'Thank you for reaching out! Is there anything else I can help with?' },
-                  { shortcut: '/wait', text: 'Bear with me for a moment while I look into this for you.' },
-                  { shortcut: '/resolve', text: 'Great, I\'m glad we could resolve this. Have a wonderful day!' },
-                ].map((cr) => (
-                  <div key={cr.shortcut} className="flex items-start gap-3 p-2.5 rounded-[var(--radius-md)] border border-[var(--border)] hover:bg-[var(--bg-hover)]">
-                    <span className="text-xs font-mono font-semibold text-[var(--accent)] bg-[var(--accent-muted)] px-1.5 py-0.5 rounded shrink-0">{cr.shortcut}</span>
-                    <p className="text-xs text-[var(--text-secondary)] flex-1">{cr.text}</p>
-                  </div>
-                ))}
-                <button className="text-xs text-[var(--accent)] hover:underline mt-1">+ Add canned response</button>
-              </div>
-            </Card>
+            <SavedReplies />
           </section>
 
         </div>
