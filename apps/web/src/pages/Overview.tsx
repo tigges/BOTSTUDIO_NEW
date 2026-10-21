@@ -105,6 +105,11 @@ function Releases({ overview }: { overview: BotOverview }) {
         <CardTitle>Production releases</CardTitle>
         <Link to="/build/releases" className="text-xs text-[var(--accent)]">All releases</Link>
       </CardHeader>
+      {overview.footprint.liveRelease == null && (
+        <p className="px-4 pb-3 text-sm text-[var(--text-muted)]">
+          Production answers from the published flows. Create a release to freeze them, so a later edit never changes live chats and rolling back is one click.
+        </p>
+      )}
       <ul className="divide-y divide-[var(--border)]">
         {overview.releases.map((release) => (
           <li key={release.number} className="flex items-center gap-3 px-4 py-2.5 text-sm">
@@ -210,7 +215,9 @@ function LiveView({ overview, botId, isAdmin }: { overview: BotOverview; botId: 
 }
 
 function stageBadge(overview: BotOverview) {
-  if (overview.stage === 'live') return <Badge variant="success" dot>Live · release {overview.footprint.liveRelease}</Badge>
+  if (overview.stage === 'live') {
+    return <Badge variant="success" dot>{overview.footprint.liveRelease != null ? `Live · release ${overview.footprint.liveRelease}` : 'Live · published flows'}</Badge>
+  }
   if (overview.stage === 'building') return <Badge variant="info">Building · not published</Badge>
   return <Badge variant="muted">Not set up yet</Badge>
 }
