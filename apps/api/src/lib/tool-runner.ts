@@ -216,7 +216,7 @@ export async function runTool(tool: RunnableTool, rawArgs: Record<string, unknow
       case 'knowledge': {
         const topK = Math.min(10, Math.max(1, Number(config['topK'] ?? 4) || 4))
         const hits = await deps.searchKnowledge(String(args['query'] ?? ''), tool.tenantId, tool.botId, topK)
-        const chunks = hits.map((hit) => ({ text: hit.content, title: hit.title, source: hit.source }))
+        const chunks = hits.map((hit) => ({ text: hit.content, title: hit.title, source: hit.source, ...(hit.sourceKind === 'business' ? { confirmed: true } : {}) }))
         return finish({ ok: true, output: { found: chunks.length > 0, chunks }, attempts: 1 })
       }
       case 'workflow': {
