@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { Button, Badge, EmptyState, Card } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
+import { KNOWLEDGE_SUBNAV } from './subnav'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
   Input,
@@ -15,13 +16,6 @@ import { useSources, useCreateSource, useUploadSource, useSyncSource, useDeleteS
 
 const BUSINESS_KIND = 'business'
 
-const SUBNAV = [
-  { label: 'Intents', path: '/build/knowledge/intents' },
-  { label: 'Entities', path: '/build/knowledge/entities' },
-  { label: 'FAQs', path: '/build/knowledge/faqs' },
-  { label: 'Sources', path: '/build/knowledge/sources' },
-  { label: 'Training', path: '/build/knowledge/training' },
-]
 
 const KIND_ICON: Record<string, React.ElementType> = {
   website: Globe,
@@ -112,7 +106,7 @@ export function SourcesPage() {
             <Plus size={13} /> Add Source
           </Button>
         </div>
-        <SubNav items={SUBNAV} />
+        <SubNav items={KNOWLEDGE_SUBNAV} />
       </div>
 
       <div className="flex-1 overflow-auto p-6">

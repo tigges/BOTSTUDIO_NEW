@@ -5,18 +5,12 @@ import {
 } from 'lucide-react'
 import { Button, Badge, Card, CardHeader, CardTitle } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
+import { KNOWLEDGE_SUBNAV } from './subnav'
 import { cn } from '@ybot/ui'
 import { useTraining, useSaveTraining, useTrainingRuns } from '../../../lib/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAppStore } from '../../../store/app'
 
-const SUBNAV = [
-  { label: 'Intents', path: '/build/knowledge/intents' },
-  { label: 'Entities', path: '/build/knowledge/entities' },
-  { label: 'FAQs', path: '/build/knowledge/faqs' },
-  { label: 'Sources', path: '/build/knowledge/sources' },
-  { label: 'Training', path: '/build/knowledge/training' },
-]
 
 // ── Model catalogue ────────────────────────────────────────────────────────
 const MODEL_GROUPS: Array<{
@@ -149,7 +143,7 @@ export function TrainingPage() {
           </Button>
           </div>
         </div>
-        <SubNav items={SUBNAV} />
+        <SubNav items={KNOWLEDGE_SUBNAV} />
       </div>
 
       <div className="flex-1 overflow-auto p-6 space-y-6">

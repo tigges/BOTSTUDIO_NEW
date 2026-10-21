@@ -28,6 +28,8 @@ import { IntentsPage } from '../pages/build/knowledge/Intents'
 import { EntitiesPage } from '../pages/build/knowledge/Entities'
 import { FaqsPage } from '../pages/build/knowledge/Faqs'
 import { SourcesPage } from '../pages/build/knowledge/Sources'
+import { DocumentsPage } from '../pages/build/knowledge/Documents'
+import { SearchTestPage } from '../pages/build/knowledge/SearchTest'
 import { TrainingPage } from '../pages/build/knowledge/Training'
 import { ChatsPage } from '../pages/inbox/Chats'
 import { TicketsPage } from '../pages/inbox/Tickets'
@@ -154,11 +156,13 @@ const toolsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/t
 const evalsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/evals', component: EvalsPage })
 const businessRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/business', component: BusinessPage })
 const releasesRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/releases', component: ReleasesPage })
-const knowledgeRedirectRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge', beforeLoad: () => { throw redirect({ to: '/build/knowledge/intents' }) }, component: () => null })
+const knowledgeRedirectRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge', beforeLoad: () => { throw redirect({ to: '/build/knowledge/sources' }) }, component: () => null })
 const intentsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/intents', component: IntentsPage })
 const entitiesRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/entities', component: EntitiesPage })
 const faqsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/faqs', component: FaqsPage })
 const sourcesRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/sources', component: SourcesPage })
+const documentsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/documents', validateSearch: (search: Record<string, unknown>): { doc?: string } => (typeof search['doc'] === 'string' && search['doc'] ? { doc: search['doc'] } : {}), component: DocumentsPage })
+const searchTestRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/search', component: SearchTestPage })
 const trainingRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/training', component: TrainingPage })
 
 // ── Inbox ─────────────────────────────────────────────────────────────────────
@@ -219,6 +223,8 @@ const routeTree = rootRoute.addChildren([
     faqsRoute,
     sourcesRoute,
     trainingRoute,
+    documentsRoute,
+    searchTestRoute,
     knowledgeRedirectRoute,
     inboxRoute,
     chatsRoute,

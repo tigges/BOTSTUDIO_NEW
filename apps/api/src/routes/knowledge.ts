@@ -9,6 +9,8 @@ import { rereadWebsitePages } from '../lib/reread-website.js'
 import { enterLlmScope } from '../lib/llm-ledger.js'
 import { readPublicSite } from '../lib/public-site.js'
 import { BUSINESS_SOURCE_KIND } from '../lib/install-blueprint.js'
+import { documentQuality, textStats } from '@ybot/shared'
+import { SEARCH_MODES, documentChunks, listDocuments, runSearchTest } from '../lib/knowledge-search-test.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -105,6 +107,47 @@ export async function knowledgeRoutes(app: FastifyInstance) {
     const { botId, id } = request.params as { botId: string; id: string }
     await prisma.faq.deleteMany({ where: { id, botId, tenantId } })
     return reply.status(204).send()
+  })
+
+  // ── Documents and Search & Test ───────────────────────────────────────────
+  app.get('/:botId/knowledge/documents', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId } = request.params as { botId: string }
+    const bot = await prisma.bot.findFirst({ where: { id: botId, tenantId }, select: { id: true } })
+    if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
+    const rows = await listDocuments(tenantId, botId)
+    return {
+      data: rows.map(({ doc, row }) => ({
+        ...row,
+        quality: documentQuality({ ...row, sourceKind: row.source.kind, ...textStats(doc.content) }),
+      })),
+    }
+  })
+
+  app.get('/:botId/knowledge/documents/:id/chunks', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId, id } = request.params as { botId: string; id: string }
+    const found = await documentChunks(tenantId, botId, id)
+    if (!found) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Document not found' } })
+    return { data: found }
+  })
+
+  app.post('/:botId/knowledge/search-test', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId } = request.params as { botId: string }
+    const body = z.object({
+      query: z.string().trim().min(1, 'Type a question to search for.').max(500, 'Keep the question under 500 characters.'),
+      mode: z.enum(SEARCH_MODES).default('hybrid'),
+      topK: z.number().int().min(1, 'Top K is at least 1.').max(20, 'Top K is at most 20.').default(5),
+    }).safeParse(request.body)
+    if (!body.success) {
+      const issue = body.error.issues[0]
+      return reply.status(400).send({ error: { code: 'VALIDATION', message: `${issue?.path.join('.') || 'body'}: ${issue?.message ?? 'invalid'}` } })
+    }
+    const bot = await prisma.bot.findFirst({ where: { id: botId, tenantId }, select: { id: true } })
+    if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
+    enterLlmScope({ source: 'retrieval', tenantId, botId })
+    return { data: await runSearchTest({ ...body.data, tenantId, botId }) }
   })
 
   // ── Knowledge Sources ─────────────────────────────────────────────────────

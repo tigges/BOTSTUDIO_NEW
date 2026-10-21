@@ -1,6 +1,6 @@
 import type {
   AuthProfileKind, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, KnowledgeConflict, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
-  ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns,
+  DocumentQuality, ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns,
 } from '@ybot/shared'
 import { messageForStatus } from './api-error'
 
@@ -210,7 +210,57 @@ export const learn = {
 }
 
 // ── Knowledge ─────────────────────────────────────────────────────────────────
+export interface KnowledgeDocument {
+  id: string
+  title: string
+  status: string
+  source: { id: string; name: string; kind: string }
+  chars: number
+  chunks: number
+  embeddedChunks: number
+  updatedAt: string
+  quality: DocumentQuality
+}
+
+export interface DocumentChunks {
+  id: string
+  title: string
+  text: string
+  chunks: Array<{ id: string; content: string; embedded: boolean }>
+}
+
+export type SearchMode = 'hybrid' | 'semantic' | 'keyword'
+export type EngineState = { state: 'ok'; ms: number; hits: number } | { state: 'skipped' } | { state: 'unavailable'; ms: number; reason: string }
+
+export interface SearchTestReport {
+  query: string
+  mode: SearchMode
+  topK: number
+  engines: { embed: EngineState; semantic: EngineState; keyword: EngineState }
+  totalMs: number
+  results: Array<{
+    rank: number
+    chunkId: string | null
+    content: string
+    documentId: string
+    title: string
+    source: string
+    sourceKind: string
+    why: {
+      semantic: { rank: number; similarity: number } | null
+      keyword: { rank: number; score: number } | null
+      matchedTerms: string[]
+      fused: number | null
+      businessFirst: boolean
+    }
+  }>
+}
+
 export const knowledge = {
+  documents: (botId: string) => apiFetch<{ data: KnowledgeDocument[] }>(`/bots/${botId}/knowledge/documents`),
+  chunks: (botId: string, documentId: string) => apiFetch<{ data: DocumentChunks }>(`/bots/${botId}/knowledge/documents/${documentId}/chunks`),
+  searchTest: (botId: string, body: { query: string; mode: SearchMode; topK: number }) =>
+    apiFetch<{ data: SearchTestReport }>(`/bots/${botId}/knowledge/search-test`, { method: 'POST', body: JSON.stringify(body) }),
   intents: {
     list: (botId: string) => apiFetch<{ data: Intent[] }>(`/bots/${botId}/intents`),
     create: (botId: string, body: Partial<Intent>) => apiFetch<{ data: Intent }>(`/bots/${botId}/intents`, { method: 'POST', body: JSON.stringify(body) }),

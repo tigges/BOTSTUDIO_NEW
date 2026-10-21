@@ -3,15 +3,9 @@ import { HelpCircle, Plus, Search, Trash2, ChevronRight, Save, CheckCircle } fro
 import { Button, Input, Badge, EmptyState, Skeleton } from '@ybot/ui'
 import { cn } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
+import { KNOWLEDGE_SUBNAV } from './subnav'
 import { useFaqs, useCreateFaq, useDeleteFaq, useUpdateFaq } from '../../../lib/hooks'
 
-const SUBNAV = [
-  { label: 'Intents', path: '/build/knowledge/intents' },
-  { label: 'Entities', path: '/build/knowledge/entities' },
-  { label: 'FAQs', path: '/build/knowledge/faqs' },
-  { label: 'Sources', path: '/build/knowledge/sources' },
-  { label: 'Training', path: '/build/knowledge/training' },
-]
 
 interface Faq {
   id: string
@@ -71,7 +65,7 @@ export function FaqsPage() {
             <Plus size={13} /> New FAQ
           </Button>
         </div>
-        <SubNav items={SUBNAV} />
+        <SubNav items={KNOWLEDGE_SUBNAV} />
       </div>
 
       <div className="flex flex-1 overflow-hidden">

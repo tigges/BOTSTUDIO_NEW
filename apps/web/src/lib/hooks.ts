@@ -251,6 +251,31 @@ export function usePublishFlow() {
 }
 
 // ── Sources ───────────────────────────────────────────────────────────────────
+export function useKnowledgeDocuments() {
+  const bid = useAppStore((s) => s.selectedBotId)
+  return useQuery({
+    queryKey: ['knowledge-documents', bid],
+    enabled: !!bid && !isDemoMode(),
+    queryFn: () => api.knowledge.documents(bid!).then((r) => r.data),
+  })
+}
+
+export function useDocumentChunks(documentId: string | null) {
+  const bid = useAppStore((s) => s.selectedBotId)
+  return useQuery({
+    queryKey: ['knowledge-chunks', bid, documentId],
+    enabled: !!bid && !!documentId && !isDemoMode(),
+    queryFn: () => api.knowledge.chunks(bid!, documentId!).then((r) => r.data),
+  })
+}
+
+export function useSearchTest() {
+  const bid = useAppStore((s) => s.selectedBotId)
+  return useMutation({
+    mutationFn: (body: { query: string; mode: api.SearchMode; topK: number }) => api.knowledge.searchTest(bid ?? '', body).then((r) => r.data),
+  })
+}
+
 export function useSources() {
   const bid = botId()
   return useQuery({
