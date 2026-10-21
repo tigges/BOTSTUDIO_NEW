@@ -11,6 +11,7 @@ import { costByConversation } from '../lib/llm-ledger.js'
 import { deliverAgentReply, HELD_WHERE, returnChat, withHeldChats } from '../lib/handover.js'
 import { renderPersonalDataDeep, RETURN_OUTCOMES, toolChangesData } from '@ybot/shared'
 import { findTool, presentTool, runAndRecord } from '../lib/tools-store.js'
+import { chatsWithMessagesLike, inboxWhere, readInboxQuery } from '../lib/inbox-list.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -80,14 +81,8 @@ export async function conversationsRoutes(app: FastifyInstance) {
   app.get('/', async (request) => {
     const { tenantId } = request.user as JWT
     const q = request.query as Record<string, string>
-    const where = {
-      tenantId,
-      ...(q['botId'] ? { botId: q['botId'] } : {}),
-      ...(q['status'] ? { status: q['status'] } : {}),
-      ...(q['assignedTo'] ? { assignedTo: q['assignedTo'] } : {}),
-      ...(q['channelId'] ? { channelId: q['channelId'] } : {}),
-      ...(q['contactId'] ? { contactId: q['contactId'] } : {}),
-    }
+    const query = readInboxQuery(q)
+    const where = inboxWhere(tenantId, query, query.search ? await chatsWithMessagesLike(tenantId, query.search) : [])
     const include = {
       contact: true,
       channel: { select: { id: true, name: true, kind: true } },
@@ -99,18 +94,24 @@ export async function conversationsRoutes(app: FastifyInstance) {
     const recent = await prisma.conversation.findMany({
       where,
       include,
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { updatedAt: query.sort === 'oldest' ? 'asc' : 'desc' },
       take: parseInt(q['limit'] ?? '50'),
       skip,
     })
-    const held = q['status'] || skip
+    const held = q['status'] || skip || query.search || query.sort === 'oldest'
       ? []
       : await prisma.conversation.findMany({ where: { ...where, ...HELD_WHERE }, include, orderBy: { updatedAt: 'desc' }, take: 200 })
     const conversations = withHeldChats(recent, held)
     const data = await attachSlaLabels(conversations).catch(() => conversations.map((c) => ({ ...c, sla: null as string | null })))
     const costs = await costByConversation(data.map((c) => c.id)).catch(() => new Map())
     const viewOf = await agentViewsFor(data.map((c) => c.botId), tenantId)
-    return { data: data.map((conversation) => ({ ...presentConversation(conversation, viewOf(conversation.botId)), llm: costs.get(conversation.id) ?? null })) }
+    const testRunChats = query.testRuns === 'exclude'
+      ? await prisma.conversation.count({ where: { ...where, testRunId: { not: null } } })
+      : data.filter((c) => c.testRunId).length
+    return {
+      data: data.map((conversation) => ({ ...presentConversation(conversation, viewOf(conversation.botId)), llm: costs.get(conversation.id) ?? null })),
+      meta: { testRunChats },
+    }
   })
 
   // GET /conversations/:id
