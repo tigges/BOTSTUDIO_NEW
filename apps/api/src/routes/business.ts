@@ -20,6 +20,7 @@ import {
   blueprintById,
   blueprintCards,
   diffProfiles,
+  knowledgeConflicts,
   parseBusinessProfile,
   profileIssues,
   type Blueprint,
@@ -27,7 +28,8 @@ import {
 } from '@ybot/shared'
 import { requireRole } from '../middleware/auth.js'
 import { PublicSiteError, readPublicSite } from '../lib/public-site.js'
-import { BUSINESS_SOURCE_KIND, saveBusinessProfile } from '../lib/install-blueprint.js'
+import { BUSINESS_SOURCE_KIND, ensureWebsiteSource, saveBusinessProfile } from '../lib/install-blueprint.js'
+import { knowledgeTexts } from '../lib/knowledge-texts.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -106,14 +108,16 @@ export async function businessRoutes(app: FastifyInstance) {
     const { tenantId } = request.user as JWT
     const found = await loadBusiness(tenantId, (request.params as { botId: string }).botId)
     if (!found) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found.' } })
-    if (!found.blueprint || !found.profile) return { data: { blueprint: null, profile: null, issues: [], documents: 0 } }
+    if (!found.blueprint || !found.profile) return { data: { blueprint: null, profile: null, issues: [], documents: 0, conflicts: [] } }
     const documents = await prisma.document.count({ where: { tenantId, knowledgeSource: { botId: found.bot.id, kind: BUSINESS_SOURCE_KIND } } })
+    const conflicts = knowledgeConflicts(found.blueprint.fields, found.profile, await knowledgeTexts(tenantId, found.bot.id))
     return {
       data: {
         blueprint: card(found.blueprint),
         profile: found.profile,
         issues: profileIssues(found.blueprint.fields, found.profile),
         documents,
+        conflicts,
       },
     }
   })
@@ -167,8 +171,11 @@ export async function businessRoutes(app: FastifyInstance) {
     const fresh = body.success ? parseBusinessProfile(found.blueprint.fields, { ...(body.data.fresh as object), blueprintId: found.blueprint.id }) : null
     if (!body.success || !fresh) return reply.status(400).send({ error: { code: 'INVALID_CHANGES', message: 'Tick the changes to keep, then try again.' } })
     const keys = body.data.keys.filter((key) => found.blueprint!.fields.some((spec) => spec.key === key))
-    const profile = acceptChanges(found.profile, fresh, keys, { userId: await whoIs(sub), at: new Date().toISOString() })
+    const websiteUrl = fresh.websiteUrl || found.profile.websiteUrl
+    const accepted = acceptChanges(found.profile, fresh, keys, { userId: await whoIs(sub), at: new Date().toISOString() })
+    const profile = websiteUrl ? { ...accepted, websiteUrl } : accepted
     const saved = await saveBusinessProfile(tenantId, botId, found.blueprint, profile)
-    return { data: { profile, accepted: keys, issues: profileIssues(found.blueprint.fields, profile), ...saved } }
+    const websiteSource = keys.length ? await ensureWebsiteSource(tenantId, botId, websiteUrl) : null
+    return { data: { profile, accepted: keys, issues: profileIssues(found.blueprint.fields, profile), ...saved, websiteSource } }
   })
 }

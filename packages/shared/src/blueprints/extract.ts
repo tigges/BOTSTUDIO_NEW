@@ -56,6 +56,21 @@ export function formatUkPhone(digits: string): string {
   return `${digits.slice(0, 5)} ${digits.slice(5)}`
 }
 
+/** UK numbers in free text as 11 national digits, each with the words in front of it in the same sentence. */
+export function phoneNumbersIn(text: string): Array<{ digits: string; context: string }> {
+  return [...text.matchAll(PHONE)].flatMap((match) => {
+    const digits = nationalDigits(match[0])
+    if (!digits) return []
+    const at = match.index ?? 0
+    const before = text.slice(Math.max(0, at - 40), at).split(/[.!?\n]\s/).pop() ?? ''
+    return [{ digits, context: `${before}${match[0]}` }]
+  })
+}
+
+export function phoneDigits(raw: string): string | null {
+  return nationalDigits(raw)
+}
+
 /** The number the site repeats most; a number next to "call" or "phone" breaks a tie. */
 export function readPhone(pages: ScannedPage[]): BusinessField {
   const counts = new Map<string, { count: number; page: ScannedPage; called: boolean }>()
@@ -165,6 +180,16 @@ export function hoursFromLine(line: string): OpeningDay[] {
   if (!/am|pm/i.test(range[2]!) && close < open) close = `${String(Number(close.slice(0, 2)) + 12).padStart(2, '0')}${close.slice(2)}`
   if (!/am|pm/i.test(range[1]!) && Number(open.slice(0, 2)) < 6) open = `${String(Number(open.slice(0, 2)) + 12).padStart(2, '0')}${open.slice(2)}`
   return days.map((day) => ({ day, open, close }))
+}
+
+const DAY_SPAN = /\b(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?(?:\s*(?:-|–|—|to)\s*(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?)?\s*:?\s*(?:closed|\d{1,2}(?:[.:]\d{2})?\s*(?:am|pm)?\s*(?:-|–|—|to|until)\s*\d{1,2}(?:[.:]\d{2})?\s*(?:am|pm)?)/gi
+
+/** Day-and-time statements anywhere in flowing text, e.g. a crawled page with no line breaks. */
+export function hoursMentionedIn(text: string): Array<{ hours: OpeningDay[]; quote: string }> {
+  return [...text.matchAll(DAY_SPAN)].flatMap((match) => {
+    const hours = hoursFromLine(match[0].trim())
+    return hours.length ? [{ hours, quote: match[0].trim() }] : []
+  })
 }
 
 function hoursKey(hours: OpeningDay[]): string {

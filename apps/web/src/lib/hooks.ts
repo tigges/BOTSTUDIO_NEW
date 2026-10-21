@@ -1432,6 +1432,7 @@ export function useSaveBusiness() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['business'] })
       qc.invalidateQueries({ queryKey: ['evals'] })
+      qc.invalidateQueries({ queryKey: ['sources'] })
     },
   })
 }
@@ -1449,6 +1450,7 @@ export function useAcceptBusiness() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['business'] })
       qc.invalidateQueries({ queryKey: ['evals'] })
+      qc.invalidateQueries({ queryKey: ['sources'] })
     },
   })
 }

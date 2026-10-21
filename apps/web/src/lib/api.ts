@@ -1,5 +1,5 @@
 import type {
-  AuthProfileKind, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
+  AuthProfileKind, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, KnowledgeConflict, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
   ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns,
 } from '@ybot/shared'
 import { messageForStatus } from './api-error'
@@ -438,7 +438,11 @@ export interface BusinessView {
   profile: BusinessProfile | null
   issues: ProfileIssue[]
   documents: number
+  /** Other Knowledge documents that say something different from these details. */
+  conflicts: KnowledgeConflict[]
 }
+
+export interface WebsiteSourceRef { id: string; name: string; created: boolean }
 
 export interface BusinessRead {
   profile: BusinessProfile
@@ -456,7 +460,7 @@ export const business = {
   reread: (botId: string, url?: string) =>
     apiFetch<{ data: { changes: FieldChange[]; fresh: BusinessProfile } }>(`/bots/${botId}/business/reread`, { method: 'POST', body: JSON.stringify(url ? { url } : {}) }),
   accept: (botId: string, fresh: BusinessProfile, keys: string[]) =>
-    apiFetch<{ data: BusinessRead & { accepted: string[] } }>(`/bots/${botId}/business/accept`, { method: 'POST', body: JSON.stringify({ fresh, keys }) }),
+    apiFetch<{ data: BusinessRead & { accepted: string[]; websiteSource: WebsiteSourceRef | null } }>(`/bots/${botId}/business/accept`, { method: 'POST', body: JSON.stringify({ fresh, keys }) }),
 }
 
 export const memory = {
