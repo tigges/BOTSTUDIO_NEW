@@ -16,7 +16,7 @@ export const ANALYTICS_METRICS = [
 ] as const
 export type AnalyticsMetric = (typeof ANALYTICS_METRICS)[number]
 
-export const ANALYTICS_DIMENSIONS = ['time', 'channel', 'outcome'] as const
+export const ANALYTICS_DIMENSIONS = ['time', 'channel', 'outcome', 'agent'] as const
 export type AnalyticsDimension = (typeof ANALYTICS_DIMENSIONS)[number]
 
 export const ANALYTICS_GRANULARITIES = ['day', 'week'] as const
@@ -71,6 +71,8 @@ export interface AnalyticsSample {
   value: number
   channel: string | null
   outcome: string | null
+  /** The teammate holding the chat. */
+  agent?: string | null
 }
 
 export interface AggregateCell {
@@ -194,6 +196,7 @@ export function aggregateSamples(query: AnalyticsQuery, samples: AnalyticsSample
     if (query.dimensions.includes('time')) key.time = timeBucket(sample.at, query.granularity)
     if (query.dimensions.includes('channel')) key.channel = sample.channel ?? 'No channel'
     if (query.dimensions.includes('outcome')) key.outcome = sample.outcome ?? 'open'
+    if (query.dimensions.includes('agent')) key.agent = sample.agent ?? 'Unassigned'
     const id = JSON.stringify(key)
     const group = groups.get(id) ?? { key, values: [] }
     group.values.push(sample.value)
