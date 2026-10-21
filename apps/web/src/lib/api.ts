@@ -1,5 +1,5 @@
 import type {
-  AuthProfileKind, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, KnowledgeConflict, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
+  AggregateResult, AuthProfileKind, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, KnowledgeConflict, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
   ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns,
 } from '@ybot/shared'
 import { messageForStatus } from './api-error'
@@ -505,6 +505,7 @@ export const analytics = {
   csatTrend: (days?: number) => apiFetch<{ data: CsatTrendPoint[] }>(`/analytics/csat-trend?days=${days ?? 30}`),
   resolutionBreakdown: (botId?: string) => apiFetch<{ data: ResolutionBreakdownItem[] }>(`/analytics/resolution-breakdown${botId ? `?botId=${botId}` : ''}`),
   responseTimeByHour: () => apiFetch<{ data: ResponseTimeHourPoint[] }>('/analytics/response-time-by-hour'),
+  aggregate: (params: Record<string, string>) => apiFetch<{ data: AggregateResult }>(`/analytics/aggregate?${new URLSearchParams(params)}`),
 }
 
 export const audit = {
@@ -865,7 +866,7 @@ export const inboxTools = {
 export const dashboards = {
   list: (botId: string) =>
     apiFetch<{ data: Dashboard[] }>(`/bots/${botId}/dashboards`),
-  create: (botId: string, body: { name: string; layout?: unknown[] }) =>
+  create: (botId: string, body: { name: string; layout?: unknown[]; widgets?: Array<{ title: string; metric: string }> }) =>
     apiFetch<{ data: Dashboard }>(`/bots/${botId}/dashboards`, { method: 'POST', body: JSON.stringify(body) }),
   update: (botId: string, id: string, body: Partial<{ name: string; layout: unknown[] }>) =>
     apiFetch<{ data: unknown }>(`/bots/${botId}/dashboards/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
