@@ -569,17 +569,28 @@ export function useDeleteChannel() {
   })
 }
 
+export function useCheckChannel() {
+  const bid = botId()
+  return useMutation({
+    mutationFn: async (id: string): Promise<api.ChannelCheck> => {
+      if (isDemoMode()) return { ok: true, message: 'The provider accepted these credentials.' }
+      return api.channels.check(bid, id).then((r) => r.data)
+    },
+  })
+}
+
 export function useUpdateChannel() {
   const qc = useQueryClient()
   const bid = botId()
   return useMutation({
     mutationFn: async ({ id, ...body }: { id: string; name?: string; isActive?: boolean; config?: Record<string, unknown> }) => {
-      if (isDemoMode()) return { data: { id, ...body } }
+      if (isDemoMode()) return { data: null }
       return api.channels.update(bid, id, body)
     },
-    onSuccess: (_data, vars) => {
+    onSuccess: (result, vars) => {
+      const { config: _sent, ...plain } = vars
       qc.setQueryData(['channels', bid], (prev: api.Channel[] | undefined) =>
-        (prev ?? []).map((channel) => channel.id === vars.id ? { ...channel, ...vars } : channel),
+        (prev ?? []).map((channel) => channel.id !== vars.id ? channel : result.data ?? { ...channel, ...plain }),
       )
       if (!isDemoMode()) qc.invalidateQueries({ queryKey: ['channels', bid] })
     },

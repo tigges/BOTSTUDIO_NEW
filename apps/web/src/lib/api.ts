@@ -341,7 +341,9 @@ export const channels = {
   create: (botId: string, body: { name: string; kind: string; environmentId: string; config?: Record<string, unknown> }) =>
     apiFetch<{ data: Channel }>(`/bots/${botId}/channels`, { method: 'POST', body: JSON.stringify(body) }),
   update: (botId: string, id: string, body: Partial<{ name: string; config: Record<string, unknown>; isActive: boolean }>) =>
-    apiFetch<{ data: unknown }>(`/bots/${botId}/channels/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    apiFetch<{ data: Channel }>(`/bots/${botId}/channels/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  check: (botId: string, id: string) =>
+    apiFetch<{ data: ChannelCheck }>(`/bots/${botId}/channels/${id}/check`, { method: 'POST' }),
   delete: (botId: string, id: string) =>
     apiFetch<void>(`/bots/${botId}/channels/${id}`, { method: 'DELETE' }),
 }
@@ -907,7 +909,9 @@ export interface Contact { id: string; displayName?: string; email?: string; pho
 export interface Campaign { id: string; name: string; channel: string; status: string; direction: string; subject?: string; body?: string; scheduledAt?: string; sentAt?: string; sent?: number; delivered?: number }
 export interface CampaignDelivery { id: string; contactId: string; email?: string; status: string; sentAt?: string; error?: string }
 export interface Template { id: string; name: string; channel: string; approvalStatus: string; content: Record<string, unknown>; variables: string[] }
-export interface Channel { id: string; name: string; kind: string; environmentId?: string; config: Record<string, unknown>; isActive: boolean; botId: string; createdAt: string }
+/** Secrets never come back from the API; secretsSet names the ones that are saved. */
+export interface Channel { id: string; name: string; kind: string; environmentId?: string; config: Record<string, unknown>; secretsSet?: string[]; isActive: boolean; botId: string; createdAt: string }
+export interface ChannelCheck { ok: boolean; message: string; status?: number; field?: string }
 export interface Webhook { id: string; url: string; events: string[]; isActive: boolean; createdAt: string; successRate?: number | null; secret?: string | null }
 export interface WebhookDelivery { id: string; event: string; statusCode: number; success: boolean; durationMs: number; error?: string | null; createdAt: string }
 export interface CannedReply { id: string; shortcut: string; title: string; text: string }

@@ -13,12 +13,12 @@ import { useChannels, useCreateChannel, useDeleteChannel, useUpdateChannel } fro
 import { ApiError, type Channel } from '../../lib/api'
 import { useAppStore } from '../../store/app'
 import { WidgetSetupWizard } from './WidgetSetupWizard'
+import { ChannelConnectionDialog, embedCode, widgetTestUrl } from './ChannelConnectionDialog'
+import { apiErrorField, type ConnectionTab } from '../../lib/channel-connection'
 import { slotsForEnvironment, type ChannelKind, type ChannelStatus } from '../../lib/channel-slots'
 import {
   CHANNEL_FIELDS,
-  CHANNEL_WEBHOOK_HINT,
   channelConfigReady,
-  channelWebhookPath,
   isOptionalChannelKind,
 } from '@ybot/shared'
 
@@ -37,36 +37,6 @@ const KIND_META: Record<ChannelKind, { label: string; description: string; icon:
   telegram:  { label: 'Telegram',      description: 'A Telegram bot.',                                   icon: <Send size={22} /> },
   phone:     { label: 'Phone',         description: 'A voice number for calls.',                         icon: <Phone size={22} /> },
   email:     { label: 'Email',         description: 'Receive and reply to mail.',                        icon: <Mail size={22} /> },
-}
-
-function getEmbedCode(channelId: string): string {
-  const base = typeof window !== 'undefined' ? window.location.origin : ''
-  return `<!-- BotStudio chat widget -->
-<script src="${base}/api/v1/widget.js?id=${channelId}" async></script>
-
-<!-- Optional customisation -->
-<script>
-  window.YBotTitle = 'Chat with us';
-  window.YBotAccentColor = '#6366f1';
-</script>`
-}
-
-function getTestUrl(channelId: string): string {
-  const base = typeof window !== 'undefined' ? window.location.origin : ''
-  return `${base}/api/v1/widget-test/${channelId}`
-}
-
-function getDemoUrl(channelId: string): string {
-  const base = typeof window !== 'undefined' ? window.location.origin : ''
-  return `${base}/api/v1/public/demo/${channelId}`
-}
-
-function originBase(): string {
-  return typeof window !== 'undefined' ? window.location.origin : ''
-}
-
-function webhookUrl(kind: string): string {
-  return `${originBase()}${channelWebhookPath(kind)}`
 }
 
 function fieldsFor(kind: string) {
@@ -90,7 +60,7 @@ export function ChannelsPage() {
   const selectedEnv = useAppStore((s) => s.selectedEnv)
   const environments = useAppStore((s) => s.bots.find((bot) => bot.id === s.selectedBotId)?.environments) ?? []
   const envId = environments.find((env) => env.kind === selectedEnv)?.id
-  const { data: channels = [], isLoading } = useChannels()
+  const { data: channels = [], isLoading, isError, refetch, isRefetching } = useChannels()
   const createChannel = useCreateChannel()
   const deleteChannel = useDeleteChannel()
   const updateChannel = useUpdateChannel()
@@ -99,61 +69,34 @@ export function ChannelsPage() {
   const recommended = slots.filter((slot) => slot.status === 'idle')
 
   const [selected, setSelected]     = useState<Channel | null>(null)
-  const [editName, setEditName]     = useState('')
-  const [editActive, setEditActive] = useState(true)
+  const [selectedTab, setSelectedTab] = useState<ConnectionTab>('overview')
   const [connecting, setConnecting] = useState<ChannelKind | null>(null)
   const [showEmbed, setShowEmbed]   = useState<Channel | null>(null)
   const [copied, setCopied]         = useState(false)
   const [showWizard, setShowWizard] = useState(false)
   const [formConfig, setFormConfig] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState('')
+  const [formField, setFormField] = useState<string | null>(null)
+  const [pageError, setPageError] = useState('')
 
   function setField(key: string, value: string) {
     setFormConfig((current) => ({ ...current, [key]: value }))
   }
 
-  function openSettings(ch: Channel) {
+  function openSettings(ch: Channel, tab: ConnectionTab = 'overview') {
+    setSelectedTab(tab)
     setSelected(ch)
-    setEditName(ch.name)
-    setEditActive(ch.isActive)
-    setFormError('')
-    const next: Record<string, string> = {}
-    for (const field of fieldsFor(ch.kind)) {
-      next[field.key] = String(ch.config[field.key] ?? '')
-    }
-    setFormConfig(next)
   }
 
   function openConnect(kind: ChannelKind) {
     setConnecting(kind)
     setFormConfig({})
     setFormError('')
-  }
-
-  async function handleSaveSettings() {
-    if (!selected) return
-    const patch: Parameters<typeof updateChannel.mutateAsync>[0] = {
-      id: selected.id,
-      name: editName.trim() || selected.name,
-      isActive: selected.kind === 'web' ? true : editActive,
-    }
-    if (isOptionalChannelKind(selected.kind)) {
-      if (!channelConfigReady(selected.kind, formConfig)) {
-        setFormError('Fill every field for this channel.')
-        return
-      }
-      patch.config = { ...formConfig }
-    }
-    try {
-      await updateChannel.mutateAsync(patch)
-      setSelected(null)
-    } catch (err) {
-      setFormError(errorMessage(err))
-    }
+    setFormField(null)
   }
 
   function copyEmbed(channelId: string) {
-    navigator.clipboard?.writeText(getEmbedCode(channelId)).catch(() => {})
+    navigator.clipboard?.writeText(embedCode(channelId)).catch(() => {})
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -167,28 +110,29 @@ export function ChannelsPage() {
     setFormError('')
     try {
       const existing = slots.find((slot) => slot.kind === connecting)?.channel
-      if (existing) {
-        await updateChannel.mutateAsync({ id: existing.id, config: { ...formConfig }, isActive: false })
-      } else {
-        await createChannel.mutateAsync({
+      const saved = existing
+        ? (await updateChannel.mutateAsync({ id: existing.id, config: { ...formConfig }, isActive: false })).data
+        : await createChannel.mutateAsync({
           name: KIND_META[connecting].label,
           kind: connecting,
           environmentId: envId,
           config: { ...formConfig },
         })
-      }
       setConnecting(null)
+      if (saved) openSettings(saved, 'deployment')
     } catch (err) {
       setFormError(errorMessage(err))
+      setFormField(err instanceof ApiError ? apiErrorField(err.body) : null)
     }
   }
 
   async function toggleActive(channel: Channel, next: boolean) {
     if (channel.kind === 'web') return
     try {
+      setPageError('')
       await updateChannel.mutateAsync({ id: channel.id, isActive: next })
     } catch (err) {
-      setFormError(errorMessage(err))
+      setPageError(`${channel.name}: ${errorMessage(err)}`)
     }
   }
 
@@ -220,7 +164,7 @@ export function ChannelsPage() {
                 <>
                   <button
                     title="Test widget in new tab"
-                    onClick={(e) => { e.stopPropagation(); window.open(getTestUrl(channel.id), '_blank') }}
+                    onClick={(e) => { e.stopPropagation(); window.open(widgetTestUrl(channel.id), '_blank') }}
                     className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-[var(--bg-overlay)] text-[var(--text-muted)] hover:text-[var(--accent)] transition-all"
                   >
                     <FlaskConical size={14} />
@@ -244,9 +188,10 @@ export function ChannelsPage() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => openSettings(channel)}><Pencil size={13} /> Settings</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openSettings(channel)}><Pencil size={13} /> Open connection</DropdownMenuItem>
+                  {slot.kind !== 'web' && <DropdownMenuItem onClick={() => openSettings(channel, 'deployment')}><Send size={13} /> Webhook and routing</DropdownMenuItem>}
                   {slot.kind === 'web' && <DropdownMenuItem onClick={() => { setShowWizard(true) }}><Wand2 size={13} /> Setup wizard</DropdownMenuItem>}
-                  {slot.kind === 'web' && <DropdownMenuItem onClick={() => window.open(getTestUrl(channel.id), '_blank')}><FlaskConical size={13} /> Test widget</DropdownMenuItem>}
+                  {slot.kind === 'web' && <DropdownMenuItem onClick={() => window.open(widgetTestUrl(channel.id), '_blank')}><FlaskConical size={13} /> Test widget</DropdownMenuItem>}
                   {slot.kind === 'web' && <DropdownMenuItem onClick={() => setShowEmbed(channel)}><Code2 size={13} /> Embed code</DropdownMenuItem>}
                   {slot.kind !== 'web' && <DropdownMenuSeparator />}
                   {slot.kind !== 'web' && (
@@ -326,7 +271,18 @@ export function ChannelsPage() {
           </div>
         )}
 
-        {!isLoading && (
+        {pageError && <p className="mb-4 text-xs text-[var(--error)]" role="alert">{pageError}</p>}
+
+        {!isLoading && isError && (
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+            <p className="text-sm text-[var(--text-secondary)]">Channels did not load. Check your connection and try again.</p>
+            <Button size="sm" variant="secondary" disabled={isRefetching} onClick={() => { void refetch() }}>
+              {isRefetching ? 'Retrying…' : 'Retry'}
+            </Button>
+          </div>
+        )}
+
+        {!isLoading && !isError && (
           <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {connected.map((slot) => renderChannelCard(slot))}
@@ -344,146 +300,17 @@ export function ChannelsPage() {
         )}
       </div>
 
-      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) setSelected(null) }}>
-        {selected && (() => {
-          const kind = (selected.kind in KIND_META ? selected.kind : 'web') as ChannelKind
-          const meta = KIND_META[kind]
-          return (
-            <DialogContent size="md">
-              <DialogHeader><DialogTitle>{meta.label} settings</DialogTitle></DialogHeader>
-              <DialogBody className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-1.5 block">Channel name</label>
-                  <input
-                    className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveSettings() }}
-                  />
-                </div>
-
-                {selected.kind === 'web' ? (
-                  <div className="flex items-center justify-between p-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)]">
-                    <div className="flex items-center gap-3">
-                      <span className="p-2 rounded-[var(--radius-md)] bg-[var(--accent-muted)] text-[var(--accent)]">
-                        {meta.icon}
-                      </span>
-                      <div>
-                        <p className="text-sm font-medium text-[var(--text-primary)]">Always on</p>
-                        <p className="text-xs text-[var(--text-muted)]">Connected and active. Guests do not wait on a wizard.</p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                <div className="flex items-center justify-between p-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)]">
-                  <div className="flex items-center gap-3">
-                    <span className={cn('p-2 rounded-[var(--radius-md)]', editActive ? 'bg-[var(--accent-muted)] text-[var(--accent)]' : 'bg-[var(--bg-overlay)] text-[var(--text-muted)]')}>
-                      {meta.icon}
-                    </span>
-                    <div>
-                      <p className="text-sm font-medium text-[var(--text-primary)]">Channel active</p>
-                      <p className="text-xs text-[var(--text-muted)]">{editActive ? 'Accepting new conversations' : 'Connected, but idle until you turn it on'}</p>
-                    </div>
-                  </div>
-                  <button
-                    role="switch"
-                    aria-checked={editActive}
-                    onClick={() => setEditActive((v) => !v)}
-                    className={cn(
-                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none',
-                      editActive ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
-                    )}
-                  >
-                    <span className={cn('pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform', editActive ? 'translate-x-4' : 'translate-x-0')} />
-                  </button>
-                </div>
-                )}
-
-                {selected.kind === 'web' && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Embed code</label>
-                      <Button variant="ghost" size="sm" className="gap-1.5 h-6 text-xs" onClick={() => { setSelected(null); setShowEmbed(selected) }}>
-                        <Code2 size={11} /> View full
-                      </Button>
-                    </div>
-                    <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2">
-                      <code className="text-[11px] text-[var(--text-muted)] font-mono break-all">…/widget.js?id={selected.id}</code>
-                    </div>
-                  </div>
-                )}
-
-                {isOptionalChannelKind(selected.kind) && (
-                  <div className="space-y-3">
-                    {fieldsFor(selected.kind).map((field) => (
-                      <div key={field.key}>
-                        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1 block">{field.label}</label>
-                        <input
-                          className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 font-mono"
-                          placeholder={field.placeholder}
-                          type={field.secret ? 'password' : 'text'}
-                          autoComplete="off"
-                          value={formConfig[field.key] ?? ''}
-                          onChange={(e) => setField(field.key, e.target.value)}
-                        />
-                        <p className="text-[11px] text-[var(--text-muted)] mt-1">{field.hint}</p>
-                      </div>
-                    ))}
-                    <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] p-3 space-y-1">
-                      <p className="text-xs font-semibold text-[var(--text-secondary)]">Webhook URL</p>
-                      <code className="text-[11px] font-mono text-[var(--text-muted)] break-all select-all">
-                        {webhookUrl(selected.kind)}
-                      </code>
-                      <p className="text-[11px] text-[var(--text-muted)]">{CHANNEL_WEBHOOK_HINT[selected.kind]}</p>
-                    </div>
-                    {formError && <p className="text-xs text-[var(--error)]">{formError}</p>}
-                  </div>
-                )}
-
-                {selected.kind === 'web' && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Live preview</label>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" className="gap-1.5 h-6 text-xs" onClick={() => window.open(getDemoUrl(selected.id), '_blank')}>
-                          🌐 Demo site
-                        </Button>
-                        <Button variant="ghost" size="sm" className="gap-1.5 h-6 text-xs" onClick={() => window.open(getTestUrl(selected.id), '_blank')}>
-                          <FlaskConical size={11} /> Widget only
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="relative rounded-[var(--radius-md)] border border-[var(--border)] overflow-hidden bg-[#f8fafc]" style={{ height: 300 }}>
-                      <iframe
-                        key={selected.id}
-                        src={getTestUrl(selected.id)}
-                        title="Widget preview"
-                        className="w-full h-full border-0"
-                        sandbox="allow-scripts allow-same-origin allow-forms"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <p className="text-xs text-[var(--text-muted)]">Channel ID: <code className="font-mono bg-[var(--bg-overlay)] px-1 rounded">{selected.id}</code></p>
-                </div>
-              </DialogBody>
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setSelected(null)}>Cancel</Button>
-                {selected.kind === 'web' && (
-                  <Button variant="ghost" className="gap-1.5" onClick={() => { setSelected(null); window.open(getTestUrl(selected.id), '_blank') }}>
-                    <FlaskConical size={14} /> Test Widget
-                  </Button>
-                )}
-                <Button onClick={handleSaveSettings} disabled={updateChannel.isPending}>
-                  {updateChannel.isPending ? 'Saving…' : 'Save changes'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          )
-        })()}
-      </Dialog>
+      {selected && (
+        <ChannelConnectionDialog
+          key={selected.id}
+          channel={channels.find((row) => row.id === selected.id) ?? selected}
+          kindLabel={KIND_META[(selected.kind in KIND_META ? selected.kind : 'web') as ChannelKind].label}
+          environmentName={environments.find((env) => env.id === selected.environmentId)?.name ?? selectedEnv}
+          initialTab={selectedTab}
+          onClose={() => setSelected(null)}
+          onShowEmbed={() => { const channel = selected; setSelected(null); setShowEmbed(channel) }}
+        />
+      )}
 
       <Dialog open={!!showEmbed} onOpenChange={(o) => { if (!o) setShowEmbed(null) }}>
         {showEmbed && (
@@ -495,7 +322,7 @@ export function ChannelsPage() {
               </p>
               <div className="relative">
                 <pre className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] p-4 text-xs text-[var(--text-secondary)] font-mono overflow-x-auto leading-relaxed whitespace-pre-wrap">
-                  {getEmbedCode(showEmbed.id)}
+                  {embedCode(showEmbed.id)}
                 </pre>
                 <button
                   onClick={() => copyEmbed(showEmbed.id)}
@@ -519,13 +346,14 @@ export function ChannelsPage() {
             <DialogHeader><DialogTitle>Connect {KIND_META[connecting].label}</DialogTitle></DialogHeader>
             <DialogBody className="space-y-4">
               <p className="text-sm text-[var(--text-secondary)]">
-                BotStudio checks these credentials, then the channel stays off until you turn it on.
+                Create the connection first: BotStudio checks these credentials and saves them, and the channel stays off until you turn it on. Then register the webhook with {KIND_META[connecting].label}; the Deployment tab opens with the URL and routing key.
               </p>
               {fieldsFor(connecting).map((field) => (
                 <div key={field.key}>
                   <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">{field.label}</label>
                   <input
-                    className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 font-mono"
+                    className={cn('w-full rounded-[var(--radius-md)] border bg-[var(--bg-overlay)] px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 font-mono', formField === field.key ? 'border-[var(--error)] ring-2 ring-[var(--error)]/30' : 'border-[var(--border)]')}
+                    aria-invalid={formField === field.key}
                     placeholder={field.placeholder}
                     type={field.secret ? 'password' : 'text'}
                     autoComplete="off"
@@ -535,13 +363,6 @@ export function ChannelsPage() {
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">{field.hint}</p>
                 </div>
               ))}
-              <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] p-3 space-y-1">
-                <p className="text-xs font-semibold text-[var(--text-secondary)]">Webhook URL</p>
-                <code className="text-[11px] font-mono text-[var(--text-muted)] break-all select-all">
-                  {webhookUrl(connecting)}
-                </code>
-                <p className="text-[11px] text-[var(--text-muted)]">{isOptionalChannelKind(connecting) ? CHANNEL_WEBHOOK_HINT[connecting] : ''}</p>
-              </div>
               {formError && <p className="text-xs text-[var(--error)]">{formError}</p>}
             </DialogBody>
             <DialogFooter>

@@ -119,7 +119,7 @@ export async function conversationsRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string }
     const convo = await prisma.conversation.findFirst({
       where: { id, tenantId },
-      include: { contact: true, channel: true, messages: { orderBy: { createdAt: 'asc' } }, labels: { include: { label: true } }, tickets: true },
+      include: { contact: true, channel: { select: { id: true, name: true, kind: true } }, messages: { orderBy: { createdAt: 'asc' } }, labels: { include: { label: true } }, tickets: true },
     })
     if (!convo) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
     const [labeled] = await attachSlaLabels([convo]).catch(() => [{ ...convo, sla: null as string | null }])
