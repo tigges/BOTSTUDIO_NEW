@@ -8,13 +8,10 @@ import {
   Megaphone,
   BarChart3,
   Settings,
-  Settings2,
   Plug,
   Database,
   Globe,
   Users,
-  Contact,
-  Ticket,
   FileText,
   Repeat2,
   Server,
@@ -32,6 +29,8 @@ export interface NavSection {
   label: string
   icon: LucideIcon
   path: string
+  /** Path prefix that keeps the item highlighted, when it differs from `path`. */
+  match?: string
   badge?: string
   subItems?: Array<{
     id: string
@@ -66,6 +65,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Knowledge',
         icon: Brain,
         path: '/build/knowledge/sources',
+        match: '/build/knowledge',
         subItems: [
           { id: 'kb-sources', label: 'Sources', path: '/build/knowledge/sources' },
           { id: 'kb-documents', label: 'Documents', path: '/build/knowledge/documents' },
@@ -79,12 +79,8 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: 'Inbox',
     items: [
-      { id: 'inbox', label: 'Inbox', icon: MessageSquare, path: '/inbox/chats' },
-      { id: 'inbox-tickets', label: 'Tickets', icon: Ticket, path: '/inbox/tickets' },
-      { id: 'inbox-contacts', label: 'Contacts', icon: Contact, path: '/inbox/contacts' },
-      { id: 'inbox-settings', label: 'Inbox Settings', icon: Settings2, path: '/inbox/settings' },
+      { id: 'inbox', label: 'Inbox', icon: MessageSquare, path: '/inbox/chats', match: '/inbox' },
     ],
   },
   {
