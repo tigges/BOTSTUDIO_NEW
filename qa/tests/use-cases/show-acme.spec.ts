@@ -20,7 +20,7 @@ test('the Acme studio pages open without changes', { tag: '@smoke' }, async ({ p
 
   await page.goto('/inbox/chats')
   await expectNoCrash(page)
-  await page.goto('/inbox/tickets')
+  await page.goto('/inbox/tasks')
   await expectNoCrash(page)
 
   const login = await request.post('/api/v1/auth/login', {
@@ -54,6 +54,6 @@ test.fixme('show the Acme demo journey', { tag: '@smoke', annotation: ACME_SEED_
   await expect(page.getByText('Bob Smith').first()).toBeVisible()
   await expect(page.getByText(/arrived damaged/i)).toBeVisible()
 
-  await page.goto('/inbox/tickets')
+  await page.goto('/inbox/tasks')
   await expect(page.getByText('Feature request: bulk export')).toBeVisible()
 })
