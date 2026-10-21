@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Outlet, useNavigate } from '@tanstack/react-router'
 import { NavRail } from './NavRail'
 import { TopBar } from './TopBar'
+import { CommandPalette } from './CommandPalette'
 import { useAppStore } from '../store/app'
 import { apiFetch } from '../lib/api'
 import type { Bot } from '../store/app'
@@ -13,6 +14,7 @@ function savedDarkMode(): boolean {
 export function AppShell() {
   const [collapsed, setCollapsed] = useState(false)
   const [darkMode, setDarkMode] = useState(savedDarkMode)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const navigate = useNavigate()
   const { bots, setBots, setBotsLoading, setBotsError, clearAuth } = useAppStore()
 
@@ -53,11 +55,13 @@ export function AppShell() {
         <TopBar
           darkMode={darkMode}
           onToggleDark={() => setDarkMode((d) => !d)}
+          onOpenPalette={() => setPaletteOpen(true)}
         />
         <main className="min-h-0 flex-1 overflow-auto">
           <Outlet />
         </main>
       </div>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   )
 }
