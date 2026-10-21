@@ -22,7 +22,7 @@ import { channelWebhookRoutes } from './routes/channel-webhooks.js'
 import { optimizationRoutes } from './routes/optimizations.js'
 import { workflowsRoutes } from './routes/workflows.js'
 import { dashboardsRoutes } from './routes/dashboards.js'
-import { installLlmLedger, withLlmScope } from './lib/llm-ledger.js'
+import { installLlmLedger } from './lib/llm-ledger.js'
 import { setTurnBroadcast } from './lib/turn-pipeline.js'
 import { systemRoutes } from './routes/system.js'
 import { cannedRoutes, reportsRoutes, databaseRoutes, integrationsRoutes, INTEGRATION_CATALOG } from './routes/studio.js'
@@ -43,6 +43,7 @@ import { businessRoutes } from './routes/business.js'
 import { assertProductionSecrets } from './lib/production-secrets.js'
 import { KEY_PREFIX, getValkey } from './lib/valkey.js'
 import { SESSION_COOKIE, adoptLegacySessionCookie } from './lib/session-cookie.js'
+import { applyDemoData, demoSeedOnBoot } from './lib/demo-boot.js'
 
 installConsoleScrubbing()
 assertProductionSecrets()
@@ -166,14 +167,14 @@ setTurnBroadcast(broadcastToTenant)
 try {
   await app.listen({ port: PORT, host: HOST })
   console.log(`API running on http://${HOST}:${PORT}`)
-  import('./scripts/demo-program.js')
-    .then((mod) => withLlmScope({ source: 'authoring' }, () => mod.applyDemoProgram()))
-    .then((result) => console.log('[demo-program]', JSON.stringify(result)))
-    .catch((err) => console.warn('[demo-program]', err instanceof Error ? err.message : err))
-  import('./scripts/ensure-demos.js')
-    .then((mod) => mod.ensureBellaBenchmark())
-    .then((result) => console.log('[bella-benchmark]', JSON.stringify(result)))
-    .catch((err) => console.warn('[bella-benchmark]', err instanceof Error ? err.message : err))
+  if (demoSeedOnBoot()) {
+    void applyDemoData((label, result, failed) => {
+      if (failed) console.warn(`[${label}]`, result)
+      else console.log(`[${label}]`, JSON.stringify(result))
+    })
+  } else {
+    console.log('[startup] DEMO_SEED_ON_BOOT=false: demo data is not re-applied')
+  }
   import('./lib/integrations.js')
     .then((mod) => mod.moveLegacyIntegrationKeys(INTEGRATION_CATALOG))
     .then((result) => { if (result.moved) console.log('[integrations] moved plain-text keys into Auth Profiles', JSON.stringify(result)) })

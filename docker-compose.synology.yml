@@ -34,6 +34,9 @@ services:
       # Set to a Slack incoming-webhook URL (or any HTTP endpoint) to receive
       # a "BotStudio API is live at vX.Y.Z" notification on every container start.
       DEPLOY_WEBHOOK_URL: ${DEPLOY_WEBHOOK_URL:-}
+      # app.botstudio.uk is the demo environment: Live QA and the scheduled
+      # test runs expect the demo companies, so they are re-applied on start.
+      DEMO_SEED_ON_BOOT: ${DEMO_SEED_ON_BOOT:-true}
     # Label lets Watchtower target this container by scope
     labels:
       - "com.centurylinklabs.watchtower.scope=botstudio"

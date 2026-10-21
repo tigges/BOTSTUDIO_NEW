@@ -25,6 +25,9 @@ x-api-env: &api-env
   # Seals Auth Profile secrets. Changing it means re-entering every secret.
   SECRETS_KEY:    ${SECRETS_KEY:-}
   TOOLS_ALLOW_PRIVATE_NETWORK: ${TOOLS_ALLOW_PRIVATE_NETWORK:-false}
+  # Re-apply the demo companies on every API start. Off for a customer
+  # install; run apps/api/dist/scripts/apply-demos.js once instead.
+  DEMO_SEED_ON_BOOT: ${DEMO_SEED_ON_BOOT:-false}
   FRONTEND_URL:   ${FRONTEND_URL:-http://localhost}
   # LLM (provide at least one). Tried in order: Gemini, Claude, OpenAI, Groq, then Ollama.
   # LLM_PROVIDER (gemini | claude | ollama | openai | groq) moves one to the front.
