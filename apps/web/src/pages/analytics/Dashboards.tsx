@@ -10,7 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useDashboards, useCreateDashboard, useDeleteDashboard, useReports, useCreateReport, useRunReport, useDeleteReport, useAnalyticsOverview } from '../../lib/hooks'
+import { useDashboards, useCreateDashboard, useDeleteDashboard, useReports, useCreateReport, useRunReport, useDeleteReport } from '../../lib/hooks'
+import { AnalyticsFilterBar, MetricCard, useAnalyticsScope } from '../../components/analytics/AnalyticsScope'
+import { DASHBOARD_TEMPLATES, templateWidgets, widgetMetric } from '../../lib/dashboard-widgets'
 import { useAppStore } from '../../store/app'
 import type { Dashboard } from '../../lib/api'
 
@@ -25,15 +27,6 @@ const DASHBOARD_ICONS: Record<string, React.ReactNode> = {
   agent: <UserCheck size={20} />,
   csat:  <ThumbsUp size={20} />,
   inbox: <MessageSquare size={20} />,
-}
-
-function metricValue(metric: string, overview: { totalConversations: number; totalContacts: number; resolutionRate: number | null; botHandledPct: number | null } | undefined) {
-  if (!overview) return '—'
-  if (metric === 'totalConversations') return overview.totalConversations.toLocaleString()
-  if (metric === 'totalContacts') return overview.totalContacts.toLocaleString()
-  if (metric === 'resolutionRate') return overview.resolutionRate == null ? '—' : `${overview.resolutionRate.toFixed(1)}%`
-  if (metric === 'botHandledPct') return overview.botHandledPct == null ? '—' : `${overview.botHandledPct}%`
-  return '—'
 }
 
 function DashboardCard({
@@ -100,12 +93,13 @@ export function DashboardsPage() {
   const [newTemplate, setNewTemplate] = useState('blank')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
-  const { data: overview } = useAnalyticsOverview()
+  const scope = useAnalyticsScope()
   const openDash = dashboards.find((dash) => dash.id === openId) ?? null
 
   async function handleCreate() {
     if (!newName.trim()) return
-    await createDashboard.mutateAsync({ name: newName.trim() })
+    const created = await createDashboard.mutateAsync({ name: newName.trim(), widgets: templateWidgets(newTemplate) })
+    setOpenId(created.id)
     setShowNew(false)
     setNewName('')
   }
@@ -150,17 +144,25 @@ export function DashboardsPage() {
 
         {openDash && (
           <section className="mb-6 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-surface)] p-5">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">{openDash.name}</h2>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">These numbers are the same chats as the overview.</p>
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {(openDash.widgets ?? []).map((widget) => (
-                <div key={widget.id} className="rounded-[var(--radius-md)] border border-[var(--border)] px-4 py-3">
-                  <p className="text-xs text-[var(--text-muted)]">{widget.title}</p>
-                  <p className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">
-                    {metricValue(String(widget.config?.metric ?? ''), overview)}
-                  </p>
-                </div>
-              ))}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">{openDash.name}</h2>
+              <AnalyticsFilterBar scope={scope} />
+            </div>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">Same numbers and filters as the overview. The filters stay in the link, so you can share this view.</p>
+            {(openDash.widgets ?? []).length === 0 && <p className="mt-4 text-xs text-[var(--text-muted)]">This dashboard has no widgets yet. Pick a template when you create a dashboard to start with a set.</p>}
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {(openDash.widgets ?? []).map((widget) => {
+                const metric = widgetMetric(widget.config)
+                return metric
+                  ? <MetricCard key={widget.id} scope={scope} metric={metric} title={widget.title} />
+                  : (
+                    <div key={widget.id} className="rounded-[var(--radius-md)] border border-dashed border-[var(--border)] px-4 py-3">
+                      <p className="text-xs text-[var(--text-muted)]">{widget.title}</p>
+                      <p className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">—</p>
+                      <p className="mt-1 text-[11px] text-[var(--text-muted)]">Not a chat metric. See Inbox → Contacts for contact counts.</p>
+                    </div>
+                  )
+              })}
             </div>
           </section>
         )}
@@ -199,12 +201,7 @@ export function DashboardsPage() {
             <div>
               <label className="text-xs font-medium text-[var(--text-muted)] mb-2 block">Start from a template</label>
               <div className="grid grid-cols-2 gap-2">
-                {[
-                  { id: 'blank', label: 'Blank dashboard', icon: <LayoutDashboard size={16} /> },
-                  { id: 'bot', label: 'Bot performance', icon: <BarChart3 size={16} /> },
-                  { id: 'agent', label: 'Agent efficiency', icon: <UserCheck size={16} /> },
-                  { id: 'csat', label: 'CSAT analysis', icon: <ThumbsUp size={16} /> },
-                ].map((t) => (
+                {DASHBOARD_TEMPLATES.map((t) => (
                   <button
                     key={t.id}
                     onClick={() => setNewTemplate(t.id)}
@@ -215,7 +212,7 @@ export function DashboardsPage() {
                         : 'border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
                     )}
                   >
-                    {t.icon} {t.label}
+                    <LayoutDashboard size={16} /> {t.label}
                   </button>
                 ))}
               </div>

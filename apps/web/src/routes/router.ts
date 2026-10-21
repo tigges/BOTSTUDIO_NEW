@@ -40,6 +40,7 @@ import { TemplatesPage } from '../pages/engage/Templates'
 import { AnalyticsOverviewPage } from '../pages/analytics/Overview'
 import { DashboardsPage } from '../pages/analytics/Dashboards'
 import { ReportsPage } from '../pages/analytics/Reports'
+import { readAnalyticsSearch } from '../lib/analytics-filters'
 import { ChannelsPage } from '../pages/configure/Channels'
 import { OptimizationsPage } from '../pages/configure/Optimizations'
 import { IntegrationsPage } from '../pages/configure/Integrations'
@@ -180,8 +181,8 @@ const templatesRoute = createRoute({ getParentRoute: () => appRoute, path: '/eng
 const engageRoute = createRoute({ getParentRoute: () => appRoute, path: '/engage', beforeLoad: () => { throw redirect({ to: '/engage/campaigns' }) }, component: () => null })
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
-const analyticsRoute = createRoute({ getParentRoute: () => appRoute, path: '/analytics', component: AnalyticsOverviewPage })
-const dashboardsRoute = createRoute({ getParentRoute: () => appRoute, path: '/analytics/dashboards', component: DashboardsPage })
+const analyticsRoute = createRoute({ getParentRoute: () => appRoute, path: '/analytics', validateSearch: readAnalyticsSearch, component: AnalyticsOverviewPage })
+const dashboardsRoute = createRoute({ getParentRoute: () => appRoute, path: '/analytics/dashboards', validateSearch: readAnalyticsSearch, component: DashboardsPage })
 const reportsRoute = createRoute({ getParentRoute: () => appRoute, path: '/analytics/reports', component: ReportsPage })
 
 // ── Configure ─────────────────────────────────────────────────────────────────
