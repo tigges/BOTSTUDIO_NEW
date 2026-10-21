@@ -1,8 +1,3 @@
----
-description: BotStudio product rules — decisions that apply to every feature. Derived from the console rebuild brief and the Kore.ai Artemis teardown (docs/competitive/kore-artemis-teardown.md).
-alwaysApply: true
----
-
 # BotStudio product rules
 
 BotStudio is a hybrid agent workforce platform: AI agents and human agents work the same conversation. A chat starts with the bot, the bot hands over, a human finishes it in the Inbox with every bot turn already in the thread. Nothing in the architecture may make that hard.
@@ -71,3 +66,10 @@ BotStudio is a hybrid agent workforce platform: AI agents and human agents work 
 
 ## Writing style for UI copy
 - Name things by what the user recognises, not how the system is built. Active voice. Errors say what went wrong and how to fix it, naming the field, node or step.
+
+## Cursor Cloud specific instructions
+- Install with `pnpm install --frozen-lockfile` (Node 22, pnpm 10). Build everything with `pnpm exec turbo run build`.
+- Build `packages/shared` and the runtime package after editing them; the API and web consume their `dist`.
+- Tests: `pnpm test` in `apps/api` and `apps/web` (or `pnpm exec turbo run test`). Typecheck a package with `pnpm exec tsc --noEmit -p .`.
+- Live QA runs Playwright against https://app.botstudio.uk: `pnpm test:live`. Demo logins are in `qa/tests/helpers.ts`; `demo@bella.com` is the read-only check account.
+- Every merge to `main` deploys to the Synology host through GHCR and Watchtower. The compose files, `Caddyfile` and `.env.production` on the host are copied there by hand, so a change to them only takes effect after someone follows `docs/deploy-synology.md`. Code must keep working with the host files that are already there.

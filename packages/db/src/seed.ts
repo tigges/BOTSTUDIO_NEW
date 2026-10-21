@@ -255,7 +255,7 @@ async function main() {
     prisma.faq.create({ data: { tenantId: tenant.id, botId: bot.id, question: 'Can I change my plan?', answer: 'Absolutely! Upgrade or downgrade anytime from Account > Billing. Upgrades are prorated and take effect immediately. Downgrades apply at your next renewal date.', tags: ['plans', 'billing', 'upgrade'] } }),
     prisma.faq.create({ data: { tenantId: tenant.id, botId: bot.id, question: 'Is my data secure?', answer: 'Yes. We are SOC 2 Type II certified, GDPR compliant, and use AES-256 encryption at rest. All traffic is TLS 1.3. Your data is never sold or shared. See our Security page for details.', tags: ['security', 'privacy', 'data'] } }),
     prisma.faq.create({ data: { tenantId: tenant.id, botId: bot.id, question: 'Do you have a mobile app?', answer: 'We have iOS and Android apps for agents to manage conversations on the go. The web widget your customers use is also fully mobile-responsive.', tags: ['mobile', 'app'] } }),
-    prisma.faq.create({ data: { tenantId: tenant.id, botId: bot.id, question: 'How do I integrate with my CRM?', answer: 'We offer native integrations with HubSpot, Salesforce, and Zendesk. For others, use our Zapier app or REST API/webhooks. Setup guides are in our docs at docs.ybot.io.', tags: ['integrations', 'crm', 'api'] } }),
+    prisma.faq.create({ data: { tenantId: tenant.id, botId: bot.id, question: 'How do I integrate with my CRM?', answer: 'We offer native integrations with HubSpot, Salesforce, and Zendesk. For others, use our Zapier app or REST API/webhooks. Setup guides are in our docs.', tags: ['integrations', 'crm', 'api'] } }),
   ])
 
   const [source1, source2] = await Promise.all([
@@ -380,7 +380,7 @@ async function main() {
   await Promise.all([
     prisma.webhook.create({ data: { tenantId: tenant.id, url: 'https://hooks.zapier.com/hooks/catch/12345/abc', events: ['conversation.created', 'message.received', 'conversation.resolved'], isActive: true } }),
     prisma.webhook.create({ data: { tenantId: tenant.id, url: 'https://api.hubspot.com/webhooks/v3/receive', events: ['contact.created', 'conversation.created'], isActive: true } }),
-    prisma.webhook.create({ data: { tenantId: tenant.id, url: 'https://n8n.acme.io/webhook/ybot-tickets', events: ['ticket.created', 'ticket.updated', 'agent.assigned'], isActive: false } }),
+    prisma.webhook.create({ data: { tenantId: tenant.id, url: 'https://n8n.acme.io/webhook/botstudio-tickets', events: ['ticket.created', 'ticket.updated', 'agent.assigned'], isActive: false } }),
   ])
   console.log(`✅ 3 webhooks`)
 

@@ -323,7 +323,7 @@ export const DEMO_WEBHOOKS = [
     events: ['contact.created', 'conversation.created'],
     isActive: true, status: 'active', successRate: 100, lastTriggered: '45m ago',
     createdAt: '2 months ago' },
-  { id: 'wh3', url: 'https://n8n.acme.io/webhook/ybot-tickets',
+  { id: 'wh3', url: 'https://n8n.acme.io/webhook/botstudio-tickets',
     events: ['ticket.created', 'ticket.updated'],
     isActive: false, status: 'error', successRate: 54, lastTriggered: '3h ago',
     createdAt: '1 month ago' },

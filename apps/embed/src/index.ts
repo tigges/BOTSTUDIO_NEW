@@ -24,7 +24,7 @@
   })()
 
   if (!channelId) {
-    console.warn('[YBot Widget] No channelId — add ?id=YOUR_CHANNEL_ID to the script src.')
+    console.warn('[BotStudio widget] No channelId — add ?id=YOUR_CHANNEL_ID to the script src.')
     return
   }
 

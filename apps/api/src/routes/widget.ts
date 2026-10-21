@@ -54,7 +54,7 @@ const WIDGET_INLINE_JS = /* js */`
   var channelId='';
   if(script){try{var u=new URL(script.src);channelId=u.searchParams.get('id')||u.searchParams.get('channelId')||'';}catch(e){}}
   if(!channelId)channelId=window.YBotChannelId||'';
-  if(!channelId){console.warn('[YBot Widget] No channelId');return;}
+  if(!channelId){console.warn('[BotStudio widget] No channelId');return;}
   var API_BASE='/api/v1';
   if(script){try{var u=new URL(script.src);API_BASE=u.protocol+'//'+u.host+'/api/v1';}catch(e){}}
   var ACCENT=window.YBotAccentColor||'#6366f1';

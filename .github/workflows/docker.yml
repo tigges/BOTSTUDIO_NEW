@@ -150,4 +150,4 @@ jobs:
           SHORT_SHA="${GITHUB_SHA::7}"
           curl -s -o /dev/null -X POST "$HOOK_URL" \
             -H "Content-Type: application/json" \
-            -d "{\"text\":\"📦 *YBot images pushed to GHCR* — tag \`${IMAGE_TAG}\` · build #${{ github.run_number }} · \`${SHORT_SHA}\`\n• API: \`${API_IMAGE}:${IMAGE_TAG}\`\n• Web: \`${WEB_IMAGE}:${IMAGE_TAG}\`\n• <${RUN_URL}|View CI run> — Watchtower will deploy to AVIORI within 5 min\"}"
+            -d "{\"text\":\"📦 *BotStudio images pushed to GHCR* — tag \`${IMAGE_TAG}\` · build #${{ github.run_number }} · \`${SHORT_SHA}\`\n• API: \`${API_IMAGE}:${IMAGE_TAG}\`\n• Web: \`${WEB_IMAGE}:${IMAGE_TAG}\`\n• <${RUN_URL}|View CI run> — Watchtower will deploy to AVIORI within 5 min\"}"

@@ -12,7 +12,7 @@ const gitSha     = process.env['VITE_GIT_SHA']     ?? 'dev'
 const buildDate  = process.env['VITE_BUILD_DATE']  ?? new Date().toISOString()
 
 export default defineConfig({
-  // GitHub Pages serves from /YAI/; Docker/self-hosted serves from /.
+  // GitHub Pages serves from /<repository name>/; Docker/self-hosted serves from /.
   // Override with VITE_BASE_PATH env var at build time.
   base: process.env.VITE_BASE_PATH ?? '/',
   plugins: [

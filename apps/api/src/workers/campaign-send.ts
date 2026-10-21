@@ -46,7 +46,7 @@ function buildContactWhere(tenantId: string, filters: CampaignFilters): Prisma.C
 // ── Optional SendGrid integration ─────────────────────────────────────────────
 async function trySendEmail(to: string, subject: string, html: string): Promise<boolean> {
   const key = process.env['SENDGRID_API_KEY']
-  const from = process.env['SENDGRID_FROM_EMAIL'] ?? process.env['FROM_EMAIL'] ?? 'noreply@ybot.io'
+  const from = process.env['SENDGRID_FROM_EMAIL'] ?? process.env['FROM_EMAIL'] ?? 'noreply@botstudio.uk'
   if (!key) return false
   try {
     const res = await fetch('https://api.sendgrid.com/v3/mail/send', {

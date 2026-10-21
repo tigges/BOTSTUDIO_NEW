@@ -40,7 +40,7 @@ jobs:
         env:
           VITE_DEMO_MODE: "true"
           VITE_API_URL: "/api/v1"
-          VITE_BASE_PATH: "/YAI/"
+          VITE_BASE_PATH: "/${{ github.event.repository.name }}/"
           VITE_APP_VERSION: ${{ github.ref_name == 'main' && '1.1.0' || github.ref_name }}
           VITE_BUILD_NUMBER: ${{ github.run_number }}
           VITE_GIT_SHA: ${{ github.sha }}

@@ -59,7 +59,7 @@ const MOCK_WEBHOOKS: Webhook[] = [
     status: 'active', successRate: 100, lastTriggered: '45m ago', createdAt: '2 months ago',
   },
   {
-    id: 'WH-003', url: 'https://n8n.acme.io/webhook/ybot-tickets', events: ['ticket.created', 'ticket.updated', 'agent.assigned'],
+    id: 'WH-003', url: 'https://n8n.acme.io/webhook/botstudio-tickets', events: ['ticket.created', 'ticket.updated', 'agent.assigned'],
     status: 'error', successRate: 54, lastTriggered: '3h ago', createdAt: '1 month ago',
   },
   {
