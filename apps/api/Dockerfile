@@ -53,7 +53,7 @@ COPY --from=deps /app/ ./
 COPY --from=builder /app/packages/shared/dist  packages/shared/dist/
 COPY --from=builder /app/packages/llm/dist     packages/llm/dist/
 COPY --from=builder /app/packages/db/dist      packages/db/dist/
-COPY --from=builder /app/apps/runtime/dist     apps/runtime/dist/
+COPY --from=builder /app/packages/runtime/dist packages/runtime/dist/
 COPY --from=builder /app/apps/api/dist         apps/api/dist/
 COPY apps/api/docker-entrypoint.sh ./docker-entrypoint.sh
 COPY apps/api/migrate.sh ./migrate.sh

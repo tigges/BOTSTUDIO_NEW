@@ -89,7 +89,7 @@ jobs:
             # The time of the last commit that can change the web image. A push
             # that leaves these paths alone then produces the same image ID, so
             # Watchtower leaves the web container running.
-            EPOCH="$(git log -1 --format=%ct -- apps/web apps/runtime packages package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json turbo.json)"
+            EPOCH="$(git log -1 --format=%ct -- apps/web packages package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json turbo.json)"
             echo "epoch=${EPOCH}" >> "$GITHUB_OUTPUT"
           fi
 
