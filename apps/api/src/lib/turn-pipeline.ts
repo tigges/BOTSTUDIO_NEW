@@ -75,6 +75,8 @@ export interface TurnResult {
   ended: boolean
   /** held: a person has the chat and the bot said nothing. handover: the bot just passed it on. */
   path: 'journey' | 'name' | 'answer' | 'none' | 'held' | 'handover' | 'guardrail'
+  /** The open question's choices, for channels that show them as buttons or a numbered list. */
+  choices?: string[]
 }
 
 /** A person has the chat, so the guest waits for their reply. */
@@ -178,7 +180,8 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
     if (journey.handover) return handOver(journey.handover, 'journey', journey.messages)
     if (journey.handled) {
       const text = journey.messages.filter((line) => line.trim()).join('\n\n')
-      if (text) return reply(text, { ended: Boolean(journey.ended), path: 'journey' })
+      const choices = !journey.ended ? journey.waitingFor?.choices?.filter((choice) => choice.trim()) : undefined
+      if (text) return reply(text, { ended: Boolean(journey.ended), path: 'journey', ...(choices?.length ? { choices } : {}) })
       return { text: '', ended: Boolean(journey.ended), path: 'journey' }
     }
   } catch (err) {

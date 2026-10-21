@@ -20,7 +20,7 @@ import { triggerRules } from '../lib/automation-engine.js'
 import { appBuildLabel, BELLA_PUBLIC_CHANNEL, resolveDemoChannel } from '../lib/demo-page.js'
 import { visitorTurn } from '../lib/widget-open.js'
 import { loadPublicChannel } from '../lib/web-channels.js'
-import { streamDoneEvent } from '../lib/widget-rating.js'
+import { streamDoneEvent, webChoices } from '../lib/widget-rating.js'
 import { withLlmScope } from '../lib/llm-ledger.js'
 import { noteRunChat, runForChat, TEST_RUN_HEADER } from '../lib/test-runs.js'
 import { firstDelivery } from '../lib/inbound-dedupe.js'
@@ -118,11 +118,16 @@ const WIDGET_INLINE_JS = /* js */`
   }
   function render(){
     msgArea.innerHTML='';
-    messages.forEach(function(m){
+    messages.forEach(function(m,idx){
       var row=mk('div');css(row,{display:'flex',justifyContent:m.role==='user'?'flex-end':'flex-start'});
       var bub=mk('div');css(bub,{maxWidth:'80%',padding:'8px 12px',borderRadius:m.role==='user'?'14px 14px 2px 14px':'14px 14px 14px 2px',background:m.role==='user'?ACCENT:'#f3f4f6',color:m.role==='user'?'#fff':'#111',fontSize:'14px',lineHeight:'1.5',whiteSpace:'pre-wrap',wordBreak:'break-word'});
       fillChat(bub,m.text+(m.streaming?'\u258b':''));
       row.appendChild(bub);msgArea.appendChild(row);
+      if(m.replies&&m.replies.length&&idx===messages.length-1&&!m.streaming){
+        var chips=mk('div');css(chips,{display:'flex',flexWrap:'wrap',gap:'6px'});
+        m.replies.forEach(function(label){var c=mk('button');c.textContent=label;css(c,{background:'#fff',border:'1px solid '+ACCENT,color:ACCENT,borderRadius:'999px',padding:'5px 12px',fontSize:'13px',cursor:'pointer',fontFamily:'inherit'});c.onclick=function(){m.replies=null;postChat(label);};chips.appendChild(c);});
+        msgArea.appendChild(chips);
+      }
     });
     renderCsatCard();
     msgArea.scrollTop=msgArea.scrollHeight;
@@ -155,7 +160,7 @@ const WIDGET_INLINE_JS = /* js */`
       var lines=buf.split('\\n');buf=lines.pop()||'';
       for(var i=0;i<lines.length;i++){
         var line=lines[i];
-        if(line.startsWith('data: ')){try{var d=JSON.parse(line.slice(6));if(d.conversationId)conversationId=d.conversationId;if(d.chunk){botText+=d.chunk;updMsg(bi,botText,true);}if(d.done){live=!!d.live;updMsg(bi,botText,false,!!d.ended);}}catch(e){}}
+        if(line.startsWith('data: ')){try{var d=JSON.parse(line.slice(6));if(d.conversationId)conversationId=d.conversationId;if(d.chunk){botText+=d.chunk;updMsg(bi,botText,true);}if(d.done){live=!!d.live;if(messages[bi])messages[bi].replies=d.replies||null;updMsg(bi,botText,false,!!d.ended);}}catch(e){}}
       }
     }
     if(conversationId)watchReplies(live);
@@ -508,7 +513,9 @@ export async function widgetRoutes(app: FastifyInstance) {
         opening: !visitor.showVisitor,
         onChunk: (chunk) => send({ chunk }),
       })
-      send(streamDoneEvent(turn.ended, withPerson(turn)))
+      const choices = webChoices(turn.ended || withPerson(turn) ? undefined : turn.choices)
+      if (choices.extra) send({ chunk: choices.extra })
+      send(streamDoneEvent(turn.ended, withPerson(turn), choices.replies))
     } catch (err) {
       request.log.error({ err, conversationId, channelId }, 'widget turn failed')
       send({ chunk: ANSWER_FAILED })

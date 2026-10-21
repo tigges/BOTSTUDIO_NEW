@@ -794,6 +794,31 @@ test('a journey that reaches its end resolves the test chat by the bot', async (
   assert.equal(done.state.outcome, 'contained_resolved')
 })
 
+test('choices reach the channel, and a numbered answer picks the choice', async () => {
+  const chapter: { name: string; graph: FlowGraph } = {
+    name: 'Welcome',
+    graph: {
+      nodes: [
+        { id: 'start', data: { kind: 'trigger_start', label: 'Start', config: {} } },
+        { id: 'ask', data: { kind: 'ask_question', label: 'Which?', config: { question: 'Which treatment?', variable: 'treatment', choices: ['Clean', 'Whitening', 'Check-up'] } } },
+        { id: 'say', data: { kind: 'send_message', label: 'Noted', config: { text: 'Booked for {{treatment}}.' } } },
+        { id: 'end', data: { kind: 'end_flow', label: 'End', config: {} } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'ask' },
+        { id: 'e2', source: 'ask', target: 'say' },
+        { id: 'e3', source: 'say', target: 'end' },
+      ],
+    },
+  }
+  const open = await pipelineTurn('', undefined, { chapters: [chapter] })
+  assert.equal(open.text, 'Which treatment?')
+  assert.deepEqual(open.choices, ['Clean', 'Whitening', 'Check-up'])
+  const picked = await pipelineTurn('2', open.state, { chapters: [chapter] })
+  assert.equal(picked.text, 'Booked for Whitening.')
+  assert.equal(picked.choices, undefined)
+})
+
 test('a test turn never changes the state it was given', async () => {
   const open = await pipelineTurn('', undefined)
   const frozen = JSON.stringify(open.state)

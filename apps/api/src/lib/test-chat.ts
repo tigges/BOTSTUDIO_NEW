@@ -67,6 +67,8 @@ export interface TestTurn {
   text: string
   path: TurnResult['path']
   ended: boolean
+  /** The open question's choices, as channels show them. */
+  choices?: string[]
   chapter: string
   state: TestChatState
   /** Tools the journey ran this turn. Tools that change data are skipped, not run. */
@@ -299,6 +301,7 @@ export async function runTestTurn(input: TestTurnInput, overrides: Partial<TestC
     text: result.text,
     path: result.path,
     ended: result.ended,
+    ...(result.choices ? { choices: result.choices } : {}),
     chapter: chapterOf(state, input.startChapter),
     state,
     tools,

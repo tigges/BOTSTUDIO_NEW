@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto'
 import { SessionMachine, acceptedHoursOffer, hoursChapterName, copyJumpVariables, missingChapterLine, hearChapter, offerOnMap, isSmallTalk, isTopicSwitch, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn, basicAct, basicsReply } from '@ybot/runtime'
 import type { Session, SessionVariables, FlowGraph, ToolCallResult } from '@ybot/runtime'
 import { prisma } from '@ybot/db'
-import { CATALOG_ENTITY, catalogFromValues, type HandoverRequest, type StudioCatalog } from '@ybot/shared'
+import { CATALOG_ENTITY, catalogFromValues, numberedChoice, type HandoverRequest, type StudioCatalog } from '@ybot/shared'
 import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
 import { newestByFlow, pickWorkingCopy } from './entry-flow.js'
 import { runFlowTurn } from './flow-turn.js'
@@ -197,7 +197,8 @@ export async function runJourney(store: JourneyStore, opts: {
   tenantId: string
   userText: string
 }): Promise<FlowRunResult> {
-  const { conversationId, botId, tenantId, userText } = opts
+  const { conversationId, botId, tenantId } = opts
+  let { userText } = opts
   const named = await store.nameTurn(userText)
   const waiting = named.thanks ? await store.loadSession() : null
   if (nameThanksEndsTurn(named.thanks, waiting?.status)) {
@@ -210,6 +211,8 @@ export async function runJourney(store: JourneyStore, opts: {
   const environmentLabel = convo.environmentLabel
 
   let fsRecord = await store.loadSession()
+  const offered = asRecord(fsRecord?.waitingFor)['choices']
+  userText = numberedChoice(Array.isArray(offered) ? offered.map(String) : undefined, userText) ?? userText
   let active = fsRecord
     ? await store.version(fsRecord.flowVersionId)
     : await store.entry()
