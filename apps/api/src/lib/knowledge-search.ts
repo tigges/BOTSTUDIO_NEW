@@ -9,6 +9,8 @@ export interface KnowledgeHit {
   documentId: string
   title: string
   source: string
+  /** "business" for the Business details source, which outranks every other source. */
+  sourceKind: string
 }
 
 /** What a knowledge answer stores on its message, so the Inbox can show where it came from. */
@@ -26,7 +28,7 @@ async function vectorHits(query: string, tenantId: string, botId: string, topK: 
     const vector = result.embeddings[0]
     if (!vector || vector.length === 0) return []
     return await (prisma.$queryRawUnsafe as Raw)(
-      `SELECT dc.content, d.id AS "documentId", d.title, ks.name AS source
+      `SELECT dc.content, d.id AS "documentId", d.title, ks.name AS source, ks.kind AS "sourceKind"
          FROM "document_chunks" dc
          JOIN "documents" d ON dc."documentId" = d.id
          JOIN "knowledge_sources" ks ON d."knowledgeSourceId" = ks.id
@@ -52,7 +54,7 @@ async function keywordHits(query: string, tenantId: string, botId: string, topK:
   if (!terms) return []
   try {
     return await (prisma.$queryRawUnsafe as Raw)(
-      `SELECT d.content, d.id AS "documentId", d.title, ks.name AS source
+      `SELECT d.content, d.id AS "documentId", d.title, ks.name AS source, ks.kind AS "sourceKind"
          FROM "documents" d
          JOIN "knowledge_sources" ks ON d."knowledgeSourceId" = ks.id
         WHERE d."tenantId" = $2 AND ks."botId" = $3 AND d.status <> 'failed'
@@ -66,10 +68,25 @@ async function keywordHits(query: string, tenantId: string, botId: string, topK:
   }
 }
 
+export const BUSINESS_KIND = 'business'
+const BUSINESS_SLOTS = 2
+
+/**
+ * Business details passages among the candidates go first (at most two), then the
+ * rest in search order. A website page that still shows old hours cannot push the
+ * confirmed hours out of the answer.
+ */
+export function preferBusiness(candidates: KnowledgeHit[], topK: number): KnowledgeHit[] {
+  const business = candidates.filter((hit) => hit.sourceKind === BUSINESS_KIND).slice(0, BUSINESS_SLOTS)
+  const rest = candidates.filter((hit) => !business.includes(hit))
+  return [...business, ...rest].slice(0, topK)
+}
+
 /** Closest passages for one bot: embeddings first, keywords when nothing is embedded. */
 export async function searchKnowledgeHits(query: string, tenantId: string, botId: string, topK = 4): Promise<KnowledgeHit[]> {
-  const hits = await vectorHits(query, tenantId, botId, topK)
-  return hits.length ? hits : keywordHits(query, tenantId, botId, topK)
+  const pool = topK * 2
+  const hits = await vectorHits(query, tenantId, botId, pool)
+  return preferBusiness(hits.length ? hits : await keywordHits(query, tenantId, botId, pool), topK)
 }
 
 /** Closest knowledge chunks for one bot. Empty when nothing matches. */
@@ -84,7 +101,11 @@ export function sourcesOf(hits: KnowledgeHit[]): KnowledgeSourceRef[] {
   return [...seen.values()]
 }
 
-export function knowledgeBlock(chunks: string[]): string {
-  if (chunks.length === 0) return ''
-  return `\n\n--- KNOWLEDGE BASE ---\n${chunks.map((chunk, i) => `[${i + 1}] ${chunk}`).join('\n\n')}\n--- END KNOWLEDGE BASE ---\n\nAnswer using only this context. If unknown, say so.`
+export function knowledgeBlock(hits: Array<Pick<KnowledgeHit, 'content' | 'sourceKind'>>): string {
+  if (hits.length === 0) return ''
+  const passages = hits.map((hit, i) => `[${i + 1}]${hit.sourceKind === BUSINESS_KIND ? ' (Business details, confirmed by the business)' : ''} ${hit.content}`)
+  const precedence = hits.some((hit) => hit.sourceKind === BUSINESS_KIND)
+    ? ' If a Business details passage and another passage disagree (hours, phone number, prices), use the Business details passage.'
+    : ''
+  return `\n\n--- KNOWLEDGE BASE ---\n${passages.join('\n\n')}\n--- END KNOWLEDGE BASE ---\n\nAnswer using only this context. If unknown, say so.${precedence}`
 }
