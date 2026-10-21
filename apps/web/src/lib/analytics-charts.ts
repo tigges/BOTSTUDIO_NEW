@@ -1,4 +1,4 @@
-import type { AggregateRow } from '@ybot/shared'
+import { timeBucket, type AggregateRow, type AnalyticsGranularity } from '@ybot/shared'
 
 export interface VolumePoint { time: string; total: number; contained: number; escalated: number; abandoned: number; open: number }
 
@@ -10,9 +10,23 @@ function bucketOf(outcome: string | undefined): keyof Omit<VolumePoint, 'time' |
   return 'open'
 }
 
-/** conversations by [time, outcome] → one point per time bucket. */
-export function volumeByTime(rows: AggregateRow[]): VolumePoint[] {
-  const points = new Map<string, VolumePoint>()
+/** Every bucket in the range, so a day without chats is a measured zero instead of a gap. */
+export function bucketsIn(range: { from: string; to: string }, granularity: AnalyticsGranularity): string[] {
+  const out: string[] = []
+  const step = granularity === 'week' ? 7 : 1
+  const end = new Date(range.to)
+  for (let at = new Date(range.from); at < end; at = new Date(at.getTime() + step * 86_400_000)) {
+    const bucket = timeBucket(at, granularity)
+    if (out[out.length - 1] !== bucket) out.push(bucket)
+  }
+  const last = timeBucket(new Date(end.getTime() - 1), granularity)
+  if (out[out.length - 1] !== last) out.push(last)
+  return out
+}
+
+/** conversations by [time, outcome] → one point per time bucket; pass `buckets` to fill empty ones with zero. */
+export function volumeByTime(rows: AggregateRow[], buckets: string[] = []): VolumePoint[] {
+  const points = new Map<string, VolumePoint>(buckets.map((time) => [time, { time, total: 0, contained: 0, escalated: 0, abandoned: 0, open: 0 }]))
   for (const row of rows) {
     const time = row.key.time ?? ''
     const point = points.get(time) ?? { time, total: 0, contained: 0, escalated: 0, abandoned: 0, open: 0 }

@@ -8,7 +8,7 @@ import {
 import { SubNav } from '../../components/SubNav'
 import { AnalyticsFilterBar, MetricCard, useAnalyticsScope, type AnalyticsScope } from '../../components/analytics/AnalyticsScope'
 import { useAggregate } from '../../lib/hooks'
-import { channelLines, endings, shortDay, volumeByTime } from '../../lib/analytics-charts'
+import { bucketsIn, channelLines, endings, shortDay, volumeByTime } from '../../lib/analytics-charts'
 import { RANGE_OPTIONS } from '../../lib/analytics-filters'
 
 const SUBNAV = [
@@ -73,7 +73,8 @@ export function AnalyticsOverviewPage() {
   const byChannel = useAggregate(scope.params({ metric: 'conversations', dimensions: ['channel'] }))
   const containedByChannel = useAggregate(scope.params({ metric: 'contained_rate', dimensions: ['channel'] }))
 
-  const volumePoints = volumeByTime(volume.data?.rows ?? []).map((p) => ({ ...p, label: shortDay(p.time) }))
+  const volumeBuckets = volume.data ? bucketsIn(volume.data.query.range, volume.data.query.granularity) : []
+  const volumePoints = volume.data?.rows.length ? volumeByTime(volume.data.rows, volumeBuckets).map((p) => ({ ...p, label: shortDay(p.time) })) : []
   const endingSummary = endings(ended.data?.rows ?? [])
   const csatPoints = (csat.data?.rows ?? []).map((r) => ({ label: shortDay(r.key.time ?? ''), score: r.value == null ? null : Math.round(r.value * 1000) / 10, ratings: r.denominator }))
   const replyPoints = (reply.data?.rows ?? []).map((r) => ({ label: shortDay(r.key.time ?? ''), seconds: r.value == null ? null : Math.round(r.value / 100) / 10, answered: r.denominator }))
@@ -178,7 +179,7 @@ export function AnalyticsOverviewPage() {
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-sm text-[var(--text-primary)] font-medium">{ch.channel}</span>
                           <span className="text-xs text-[var(--text-muted)]">
-                            {ch.chats} chats · {formatMetric('contained_rate', ch.contained)} contained{ch.finished ? ` of ${ch.finished} finished` : ''}
+                            {ch.chats} chat{ch.chats === 1 ? '' : 's'} · {formatMetric('contained_rate', ch.contained)} contained{ch.finished ? ` of ${ch.finished} finished` : ''}
                           </span>
                         </div>
                         <div className="h-2 w-full rounded-full bg-[var(--bg-overlay)] overflow-hidden">
