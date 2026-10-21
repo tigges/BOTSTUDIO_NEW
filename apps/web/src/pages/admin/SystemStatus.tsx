@@ -133,7 +133,7 @@ export function SystemStatusPage() {
     : '—'
 
   const release = data?.version ?? buildInfo
-  const attention = data?.secretProblems ?? []
+  const attention = [...(data?.background?.problems ?? []), ...(data?.secretProblems ?? [])]
   const runningCount = data?.containers.filter((c) => c.state === 'running').length ?? 0
   const totalCount = data?.containers.length ?? 0
 
@@ -235,6 +235,17 @@ export function SystemStatusPage() {
                   )}
                   {data?.services.redis && (
                     <ServiceCard label="Redis / Valkey" icon={Radio} ok={data.services.redis.ok} latencyMs={data.services.redis.latencyMs} />
+                  )}
+                  {data?.background && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-2 text-[var(--text-secondary)]">
+                        <StatusDot ok={data.background.workers.length > 0} />
+                        Background workers
+                      </span>
+                      <span className="font-mono text-[var(--text-primary)]" title={data.background.workers.map((w) => w.id).join(', ')}>
+                        {data.background.workers.length} running
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>

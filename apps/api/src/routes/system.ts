@@ -5,6 +5,8 @@ import * as os from 'node:os'
 import * as http from 'node:http'
 import { DEFAULT_MODELS, currentModelId, llmChain } from '@ybot/llm'
 import { isKnownDefault, productionSecretProblems } from '../lib/production-secrets.js'
+import { backgroundProblems, liveWorkers, processRole } from '../background.js'
+import { queueHealth } from '../queues.js'
 
 function llmOrder(): string {
   const links = llmChain()
@@ -142,11 +144,14 @@ export async function systemRoutes(app: FastifyInstance) {
 }
 
 async function statusHandler() {
-    const [db, redis, rawContainers] = await Promise.all([
+    const [db, redis, rawContainers, workers] = await Promise.all([
       pingDb(),
       pingRedis(),
       dockerRequest('/containers/json?all=1'),
+      liveWorkers(),
     ])
+    const role = processRole()
+    const queues = queueHealth()
 
     const containers = Array.isArray(rawContainers)
       ? (rawContainers as Array<Record<string, unknown>>).map((c) => ({
@@ -174,6 +179,12 @@ async function statusHandler() {
         secretProblems: process.env['NODE_ENV'] === 'production'
           ? productionSecretProblems(process.env).map(({ key, message }) => ({ key, message }))
           : [],
+        background: {
+          role,
+          workers,
+          dropped: queues.dropped,
+          problems: backgroundProblems({ valkeyOk: redis.ok, role, workers, dropped: queues.dropped, lastDrop: queues.lastDrop }),
+        },
         containers,
         rag: {
           sources: sources.length,

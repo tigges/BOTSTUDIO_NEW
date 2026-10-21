@@ -14,6 +14,38 @@ x-logging: &logging
   driver: "json-file"
   options: { max-size: "10m", max-file: "3" }
 
+# Shared by the API and the worker: both run the same image and code.
+x-api-env: &api-env
+  NODE_ENV:       ${NODE_ENV:-production}
+  PORT:           3001
+  HOST:           0.0.0.0
+  DATABASE_URL:   postgresql://${POSTGRES_USER:-ybot}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ybot}
+  REDIS_URL:      redis://:${REDIS_PASSWORD}@valkey:6379
+  JWT_SECRET:     ${JWT_SECRET:?Set JWT_SECRET in the env file (openssl rand -hex 32)}
+  # Seals Auth Profile secrets. Changing it means re-entering every secret.
+  SECRETS_KEY:    ${SECRETS_KEY:-}
+  TOOLS_ALLOW_PRIVATE_NETWORK: ${TOOLS_ALLOW_PRIVATE_NETWORK:-false}
+  FRONTEND_URL:   ${FRONTEND_URL:-http://localhost}
+  # LLM (provide at least one). Tried in order: Gemini, Claude, OpenAI, Groq, then Ollama.
+  # LLM_PROVIDER (gemini | claude | ollama | openai | groq) moves one to the front.
+  LLM_PROVIDER:      ${LLM_PROVIDER:-}
+  GEMINI_API_KEY:    ${GEMINI_API_KEY:-}
+  GEMINI_MODEL:      ${GEMINI_MODEL:-gemini-flash-latest}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  ANTHROPIC_MODEL:   ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+  OLLAMA_BASE_URL:   ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+  OLLAMA_MODEL:      ${OLLAMA_MODEL:-llama3.2}
+  OPENAI_API_KEY:    ${OPENAI_API_KEY:-}
+  OPENAI_MODEL:      ${OPENAI_MODEL:-gpt-4o}
+  GROQ_API_KEY:      ${GROQ_API_KEY:-}
+  GROQ_MODEL:        ${GROQ_MODEL:-llama-3.3-70b-versatile}
+  # Object storage
+  S3_ENDPOINT:    ${S3_ENDPOINT:-http://minio:9000}
+  S3_BUCKET:      ${S3_BUCKET:-ybot-uploads}
+  S3_ACCESS_KEY:  ${MINIO_ROOT_USER:-ybotadmin}
+  S3_SECRET_KEY:  ${MINIO_ROOT_PASSWORD}
+  S3_REGION:      ${S3_REGION:-us-east-1}
+
 services:
 
   # ── Infrastructure ────────────────────────────────────────────────────────
@@ -85,35 +117,10 @@ services:
       postgres: { condition: service_healthy }
       valkey:   { condition: service_healthy }
     environment:
-      NODE_ENV:       ${NODE_ENV:-production}
-      PORT:           3001
-      HOST:           0.0.0.0
-      DATABASE_URL:   postgresql://${POSTGRES_USER:-ybot}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ybot}
-      REDIS_URL:      redis://:${REDIS_PASSWORD}@valkey:6379
-      JWT_SECRET:     ${JWT_SECRET:?Set JWT_SECRET in the env file (openssl rand -hex 32)}
-      # Seals Auth Profile secrets. Changing it means re-entering every secret.
-      SECRETS_KEY:    ${SECRETS_KEY:-}
-      TOOLS_ALLOW_PRIVATE_NETWORK: ${TOOLS_ALLOW_PRIVATE_NETWORK:-false}
-      FRONTEND_URL:   ${FRONTEND_URL:-http://localhost}
-      # LLM (provide at least one). Tried in order: Gemini, Claude, OpenAI, Groq, then Ollama.
-      # LLM_PROVIDER (gemini | claude | ollama | openai | groq) moves one to the front.
-      LLM_PROVIDER:      ${LLM_PROVIDER:-}
-      GEMINI_API_KEY:    ${GEMINI_API_KEY:-}
-      GEMINI_MODEL:      ${GEMINI_MODEL:-gemini-flash-latest}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      ANTHROPIC_MODEL:   ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
-      OLLAMA_BASE_URL:   ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      OLLAMA_MODEL:      ${OLLAMA_MODEL:-llama3.2}
-      OPENAI_API_KEY:    ${OPENAI_API_KEY:-}
-      OPENAI_MODEL:      ${OPENAI_MODEL:-gpt-4o}
-      GROQ_API_KEY:      ${GROQ_API_KEY:-}
-      GROQ_MODEL:        ${GROQ_MODEL:-llama-3.3-70b-versatile}
-      # Object storage
-      S3_ENDPOINT:    ${S3_ENDPOINT:-http://minio:9000}
-      S3_BUCKET:      ${S3_BUCKET:-ybot-uploads}
-      S3_ACCESS_KEY:  ${MINIO_ROOT_USER:-ybotadmin}
-      S3_SECRET_KEY:  ${MINIO_ROOT_PASSWORD}
-      S3_REGION:      ${S3_REGION:-us-east-1}
+      <<: *api-env
+      # HTTP only; the worker container runs queues and sweeps. A host still on
+      # an older compose file runs everything in the API (PROCESS_ROLE=all).
+      PROCESS_ROLE: api
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:3001/health || exit 1"]
       interval: 15s
@@ -121,6 +128,25 @@ services:
       retries: 3
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [botstudio-net]
+
+  # Same image as the API, started with the worker entry point: BullMQ
+  # consumers (knowledge sync, webhook delivery, campaigns, chat analysis),
+  # the quiet-chat and memory sweeps, and a heartbeat System Status reads.
+  worker:
+    image: botstudio-api:latest
+    container_name: botstudio-worker
+    restart: *restart
+    logging: *logging
+    command: ["node", "apps/api/dist/worker.js"]
+    stop_grace_period: 20s
+    depends_on:
+      postgres: { condition: service_healthy }
+      valkey:   { condition: service_healthy }
+      api:      { condition: service_started }
+    environment:
+      <<: *api-env
+      PROCESS_ROLE: worker
     networks: [botstudio-net]
 
   web:

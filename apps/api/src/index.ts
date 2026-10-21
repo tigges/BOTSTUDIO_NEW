@@ -22,18 +22,14 @@ import { channelWebhookRoutes } from './routes/channel-webhooks.js'
 import { optimizationRoutes } from './routes/optimizations.js'
 import { workflowsRoutes } from './routes/workflows.js'
 import { dashboardsRoutes } from './routes/dashboards.js'
-import { startKnowledgeSyncWorker } from './workers/knowledge-sync.js'
-import { startWebhookWorker } from './workers/webhook-deliver.js'
-import { startConversationAnalysisWorker } from './workers/conversation-analysis.js'
-import { startCampaignWorker } from './workers/campaign-send.js'
-import { startQuietChatSweep } from './lib/chat-outcome.js'
 import { installLlmLedger, withLlmScope } from './lib/llm-ledger.js'
 import { setTurnBroadcast } from './lib/turn-pipeline.js'
 import { systemRoutes } from './routes/system.js'
 import { cannedRoutes, reportsRoutes, databaseRoutes, integrationsRoutes, INTEGRATION_CATALOG } from './routes/studio.js'
 import { toolsRoutes, authProfilesRoutes } from './routes/tools.js'
 import { authMiddleware } from './middleware/auth.js'
-import { wsRoutes, broadcastToTenant } from './ws.js'
+import { wsRoutes, broadcastToTenant, startBroadcastRelay } from './ws.js'
+import { processRole, startBackgroundWork } from './background.js'
 import { initQueues } from './queues.js'
 import { runWithAuditContext } from '@ybot/db'
 import { installConsoleScrubbing, scrubbingLoggerOptions } from './lib/log-scrub.js'
@@ -44,8 +40,8 @@ import { releasesRoutes } from './routes/releases.js'
 import { bundleRoutes } from './routes/bundle.js'
 import { botMemoryRoutes, contactMemoryRoutes } from './routes/memory.js'
 import { businessRoutes } from './routes/business.js'
-import { sweepExpiredMemory } from './lib/contact-memory.js'
 import { assertProductionSecrets } from './lib/production-secrets.js'
+import { KEY_PREFIX, getValkey } from './lib/valkey.js'
 
 installConsoleScrubbing()
 assertProductionSecrets()
@@ -79,8 +75,12 @@ await app.register(cors, {
 // ── Rate limiting ──────────────────────────────────────────────────────────
 // The console opens many screens in a minute. Login and the public chat keep
 // their own tighter limits. A full limit answers 429, so a burst is not a crash.
+// Counters live in Valkey so every replica counts the same caller together;
+// while Valkey is unreachable requests are let through rather than refused.
+const rateLimitStore = await getValkey()
 await app.register(rateLimit, {
   global: true,
+  ...(rateLimitStore ? { redis: rateLimitStore, nameSpace: `${KEY_PREFIX}rate-limit:`, skipOnError: true } : {}),
   max: 1200,
   timeWindow: '1 minute',
   keyGenerator: (req) =>
@@ -176,15 +176,11 @@ try {
     .then((mod) => mod.moveLegacyIntegrationKeys(INTEGRATION_CATALOG))
     .then((result) => { if (result.moved) console.log('[integrations] moved plain-text keys into Auth Profiles', JSON.stringify(result)) })
     .catch((err) => console.warn('[integrations]', err instanceof Error ? err.message : err))
-  const sweepMemory = () => sweepExpiredMemory().catch((err) => console.warn('[contact-memory]', err instanceof Error ? err.message : err))
-  void sweepMemory()
-  setInterval(sweepMemory, 6 * 3_600_000).unref()
-  startKnowledgeSyncWorker().catch(() => {})
-  startWebhookWorker().catch(() => {})
-  startConversationAnalysisWorker().catch(() => {})
-  startCampaignWorker().catch(() => {})
-  startQuietChatSweep((message) => console.log(message))
-  initQueues(process.env['REDIS_URL'] ?? 'redis://localhost:6379').catch(() => {})
+  await startBroadcastRelay({ subscribe: true }).catch((err) => console.error('[ws] broadcast relay not started:', err instanceof Error ? err.message : err))
+  void initQueues(process.env['REDIS_URL'] ?? 'redis://localhost:6379')
+  const role = processRole()
+  const stopBackground = role === 'all' ? startBackgroundWork(role) : () => {}
+  if (role === 'api') console.log('[startup] PROCESS_ROLE=api: queue workers and sweeps run in the worker container')
   notifyDeployWebhook().catch(() => {})
   // Watchtower stops the old container with SIGTERM during a deploy. Stop
   // accepting connections and let requests in flight finish, so Caddy retries
@@ -192,6 +188,7 @@ try {
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.once(signal, () => {
       setTimeout(() => process.exit(0), 15_000).unref()
+      stopBackground()
       app.close().finally(() => process.exit(0))
     })
   }

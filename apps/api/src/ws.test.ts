@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import Fastify from 'fastify'
 import jwt from '@fastify/jwt'
 import wsPlugin from '@fastify/websocket'
-import { broadcastToTenant, tenantSocketCount, wsRoutes } from './ws.js'
+import { broadcastToTenant, tenantSocketCount, useBroadcastTransport, wsRoutes } from './ws.js'
 
 type Inbox = { ws: import('ws').WebSocket; next(): Promise<Record<string, unknown>> }
 
@@ -65,4 +65,40 @@ test('a broadcast never throws, even with a bad token socket or an unserialisabl
   assert.doesNotThrow(() => broadcastToTenant('t-ws', loop))
   ws.terminate()
   await app.close()
+})
+
+test('with a ready transport every broadcast goes through it, and a stopped transport falls back to local sockets', async () => {
+  const app = await socketApp()
+  const token = app.jwt.sign({ tenantId: 't-relay' })
+  const { ws, next } = await connect(app, `/ws?token=${token}`)
+  await next()
+
+  let up = true
+  const published: string[] = []
+  const handlers: Array<(message: string) => void> = []
+  useBroadcastTransport({
+    ready: () => up,
+    publish: async (message) => {
+      published.push(message)
+      setImmediate(() => { for (const h of handlers) h(message) })
+    },
+    onMessage: (h) => { handlers.push(h) },
+  })
+  try {
+    broadcastToTenant('t-relay', { event: 'message.created', data: { id: 'via-valkey' } })
+    assert.deepEqual(await next(), { event: 'message.created', data: { id: 'via-valkey' } })
+    assert.equal(published.length, 1, 'the event went out through the transport')
+
+    handlers[0]!(JSON.stringify({ tenantId: 't-relay', payload: JSON.stringify({ event: 'from-other-replica' }) }))
+    assert.deepEqual(await next(), { event: 'from-other-replica' })
+
+    up = false
+    broadcastToTenant('t-relay', { event: 'message.created', data: { id: 'local' } })
+    assert.deepEqual(await next(), { event: 'message.created', data: { id: 'local' } })
+    assert.equal(published.length, 1, 'nothing was published while the transport was down')
+  } finally {
+    useBroadcastTransport(null)
+    ws.terminate()
+    await app.close()
+  }
 })

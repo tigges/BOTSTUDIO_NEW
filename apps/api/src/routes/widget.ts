@@ -442,7 +442,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     const { tenantId, botId } = { tenantId: channel.tenantId, botId: channel.botId }
 
     const messageId = typeof body.messageId === 'string' ? body.messageId.slice(0, 120) : undefined
-    if (visitor.showVisitor && !firstDelivery(channelId, messageId)) {
+    if (visitor.showVisitor && !(await firstDelivery(channelId, messageId))) {
       const stream = openEventStream(reply, { 'Access-Control-Allow-Origin': '*' })
       if (body.conversationId) stream.send({ conversationId: body.conversationId })
       stream.send({ duplicate: true })

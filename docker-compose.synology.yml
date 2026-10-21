@@ -38,6 +38,13 @@ services:
     labels:
       - "com.centurylinklabs.watchtower.scope=botstudio"
 
+  worker:
+    image: ghcr.io/tigges/botstudio-api:${IMAGE_TAG:-latest}
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    labels:
+      - "com.centurylinklabs.watchtower.scope=botstudio"
+
   web:
     image: ghcr.io/tigges/botstudio-web:${IMAGE_TAG:-latest}
     labels:

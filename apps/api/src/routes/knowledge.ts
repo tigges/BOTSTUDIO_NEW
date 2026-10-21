@@ -3,7 +3,7 @@ import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { z } from 'zod'
 import { DEFAULT_MODELS } from '@ybot/llm'
-import { enqueueKnowledgeSync } from '../queues.js'
+import { BackgroundJobsUnavailableError, enqueueKnowledgeSync } from '../queues.js'
 import { extractTextFromBuffer } from '../lib/extract-text.js'
 import { rereadWebsitePages } from '../lib/reread-website.js'
 import { enterLlmScope } from '../lib/llm-ledger.js'
@@ -242,7 +242,12 @@ export async function knowledgeRoutes(app: FastifyInstance) {
       await syncFaqKnowledge(tenantId, botId)
       return { data: { queued: true, sourceId: id } }
     }
-    await enqueueKnowledgeSync({ tenantId, sourceId: id, botId, kind: src.kind as 'website' | 'file', config: src.config as Record<string, unknown> })
+    try {
+      await enqueueKnowledgeSync({ tenantId, sourceId: id, botId, kind: src.kind as 'website' | 'file', config: src.config as Record<string, unknown> })
+    } catch (err) {
+      if (err instanceof BackgroundJobsUnavailableError) return reply.status(503).send({ error: { code: err.code, message: err.message } })
+      throw err
+    }
     await prisma.knowledgeSource.update({ where: { id }, data: { lastSyncAt: new Date() } })
     const url = typeof (src.config as { url?: unknown }).url === 'string' ? (src.config as { url: string }).url : ''
     if (src.kind === 'website' && url) {

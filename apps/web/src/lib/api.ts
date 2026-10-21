@@ -1026,6 +1026,12 @@ export interface SystemStatus {
   services: { database: ServicePing; redis: ServicePing }
   /** Production only: secrets that are missing or still a published default. */
   secretProblems?: Array<{ key: string; message: string }>
+  background?: {
+    role: 'all' | 'api' | 'worker'
+    workers: Array<{ id: string; role: string; startedAt: string; seenAt: string }>
+    dropped: number
+    problems: Array<{ key: string; message: string }>
+  }
   containers: DockerContainer[]
   rag: { sources: number; documents: number; chunks: number; sourceList: RagSourceEntry[] }
   system: { platform: string; uptime: number; nodeVersion: string; cpuCount: number; totalMemMb: number; freeMemMb: number; usedMemPct: number }
