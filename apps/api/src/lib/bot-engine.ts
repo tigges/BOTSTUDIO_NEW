@@ -29,6 +29,8 @@ export interface BotReplyParams {
 export interface BotReplyResult {
   reply: string
   conversationId: string | null
+  /** The open question's choices; channels show them as buttons, a menu or a numbered list. */
+  choices?: string[]
 }
 
 /** Creates the contact and chat when needed, then runs the shared turn pipeline. */
@@ -84,5 +86,5 @@ async function replyFor(params: BotReplyParams): Promise<BotReplyResult> {
   if (!conversationId) return { reply: 'This chat is not set up yet. Please try again later.', conversationId: null }
 
   const turn = await runTurn({ conversationId, tenantId, botId, text: userText })
-  return { reply: turn.text, conversationId }
+  return { reply: turn.text, conversationId, ...(turn.choices?.length ? { choices: turn.choices } : {}) }
 }

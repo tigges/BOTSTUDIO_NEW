@@ -1,6 +1,6 @@
 import type {
-  AggregateResult, AuthProfileKind, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, KnowledgeConflict, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
-  ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns,
+  AuthProfileKind, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, KnowledgeConflict, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader,
+  PrivacySettings, BotFootprint, BotStage, ChecklistItem, ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns, AggregateResult, BotSettings, DocumentQuality,
 } from '@ybot/shared'
 import { messageForStatus } from './api-error'
 
@@ -65,10 +65,20 @@ export const me = {
     apiFetch<{ data: unknown }>('/me/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
 }
 
+export interface BotOverview {
+  stage: BotStage
+  footprint: BotFootprint
+  checklist: ChecklistItem[]
+  production: { chats: number; handedOver: number; open: number; costUsd: number | null; costPerChatUsd: number | null }
+  releases: Array<{ number: number; note: string | null; createdAt: string; live: boolean }>
+  activity: Array<{ id: string; action: string; who: string | null; createdAt: string }> | null
+}
+
 // ── Bots ──────────────────────────────────────────────────────────────────────
 export const bots = {
   list: () => apiFetch<{ data: BotSummary[] }>('/bots'),
   get: (id: string) => apiFetch<{ data: BotSummary }>(`/bots/${id}`),
+  overview: (id: string) => apiFetch<{ data: BotOverview }>(`/bots/${id}/overview`),
   create: (body: {
     name: string
     description?: string
@@ -210,7 +220,65 @@ export const learn = {
 }
 
 // ── Knowledge ─────────────────────────────────────────────────────────────────
+export interface KnowledgeDocument {
+  id: string
+  title: string
+  status: string
+  source: { id: string; name: string; kind: string }
+  chars: number
+  chunks: number
+  embeddedChunks: number
+  updatedAt: string
+  quality: DocumentQuality
+}
+
+export interface DocumentChunks {
+  id: string
+  title: string
+  text: string
+  chunks: Array<{ id: string; content: string; embedded: boolean }>
+}
+
+export type SearchMode = 'hybrid' | 'semantic' | 'keyword'
+export type EngineState = { state: 'ok'; ms: number; hits: number } | { state: 'skipped' } | { state: 'unavailable'; ms: number; reason: string }
+
+export interface SearchTestReport {
+  query: string
+  mode: SearchMode
+  topK: number
+  engines: { embed: EngineState; semantic: EngineState; keyword: EngineState }
+  totalMs: number
+  results: Array<{
+    rank: number
+    chunkId: string | null
+    content: string
+    documentId: string
+    title: string
+    source: string
+    sourceKind: string
+    why: {
+      semantic: { rank: number; similarity: number } | null
+      keyword: { rank: number; score: number } | null
+      matchedTerms: string[]
+      fused: number | null
+      businessFirst: boolean
+    }
+  }>
+}
+
+/** The three execution settings, and which model providers this BotStudio has a key for. */
+export interface BotSettingsView { settings: BotSettings; connected: Record<string, boolean> }
+
+export const botSettings = {
+  get: (botId: string) => apiFetch<{ data: BotSettingsView }>(`/bots/${botId}/settings`),
+  update: (botId: string, settings: BotSettings) => apiFetch<{ data: BotSettingsView }>(`/bots/${botId}/settings`, { method: 'PUT', body: JSON.stringify(settings) }),
+}
+
 export const knowledge = {
+  documents: (botId: string) => apiFetch<{ data: KnowledgeDocument[] }>(`/bots/${botId}/knowledge/documents`),
+  chunks: (botId: string, documentId: string) => apiFetch<{ data: DocumentChunks }>(`/bots/${botId}/knowledge/documents/${documentId}/chunks`),
+  searchTest: (botId: string, body: { query: string; mode: SearchMode; topK: number }) =>
+    apiFetch<{ data: SearchTestReport }>(`/bots/${botId}/knowledge/search-test`, { method: 'POST', body: JSON.stringify(body) }),
   intents: {
     list: (botId: string) => apiFetch<{ data: Intent[] }>(`/bots/${botId}/intents`),
     create: (botId: string, body: Partial<Intent>) => apiFetch<{ data: Intent }>(`/bots/${botId}/intents`, { method: 'POST', body: JSON.stringify(body) }),
@@ -251,11 +319,6 @@ export const knowledge = {
     },
     sync: (botId: string, id: string) => apiFetch<{ data: { queued: boolean } }>(`/bots/${botId}/sources/${id}/sync`, { method: 'POST' }),
     delete: (botId: string, id: string) => apiFetch<void>(`/bots/${botId}/sources/${id}`, { method: 'DELETE' }),
-  },
-  training: {
-    get: (botId: string) => apiFetch<{ data: LlmConfig }>(`/bots/${botId}/training`),
-    update: (botId: string, config: Partial<LlmConfig>) => apiFetch<{ data: LlmConfig }>(`/bots/${botId}/training`, { method: 'PUT', body: JSON.stringify(config) }),
-    runs: (botId: string) => apiFetch<{ data: TrainingRun[] }>(`/bots/${botId}/training-runs`),
   },
   inboxConfig: {
     get: (botId: string) => apiFetch<{ data: Record<string, unknown> }>(`/bots/${botId}/inbox-config`),
@@ -341,7 +404,9 @@ export const channels = {
   create: (botId: string, body: { name: string; kind: string; environmentId: string; config?: Record<string, unknown> }) =>
     apiFetch<{ data: Channel }>(`/bots/${botId}/channels`, { method: 'POST', body: JSON.stringify(body) }),
   update: (botId: string, id: string, body: Partial<{ name: string; config: Record<string, unknown>; isActive: boolean }>) =>
-    apiFetch<{ data: unknown }>(`/bots/${botId}/channels/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    apiFetch<{ data: Channel }>(`/bots/${botId}/channels/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  check: (botId: string, id: string) =>
+    apiFetch<{ data: ChannelCheck }>(`/bots/${botId}/channels/${id}/check`, { method: 'POST' }),
   delete: (botId: string, id: string) =>
     apiFetch<void>(`/bots/${botId}/channels/${id}`, { method: 'DELETE' }),
 }
@@ -899,7 +964,6 @@ export interface Intent { id: string; name: string; description?: string; uttera
 export interface Entity { id: string; name: string; kind: string; values: object[] }
 export interface Faq { id: string; question: string; answer: string; tags: string[] }
 export interface KnowledgeSource { id: string; name: string; kind: string; config: Record<string, unknown>; lastSyncAt?: string; documents: Array<{ id: string; status: string }> }
-export interface LlmConfig { model: string; temperature: number; maxTokens: number; systemPrompt: string }
 export interface Conversation { id: string; status: string; assignedTo?: string; contact?: Contact; channel?: { id: string; name: string; kind: string }; messages: Message[]; labels: Array<{ label: Label }>; updatedAt: string; sla?: string | null; outcome?: string | null; llm?: ConversationLlmCost | null; handover?: Partial<HandoverContract> | null; /** Set on chats a scheduled test run opened. */ testRunId?: string | null }
 /** Model calls made for one chat. costUsd is null when a model had no known price. */
 export interface ConversationLlmCost { costUsd: number | null; calls: number }
@@ -912,7 +976,9 @@ export interface Contact { id: string; displayName?: string; email?: string; pho
 export interface Campaign { id: string; name: string; channel: string; status: string; direction: string; subject?: string; body?: string; scheduledAt?: string; sentAt?: string; sent?: number; delivered?: number }
 export interface CampaignDelivery { id: string; contactId: string; email?: string; status: string; sentAt?: string; error?: string }
 export interface Template { id: string; name: string; channel: string; approvalStatus: string; content: Record<string, unknown>; variables: string[] }
-export interface Channel { id: string; name: string; kind: string; environmentId?: string; config: Record<string, unknown>; isActive: boolean; botId: string; createdAt: string }
+/** Secrets never come back from the API; secretsSet names the ones that are saved. */
+export interface Channel { id: string; name: string; kind: string; environmentId?: string; config: Record<string, unknown>; secretsSet?: string[]; isActive: boolean; botId: string; createdAt: string }
+export interface ChannelCheck { ok: boolean; message: string; status?: number; field?: string }
 export interface Webhook { id: string; url: string; events: string[]; isActive: boolean; createdAt: string; successRate?: number | null; secret?: string | null }
 export interface WebhookDelivery { id: string; event: string; statusCode: number; success: boolean; durationMs: number; error?: string | null; createdAt: string }
 export interface CannedReply { id: string; shortcut: string; title: string; text: string }
@@ -949,7 +1015,6 @@ export interface ChannelStat { channelId: string; name: string; total: number }
 export interface CsatTrendPoint { date: string; score: number; positive: number; negative: number }
 export interface ResolutionBreakdownItem { name: string; value: number }
 export interface ResponseTimeHourPoint { hour: string; time: number }
-export interface TrainingRun { id: string; createdAt: string; model: string; examples: number; intents: number; faqs: number; sources: number; status: string; durationMs: number }
 export interface AuditEvent { id: string; action: string; resource?: string; resourceId?: string; metadata: Record<string, unknown>; createdAt: string; user?: { displayName: string; email: string } }
 
 export interface DockerContainer { id: string; name: string; image: string; state: string; status: string; created?: number }

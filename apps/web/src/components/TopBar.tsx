@@ -13,6 +13,7 @@ import {
   Loader2,
   Circle,
   CircleHelp,
+  Search,
 } from 'lucide-react'
 import {
   Avatar,
@@ -35,7 +36,10 @@ import { HELP_TOPICS } from '../pages/help-topics'
 interface TopBarProps {
   darkMode: boolean
   onToggleDark: () => void
+  onOpenPalette: () => void
 }
+
+const SHORTCUT_LABEL = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K'
 
 function envRank(kind: string): number {
   if (kind === 'sandbox') return 0
@@ -86,7 +90,7 @@ function EnvSwitcher() {
   )
 }
 
-export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
+export function TopBar({ darkMode, onToggleDark, onOpenPalette }: TopBarProps) {
   const navigate = useNavigate()
   const { user, bots, botsLoading, botsError, selectedBotId, selectBot, clearAuth } = useAppStore()
   const { data: agentStatus = 'offline' } = useAgentStatus()
@@ -177,6 +181,16 @@ export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
 
         <EnvSwitcher />
       </div>
+
+      <button
+        onClick={onOpenPalette}
+        className="hidden md:flex h-8 w-full max-w-sm items-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-base)] px-3 text-sm text-[var(--text-muted)] hover:bg-[var(--bg-hover)] transition-colors"
+        aria-label="Search pages, bots, flows and actions"
+      >
+        <Search size={14} />
+        <span className="flex-1 text-left">Search or jump to…</span>
+        <kbd className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px]">{SHORTCUT_LABEL}</kbd>
+      </button>
 
       {/* Right: theme + user */}
       <div className="flex items-center gap-1">

@@ -30,7 +30,17 @@ test('WhatsApp credentials are checked against Graph', async () => {
     verifyToken: 'verify',
   }, fakeFetch({ 'graph.facebook.com': { status: 401, body: { error: { message: 'Invalid OAuth' } } } }))
   assert.equal(bad.ok, false)
-  assert.match(bad.message ?? '', /refused/i)
+  assert.equal(bad.status, 401)
+  assert.equal(bad.field, 'accessToken')
+  assert.match(bad.message ?? '', /answered 401: check Access Token/)
+
+  const wrongId = await verifyChannelCredentials('whatsapp', {
+    phoneNumberId: '9999',
+    accessToken: 'token',
+    verifyToken: 'verify',
+  }, fakeFetch({ 'graph.facebook.com': { status: 400, body: { error: { message: 'Unsupported get request' } } } }))
+  assert.equal(wrongId.field, 'phoneNumberId')
+  assert.match(wrongId.message ?? '', /Phone Number ID/)
 })
 
 test('Telegram getMe must succeed and a webhook secret is stored', async () => {

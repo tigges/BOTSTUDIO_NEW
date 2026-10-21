@@ -7,7 +7,7 @@ import type {
   Flow, FlowVersion, Intent, Entity, Faq, KnowledgeSource,
   Conversation, Message, Contact, Campaign, Template,
   Webhook, TeamMember, AnalyticsOverview, ConversationTrend, AuditEvent,
-  LlmConfig, SystemStatus, SystemConfig, Channel,
+  BotSettingsView, SystemStatus, SystemConfig, Channel,
 } from './api'
 
 // ── Flows ─────────────────────────────────────────────────────────────────────
@@ -129,13 +129,13 @@ export const DEMO_SOURCES: KnowledgeSource[] = [
 export const DEMO_CHANNELS: Channel[] = [
   { id: 'ch_demo_web_test', name: 'Website chat', kind: 'web', environmentId: 'demo-env-sandbox', config: { accentColor: '#6366f1', title: 'Chat with us' }, isActive: true, botId: 'demo', createdAt: new Date(Date.now() - 7 * 86400_000).toISOString() },
   { id: 'ch_demo_web', name: 'Website chat', kind: 'web', environmentId: 'demo-env-prod', config: { accentColor: '#6366f1', title: 'Chat with us' }, isActive: true, botId: 'demo', createdAt: new Date(Date.now() - 7 * 86400_000).toISOString() },
-  { id: 'ch_demo_wa', name: 'WhatsApp', kind: 'whatsapp', environmentId: 'demo-env-sandbox', config: { phoneNumberId: '15550001234', accessToken: 'demo-token', verifyToken: 'demo-verify' }, isActive: true, botId: 'demo', createdAt: new Date(Date.now() - 14 * 86400_000).toISOString() },
-  { id: 'ch_demo_email', name: 'Email', kind: 'email', environmentId: 'demo-env-sandbox', config: { fromAddress: 'support@acme.com', inboundSecret: 'demo-secret' }, isActive: false, botId: 'demo', createdAt: new Date(Date.now() - 30 * 86400_000).toISOString() },
+  { id: 'ch_demo_wa', name: 'WhatsApp', kind: 'whatsapp', environmentId: 'demo-env-sandbox', config: { phoneNumberId: '15550001234', verifyToken: 'demo-verify' }, secretsSet: ['accessToken'], isActive: true, botId: 'demo', createdAt: new Date(Date.now() - 14 * 86400_000).toISOString() },
+  { id: 'ch_demo_email', name: 'Email', kind: 'email', environmentId: 'demo-env-sandbox', config: { fromAddress: 'support@acme.com' }, secretsSet: ['inboundSecret'], isActive: false, botId: 'demo', createdAt: new Date(Date.now() - 30 * 86400_000).toISOString() },
 ]
 
-export const DEMO_TRAINING: LlmConfig = {
-  model: 'gpt-4o', temperature: 0.3, maxTokens: 2048,
-  systemPrompt: 'You are a helpful support assistant for Acme Corp. Be concise, friendly, and professional.',
+export const DEMO_BOT_SETTINGS: BotSettingsView = {
+  settings: { model: 'gemini-flash-latest', responseLength: 'medium', toolWaitEscalateSeconds: 20 },
+  connected: { GEMINI_API_KEY: true },
 }
 
 // ── Conversations ─────────────────────────────────────────────────────────────

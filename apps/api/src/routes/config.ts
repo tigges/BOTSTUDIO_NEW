@@ -1,15 +1,26 @@
-import type { FastifyInstance, FastifyReply } from 'fastify'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { prisma } from '@ybot/db'
 import { requireRole } from '../middleware/auth.js'
 import { z } from 'zod'
 import { sendEmail, inviteEmail } from '../lib/email.js'
 import { canRemoveWebChannel, ensureWebChannels } from '../lib/web-channels.js'
-import { parseChannelConfig, channelWebhookPath, readAnalyticsQuery } from '@ybot/shared'
-import { registerTelegramWebhook, verifyChannelCredentials } from '../lib/channel-verify.js'
+import { parseChannelConfig, channelWebhookPath, mergeChannelConfig, readAnalyticsQuery } from '@ybot/shared'
+import { registerTelegramWebhook, verifyChannelCredentials, type VerifyResult } from '../lib/channel-verify.js'
+import { publicChannel } from '../lib/channel-public.js'
 import { summariseOutcomes } from '../lib/outcome-summary.js'
 import { runAggregate } from '../lib/analytics-aggregate.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
+
+function webhookBase(request: FastifyRequest): string {
+  const proto = String(request.headers['x-forwarded-proto'] ?? request.protocol ?? 'https').split(',')[0]?.trim() || 'https'
+  const host = String(request.headers['x-forwarded-host'] ?? request.headers.host ?? request.hostname).split(',')[0]?.trim()
+  return `${proto}://${host}`
+}
+
+function verifyRefusal(check: VerifyResult) {
+  return { code: 'CHANNEL_VERIFY', message: check.message, ...(check.field ? { field: check.field } : {}), ...(check.status ? { status: check.status } : {}) }
+}
 
 export async function channelsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
@@ -19,7 +30,8 @@ export async function channelsRoutes(app: FastifyInstance) {
     const { tenantId } = request.user as JWT
     const { botId } = request.params as { botId: string }
     await ensureWebChannels(tenantId, botId)
-    return { data: await prisma.channel.findMany({ where: { botId, tenantId }, orderBy: { createdAt: 'asc' } }) }
+    const rows = await prisma.channel.findMany({ where: { botId, tenantId }, orderBy: { createdAt: 'asc' } })
+    return { data: rows.map(publicChannel) }
   })
 
   app.post('/:botId/channels', async (request, reply) => {
@@ -32,7 +44,7 @@ export async function channelsRoutes(app: FastifyInstance) {
       const parsed = parseChannelConfig(body.data.kind, body.data.config)
       if (!parsed) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Fill every field for this channel.' } })
       const check = await verifyChannelCredentials(body.data.kind, parsed)
-      if (!check.ok) return reply.status(400).send({ error: { code: 'CHANNEL_VERIFY', message: check.message } })
+      if (!check.ok) return reply.status(400).send({ error: verifyRefusal(check) })
       body.data.config = { ...parsed, ...(check.extra ?? {}) }
       const existing = await prisma.channel.findFirst({
         where: { botId, tenantId, kind: body.data.kind, environmentId: body.data.environmentId },
@@ -42,13 +54,9 @@ export async function channelsRoutes(app: FastifyInstance) {
     const created = await prisma.channel.create({ data: { ...body.data, tenantId, botId, isActive } })
     if (created.kind === 'telegram') {
       const parsed = parseChannelConfig(created.kind, created.config)
-      if (parsed) {
-        const proto = String(request.headers['x-forwarded-proto'] ?? request.protocol ?? 'https').split(',')[0]?.trim() || 'https'
-        const host = String(request.headers['x-forwarded-host'] ?? request.headers.host ?? request.hostname).split(',')[0]?.trim()
-        await registerTelegramWebhook(parsed, `${proto}://${host}${channelWebhookPath('telegram')}`)
-      }
+      if (parsed) await registerTelegramWebhook(parsed, `${webhookBase(request)}${channelWebhookPath('telegram')}`)
     }
-    return reply.status(201).send({ data: created })
+    return reply.status(201).send({ data: publicChannel(created) })
   })
 
   app.patch('/:botId/channels/:id', async (request, reply) => {
@@ -59,25 +67,37 @@ export async function channelsRoutes(app: FastifyInstance) {
     if (!existing) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
     if (existing.kind === 'web' && body.isActive === false) body.isActive = true
     if (body.config && existing.kind !== 'web') {
-      const previous = typeof existing.config === 'object' && existing.config && !Array.isArray(existing.config)
-        ? existing.config as Record<string, unknown>
-        : {}
-      const parsed = parseChannelConfig(existing.kind, { ...previous, ...body.config })
+      const parsed = parseChannelConfig(existing.kind, mergeChannelConfig(existing.config, body.config))
       if (!parsed) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Fill every field for this channel.' } })
       const check = await verifyChannelCredentials(existing.kind, parsed)
-      if (!check.ok) return reply.status(400).send({ error: { code: 'CHANNEL_VERIFY', message: check.message } })
+      if (!check.ok) return reply.status(400).send({ error: verifyRefusal(check) })
       body.config = { ...parsed, ...(check.extra ?? {}) }
     }
-    const updated = await prisma.channel.updateMany({ where: { id, botId, tenantId }, data: body })
+    const updated = await prisma.channel.update({ where: { id: existing.id }, data: body })
     if (existing.kind === 'telegram' && body.config) {
       const parsed = parseChannelConfig('telegram', body.config)
-      if (parsed) {
-        const proto = String(request.headers['x-forwarded-proto'] ?? request.protocol ?? 'https').split(',')[0]?.trim() || 'https'
-        const host = String(request.headers['x-forwarded-host'] ?? request.headers.host ?? request.hostname).split(',')[0]?.trim()
-        await registerTelegramWebhook(parsed, `${proto}://${host}${channelWebhookPath('telegram')}`)
-      }
+      if (parsed) await registerTelegramWebhook(parsed, `${webhookBase(request)}${channelWebhookPath('telegram')}`)
     }
-    return { data: updated }
+    return { data: publicChannel(updated) }
+  })
+
+  app.post('/:botId/channels/:id/check', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId, id } = request.params as { botId: string; id: string }
+    const channel = await prisma.channel.findFirst({ where: { id, botId, tenantId } })
+    if (!channel) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
+    if (channel.kind === 'web') return { data: { ok: true, message: 'Website chat has no provider credentials to check.' } }
+    const parsed = parseChannelConfig(channel.kind, channel.config)
+    if (!parsed) return { data: { ok: false, message: 'Some fields are empty. Fill every field on Credentials and save.' } }
+    const check = await verifyChannelCredentials(channel.kind, parsed)
+    return {
+      data: {
+        ok: check.ok,
+        message: check.ok ? 'The provider accepted these credentials.' : check.message,
+        ...(check.status ? { status: check.status } : {}),
+        ...(check.field ? { field: check.field } : {}),
+      },
+    }
   })
 
   app.delete('/:botId/channels/:id', async (request, reply) => {
@@ -87,7 +107,7 @@ export async function channelsRoutes(app: FastifyInstance) {
     if (!canRemoveWebChannel(channels, id)) {
       return reply.status(409).send({ error: { code: 'WEBCHAT_REQUIRED', message: 'Website chat stays on so guests can walk the journey.' } })
     }
-    await prisma.channel.deleteMany({ where: { id, botId, tenantId } })
+    if (channels.some((channel) => channel.id === id)) await prisma.channel.delete({ where: { id } })
     return reply.status(204).send()
   })
 }

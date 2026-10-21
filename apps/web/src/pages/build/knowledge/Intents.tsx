@@ -5,16 +5,9 @@ import {
 } from 'lucide-react'
 import { Button, Input, Badge, EmptyState } from '@ybot/ui'
 import { cn } from '@ybot/ui'
-import { SubNav } from '../../../components/SubNav'
+import { KnowledgeSubNav } from './subnav'
 import { useIntents, useUpdateIntent, useCreateIntent, useDeleteIntent } from '../../../lib/hooks'
 
-const SUBNAV = [
-  { label: 'Intents', path: '/build/knowledge/intents' },
-  { label: 'Entities', path: '/build/knowledge/entities' },
-  { label: 'FAQs', path: '/build/knowledge/faqs' },
-  { label: 'Sources', path: '/build/knowledge/sources' },
-  { label: 'Training', path: '/build/knowledge/training' },
-]
 
 interface Intent {
   id: string
@@ -163,7 +156,7 @@ export function IntentsPage() {
             <Plus size={13} /> New Intent
           </Button>
         </div>
-        <SubNav items={SUBNAV} />
+        <KnowledgeSubNav />
       </div>
 
       <div className="flex flex-1 overflow-hidden">

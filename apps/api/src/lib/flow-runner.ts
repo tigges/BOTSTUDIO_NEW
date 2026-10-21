@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto'
 import { SessionMachine, acceptedHoursOffer, hoursChapterName, copyJumpVariables, missingChapterLine, hearChapter, offerOnMap, isSmallTalk, isTopicSwitch, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn, basicAct, basicsReply } from '@ybot/runtime'
 import type { Session, SessionVariables, FlowGraph, ToolCallResult } from '@ybot/runtime'
 import { prisma } from '@ybot/db'
-import { CATALOG_ENTITY, catalogFromValues, type HandoverRequest, type StudioCatalog } from '@ybot/shared'
+import { CATALOG_ENTITY, catalogFromValues, numberedChoice, type HandoverRequest, type StudioCatalog } from '@ybot/shared'
 import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
 import { newestByFlow, pickWorkingCopy } from './entry-flow.js'
 import { runFlowTurn } from './flow-turn.js'
@@ -103,6 +103,9 @@ export interface JourneyStore {
   createTicket(ticket: { subject: string; description: string }): Promise<void>
   /** Runs a tool from the bot's Tools list for a Run tool step. */
   runTool?(toolId: string, args: Record<string, unknown>): Promise<ToolCallResult>
+  /** Bot settings: hand over when a tool has not answered after this many seconds. */
+  toolWaitSeconds?(): Promise<number | null>
+  toolName?(toolId: string): Promise<string | null>
   /** What the bot remembers about this contact, for contact.* in a new session. */
   recall?(): Promise<Record<string, string>>
   /** Keeps the bot's listed answers for the contact's next chat. */
@@ -197,7 +200,8 @@ export async function runJourney(store: JourneyStore, opts: {
   tenantId: string
   userText: string
 }): Promise<FlowRunResult> {
-  const { conversationId, botId, tenantId, userText } = opts
+  const { conversationId, botId, tenantId } = opts
+  let { userText } = opts
   const named = await store.nameTurn(userText)
   const waiting = named.thanks ? await store.loadSession() : null
   if (nameThanksEndsTurn(named.thanks, waiting?.status)) {
@@ -210,6 +214,8 @@ export async function runJourney(store: JourneyStore, opts: {
   const environmentLabel = convo.environmentLabel
 
   let fsRecord = await store.loadSession()
+  const offered = asRecord(fsRecord?.waitingFor)['choices']
+  userText = numberedChoice(Array.isArray(offered) ? offered.map(String) : undefined, userText) ?? userText
   let active = fsRecord
     ? await store.version(fsRecord.flowVersionId)
     : await store.entry()
@@ -220,6 +226,7 @@ export async function runJourney(store: JourneyStore, opts: {
 
   const llmAdapter = await store.llm()
   const catalog = await store.catalog()
+  const toolWaitSeconds = store.toolWaitSeconds ? await store.toolWaitSeconds().catch(() => null) : null
   const machine = new SessionMachine({
     llm: llmAdapter,
     db: store.db() as never,
@@ -227,6 +234,8 @@ export async function runJourney(store: JourneyStore, opts: {
     catalog,
     now: store.now,
     ...(store.runTool ? { runTool: (toolId: string, args: Record<string, unknown>) => store.runTool!(toolId, args) } : {}),
+    toolWaitSeconds,
+    ...(store.toolName ? { toolName: (toolId: string) => store.toolName!(toolId) } : {}),
   })
   const loadChapters = () => store.chapters()
   const previousAsked = savedQuestion(fsRecord?.waitingFor)
@@ -577,6 +586,17 @@ async function runVersion(store: JourneyStore, opts: {
   }
 }
 
+/** Bot settings: seconds a Run tool step may keep the guest waiting before the chat is handed over. */
+export async function botToolWaitSeconds(botId: string): Promise<number | null> {
+  const config = await prisma.botConfig.findUnique({ where: { botId }, select: { toolWaitEscalateSeconds: true } })
+  return config?.toolWaitEscalateSeconds ?? null
+}
+
+export async function botToolName(botId: string, toolId: string): Promise<string | null> {
+  const tool = await prisma.tool.findFirst({ where: { id: toolId, botId }, select: { name: true } })
+  return tool?.name ?? null
+}
+
 /** Live chats: flow_sessions, step_logs and tickets in Postgres. Production plays its live release. */
 export function postgresJourneyStore(opts: { conversationId: string; botId: string; tenantId: string }): JourneyStore {
   const { conversationId, botId, tenantId } = opts
@@ -594,6 +614,8 @@ export function postgresJourneyStore(opts: { conversationId: string; botId: stri
     nameTurn: (userText) => takeNameTurn(conversationId, userText),
     saveContactName,
     runTool: (toolId, args) => toolRunnerFor(tenantId, botId, { source: 'bot', conversationId })(toolId, args),
+    toolWaitSeconds: () => botToolWaitSeconds(botId),
+    toolName: (toolId) => botToolName(botId, toolId),
     recall: () => recallForChat(conversationId, botId),
     async remember(flow) {
       await rememberFromChat(conversationId, botId, flow)

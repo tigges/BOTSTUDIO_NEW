@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Play, Plus } from 'lucide-react'
+import { List, Play, Plus } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { Button, PageHeader, Skeleton } from '@ybot/ui'
@@ -18,6 +18,7 @@ import {
 } from '@ybot/shared'
 import type { FlowGraph as RuntimeGraph } from '@ybot/runtime'
 import { FlowWizard } from './FlowWizard'
+import { LearnFromChats } from './LearnFromChats'
 import { JourneyMap, type ChapterHealth, type JourneyLens } from './JourneyMap'
 import { JourneyTest, type JourneyTestLine, type StepVote } from './JourneyTest'
 import { reviewFlow } from './PublishCheck'
@@ -27,13 +28,17 @@ import { useAppStore } from '../../store/app'
 import { busierEnvironment, journeySummary, outcomeLine } from '../../lib/journey-health'
 
 const NO_ENVIRONMENTS: Array<{ id: string; kind: string; name: string }> = []
-const LENSES: Array<{ id: JourneyLens; label: string }> = [
+/** The map lenses, plus Learn from chats: drafts from real chats belong next to the map they change. */
+type JourneyTab = JourneyLens | 'learn'
+
+const LENSES: Array<{ id: JourneyTab; label: string }> = [
   { id: 'design', label: 'Design' },
   { id: 'traffic', label: 'Traffic' },
   { id: 'health', label: 'Health' },
+  { id: 'learn', label: 'Learn from chats' },
 ]
 
-function LensTabs({ lens, onChange }: { lens: JourneyLens; onChange: (lens: JourneyLens) => void }) {
+function LensTabs({ lens, onChange }: { lens: JourneyTab; onChange: (lens: JourneyTab) => void }) {
   return (
     <div className="flex gap-0 border-b border-[var(--border)] px-6">
       {LENSES.map((item) => (
@@ -111,13 +116,14 @@ function healthForChapter(outcome: ChapterOutcome | undefined, graph: FlowGraph 
 export function JourneyPage() {
   const navigate = useNavigate()
   const search = useSearch({ from: '/app/build/journey' })
-  const lens: JourneyLens = search.lens ?? 'design'
+  const lens: JourneyTab = search.lens ?? 'design'
+  const counting = lens === 'traffic' || lens === 'health'
   const setSearch = (next: Partial<typeof search>) => {
     const merged = { ...search, ...next }
     const clean = Object.fromEntries(Object.entries(merged).filter(([, value]) => value !== undefined)) as typeof search
     void navigate({ to: '/build/journey', search: clean, replace: true })
   }
-  const setLens = (next: JourneyLens) => setSearch({ lens: next === 'design' ? undefined : next })
+  const setLens = (next: JourneyTab) => setSearch({ lens: next === 'design' ? undefined : next })
   const [showNew, setShowNew] = useState(false)
   const [createError, setCreateError] = useState('')
   const [connectingId, setConnectingId] = useState('')
@@ -149,10 +155,10 @@ export function JourneyPage() {
   const trafficKind = search.env ?? 'production'
   const trafficId = environments.find((env) => env.kind === trafficKind)?.id ?? ''
   const includeTestRuns = search.tests !== 'hide'
-  const traffic = useJourneyTraffic(lens === 'traffic' || lens === 'health', trafficId || undefined, includeTestRuns)
+  const traffic = useJourneyTraffic(counting, trafficId || undefined, includeTestRuns)
   const busier = busierEnvironment(traffic.data?.byEnvironment, environments, trafficId)
-  const viewKind = lens === 'design' ? selectedEnv : trafficKind
-  const environmentId = lens === 'design' ? editingId : trafficId
+  const viewKind = counting ? trafficKind : selectedEnv
+  const environmentId = counting ? trafficId : editingId
 
   const shown = (flow: Flow) => versionForEnvironment(flow.versions, environmentId, viewKind)
   const named = useMemo(() => flows.flatMap((flow) => {
@@ -327,6 +333,9 @@ export function JourneyPage() {
                 <Play size={14} /> {testing ? 'Hide test' : 'Test this journey'}
               </Button>
             )}
+            <Button size="md" variant="ghost" onClick={() => navigate({ to: '/build/flows' })} data-testid="journey-all-flows">
+              <List size={14} /> All flows
+            </Button>
             <Button size="md" onClick={() => setShowNew(true)}>
               <Plus size={14} /> Add chapter
             </Button>
@@ -336,7 +345,7 @@ export function JourneyPage() {
       />
       <div className="flex min-h-0 flex-1">
       <div className="flex-1 overflow-auto p-6">
-        {lens !== 'design' && (
+        {counting && (
           <TrafficFilters
             environments={environments}
             environmentKind={trafficKind}
@@ -345,14 +354,14 @@ export function JourneyPage() {
             onTestRuns={(include) => setSearch({ tests: include ? undefined : 'hide' })}
           />
         )}
-        {lens !== 'design' && traffic.isError && (
+        {counting && traffic.isError && (
           <p className="mb-4 text-sm text-[var(--text-secondary)]">
             Chat counts are unavailable right now. The chapters are still here.{' '}
             <button type="button" className="font-medium text-[var(--accent)]" onClick={() => { void traffic.refetch() }}>Try again</button>
           </p>
         )}
-        {lens !== 'design' && traffic.isLoading && <Skeleton className="mb-4 h-5 w-96 rounded" />}
-        {lens !== 'design' && traffic.data && (
+        {counting && traffic.isLoading && <Skeleton className="mb-4 h-5 w-96 rounded" />}
+        {counting && traffic.data && (
           <p className="mb-4 text-sm text-[var(--text-secondary)]" data-testid="journey-summary">
             {journeySummary(traffic.data.total, trafficLabel, traffic.data.days, { unstarted: traffic.data.unstarted, testRuns: traffic.data.testRuns })}
             {busier && (
@@ -421,7 +430,11 @@ export function JourneyPage() {
             ))}
           </div>
         )}
-        {isLoading ? (
+        {lens === 'learn' ? (
+          <div className="max-w-3xl" data-testid="journey-learn">
+            <LearnFromChats />
+          </div>
+        ) : isLoading ? (
           <div className="space-y-3">{Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-24 w-full rounded-xl" />)}</div>
         ) : isError ? (
           <div>
@@ -431,7 +444,7 @@ export function JourneyPage() {
         ) : (
           <JourneyMap
             layout={layout}
-            lens={lens}
+            lens={lens as JourneyLens}
             chats={traffic.data?.chats ?? {}}
             healthFor={(id) => (lens === 'health' ? healthForChapter(traffic.data?.outcomes?.[id], graphs.get(id), names) : undefined)}
             automationsFor={automationsFor}

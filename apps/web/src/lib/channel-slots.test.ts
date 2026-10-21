@@ -45,4 +45,6 @@ test('website chat cannot sit idle even without a row', () => {
 test('a row without credentials still counts as idle', () => {
   assert.equal(channelStatus('sms', { isActive: false, config: {} }), 'idle')
   assert.equal(channelStatus('whatsapp', { isActive: true, config: { phoneNumberId: '1' } }), 'idle')
+  assert.equal(channelStatus('email', { isActive: true, config: { fromAddress: 'desk@harbour.test' }, secretsSet: ['inboundSecret'] }), 'active')
+  assert.equal(channelStatus('whatsapp', { isActive: false, config: { phoneNumberId: '1', verifyToken: 'v' }, secretsSet: ['accessToken'] }), 'inactive')
 })

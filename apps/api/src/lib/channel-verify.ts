@@ -1,7 +1,9 @@
 import { randomBytes } from 'node:crypto'
 import {
+  channelFieldLabel,
   isOptionalChannelKind,
   parseChannelConfig,
+  statusHelp,
   type OptionalChannelKind,
 } from '@ybot/shared'
 
@@ -16,6 +18,18 @@ export interface VerifyResult {
   ok: boolean
   message?: string
   extra?: Record<string, string>
+  /** The provider's HTTP status when it refused. */
+  status?: number
+  /** The field to fix, from the channel's status-code table. */
+  field?: string
+}
+
+/** A refusal that names the field the status code points at. */
+function refused(kind: OptionalChannelKind, status: number, fallback: string): VerifyResult {
+  const help = statusHelp(kind, status, 'provider')
+  if (!help) return { ok: false, status, message: fallback }
+  const label = channelFieldLabel(kind, help.field)
+  return { ok: false, status, ...(help.field ? { field: help.field } : {}), message: `${kindLabel(kind)} answered ${status}${label ? `: check ${label}` : ''}. ${help.fix}` }
 }
 
 function emailLooksRight(value: string): boolean {
@@ -40,10 +54,10 @@ export async function verifyChannelCredentials(
 
   if (kind === 'email') {
     if (!emailLooksRight(parsed['fromAddress'] ?? '')) {
-      return { ok: false, message: 'From address needs to look like an email.' }
+      return { ok: false, field: 'fromAddress', message: 'From address needs to look like an email.' }
     }
     if ((parsed['inboundSecret'] ?? '').length < 8) {
-      return { ok: false, message: 'Inbound secret needs at least 8 characters.' }
+      return { ok: false, field: 'inboundSecret', message: 'Inbound secret needs at least 8 characters.' }
     }
     return { ok: true }
   }
@@ -51,7 +65,7 @@ export async function verifyChannelCredentials(
   try {
     if (kind === 'whatsapp') return await verifyWhatsApp(parsed, fetchImpl)
     if (kind === 'telegram') return await verifyTelegram(parsed, fetchImpl)
-    if (kind === 'sms' || kind === 'phone') return await verifyTwilio(parsed, fetchImpl)
+    if (kind === 'sms' || kind === 'phone') return await verifyTwilio(kind, parsed, fetchImpl)
   } catch (err) {
     const who = kindLabel(kind)
     const detail = err instanceof Error ? err.message : 'network error'
@@ -73,13 +87,10 @@ async function verifyWhatsApp(config: Record<string, string>, fetchImpl: FetchLi
   const res = await fetchImpl(`https://graph.facebook.com/v20.0/${encodeURIComponent(id)}?fields=display_phone_number`, {
     headers: { Authorization: `Bearer ${token}` },
   })
-  if (res.status === 401 || res.status === 403) {
-    return { ok: false, message: 'WhatsApp refused that access token.' }
-  }
   if (!res.ok) {
     const body = await readJson(res)
     const msg = (body['error'] as { message?: string } | undefined)?.message
-    return { ok: false, message: msg ?? `WhatsApp returned HTTP ${res.status}.` }
+    return refused('whatsapp', res.status, msg ?? `WhatsApp returned HTTP ${res.status}.`)
   }
   return { ok: true }
 }
@@ -89,26 +100,23 @@ async function verifyTelegram(config: Record<string, string>, fetchImpl: FetchLi
   const res = await fetchImpl(`https://api.telegram.org/bot${token}/getMe`)
   const body = await readJson(res)
   if (!res.ok || body['ok'] !== true) {
-    return { ok: false, message: 'Telegram refused that bot token.' }
+    return refused('telegram', res.ok ? 401 : res.status, 'Telegram refused that bot token.')
   }
   if (config['webhookSecret']) return { ok: true }
   return { ok: true, extra: { webhookSecret: randomBytes(16).toString('hex') } }
 }
 
-async function verifyTwilio(config: Record<string, string>, fetchImpl: FetchLike): Promise<VerifyResult> {
+async function verifyTwilio(kind: 'sms' | 'phone', config: Record<string, string>, fetchImpl: FetchLike): Promise<VerifyResult> {
   const sid = config['accountSid'] ?? ''
   const auth = config['authToken'] ?? ''
   if (!sid.startsWith('AC')) {
-    return { ok: false, message: 'Twilio Account SID starts with AC.' }
+    return { ok: false, field: 'accountSid', message: 'Twilio Account SID starts with AC.' }
   }
   const res = await fetchImpl(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}.json`, {
     headers: { Authorization: `Basic ${Buffer.from(`${sid}:${auth}`).toString('base64')}` },
   })
-  if (res.status === 401 || res.status === 403) {
-    return { ok: false, message: 'Twilio refused those credentials.' }
-  }
   if (!res.ok) {
-    return { ok: false, message: `Twilio returned HTTP ${res.status}.` }
+    return refused(kind, res.status === 403 ? 401 : res.status, `Twilio returned HTTP ${res.status}.`)
   }
   return { ok: true }
 }

@@ -1,7 +1,7 @@
 import type { NodeContext, NodeResult } from '../types.js'
 import { pickCatalog } from '../catalog-lookup.js'
 import { pickRoute } from '../topic-route.js'
-import { aiStepContract, handoverFromConfig, parseAiTurn, routerRoutes, stepMode, type AiStepContract } from '@ybot/shared'
+import { aiStepContract, handoverFromConfig, parseAiTurn, routerRoutes, stepMode, toolWaitHandoverConfig, type AiStepContract } from '@ybot/shared'
 import { evaluateCondition, interpolate, lookup } from '../utils.js'
 
 // ── trigger_start ────────────────────────────────────────────────────────────
@@ -118,6 +118,19 @@ function toolArg(template: string, vars: Record<string, unknown>): unknown {
   return interpolate(template, vars).replace(/\{\{[^}]+\}\}/g, '')
 }
 
+const TOOL_WAIT_EXPIRED = Symbol('tool-wait-expired')
+
+/** The tool keeps running after the wait expires; its result is simply no longer awaited by this turn. */
+async function withinToolWait<T>(call: Promise<T>, seconds: number): Promise<T | typeof TOOL_WAIT_EXPIRED> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const expired = new Promise<typeof TOOL_WAIT_EXPIRED>((resolve) => { timer = setTimeout(() => resolve(TOOL_WAIT_EXPIRED), seconds * 1000) })
+  try {
+    return await Promise.race([call, expired])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export async function executeRunTool(ctx: NodeContext): Promise<NodeResult> {
   const { config, session, services } = ctx
   const toolId = String(config['toolId'] ?? '').trim()
@@ -132,7 +145,16 @@ export async function executeRunTool(ctx: NodeContext): Promise<NodeResult> {
   if (!toolId || !services.runTool) {
     return { output: { [saveAs]: null, tool_ok: false, tool_error: toolId ? 'Tools cannot run here.' : 'No tool chosen.' }, nextNodeId: 'error' }
   }
-  const result = await services.runTool(toolId, args)
+  const call = services.runTool(toolId, args)
+  const seconds = services.toolWaitSeconds
+  const result = seconds && seconds > 0 ? await withinToolWait(call, seconds) : await call
+  if (result === TOOL_WAIT_EXPIRED) {
+    const name = await services.toolName?.(toolId).catch(() => null) ?? null
+    return {
+      output: { [saveAs]: null, tool_ok: false, tool_error: `No answer within ${seconds} seconds.`, tool_wait_escalated: true },
+      handover: handoverFromConfig(toolWaitHandoverConfig(name ?? '', seconds!), session.variables.flow),
+    }
+  }
   return {
     output: { [saveAs]: result.output ?? null, tool_ok: result.ok, tool_error: result.error ?? '', tool_skipped: result.skipped === true },
     nextNodeId: result.ok ? 'success' : 'error',

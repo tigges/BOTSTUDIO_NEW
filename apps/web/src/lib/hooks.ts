@@ -5,7 +5,7 @@
  */
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import React from 'react'
-import type { BusinessProfile, GuardrailRule, ReturnOutcome } from '@ybot/shared'
+import type { BotSettings, BusinessProfile, GuardrailRule, ReturnOutcome } from '@ybot/shared'
 import * as api from './api'
 import * as demo from './demo-data'
 import { useAppStore } from '../store/app'
@@ -251,6 +251,31 @@ export function usePublishFlow() {
 }
 
 // ── Sources ───────────────────────────────────────────────────────────────────
+export function useKnowledgeDocuments() {
+  const bid = useAppStore((s) => s.selectedBotId)
+  return useQuery({
+    queryKey: ['knowledge-documents', bid],
+    enabled: !!bid && !isDemoMode(),
+    queryFn: () => api.knowledge.documents(bid!).then((r) => r.data),
+  })
+}
+
+export function useDocumentChunks(documentId: string | null) {
+  const bid = useAppStore((s) => s.selectedBotId)
+  return useQuery({
+    queryKey: ['knowledge-chunks', bid, documentId],
+    enabled: !!bid && !!documentId && !isDemoMode(),
+    queryFn: () => api.knowledge.chunks(bid!, documentId!).then((r) => r.data),
+  })
+}
+
+export function useSearchTest() {
+  const bid = useAppStore((s) => s.selectedBotId)
+  return useMutation({
+    mutationFn: (body: { query: string; mode: api.SearchMode; topK: number }) => api.knowledge.searchTest(bid ?? '', body).then((r) => r.data),
+  })
+}
+
 export function useSources() {
   const bid = botId()
   return useQuery({
@@ -292,20 +317,21 @@ export function useDeleteSource() {
   })
 }
 
-// ── Training config ───────────────────────────────────────────────────────────
-export function useTraining() {
+// ── Bot settings ──────────────────────────────────────────────────────────────
+export function useBotSettings() {
   const bid = botId()
   return useQuery({
-    queryKey: ['training', bid],
-    queryFn: withDemoFallback(() => api.knowledge.training.get(bid).then((r) => r.data), demo.DEMO_TRAINING),
+    queryKey: ['bot-settings', bid],
+    queryFn: withDemoFallback(() => api.botSettings.get(bid).then((r) => r.data), demo.DEMO_BOT_SETTINGS),
+    enabled: !!bid,
   })
 }
 
-export function useSaveTraining() {
+export function useSaveBotSettings() {
   const qc = useQueryClient(); const bid = botId()
   return useMutation({
-    mutationFn: (config: Partial<api.LlmConfig>) => api.knowledge.training.update(bid, config),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['training', bid] }),
+    mutationFn: (settings: BotSettings) => api.botSettings.update(bid, settings).then((r) => r.data),
+    onSuccess: (data) => qc.setQueryData(['bot-settings', bid], data),
   })
 }
 
@@ -327,6 +353,16 @@ export function useSaveInboxConfig() {
 }
 
 // ── Conversations ─────────────────────────────────────────────────────────────
+export function useBotOverview() {
+  const bid = useAppStore((s) => s.selectedBotId)
+  return useQuery({
+    queryKey: ['bot-overview', bid],
+    enabled: !!bid && !isDemoMode(),
+    queryFn: () => api.bots.overview(bid!).then((r) => r.data),
+    refetchInterval: 30_000,
+  })
+}
+
 export function useConversations(params?: Record<string, string>) {
   return useQuery({
     queryKey: ['conversations', params],
@@ -582,17 +618,28 @@ export function useDeleteChannel() {
   })
 }
 
+export function useCheckChannel() {
+  const bid = botId()
+  return useMutation({
+    mutationFn: async (id: string): Promise<api.ChannelCheck> => {
+      if (isDemoMode()) return { ok: true, message: 'The provider accepted these credentials.' }
+      return api.channels.check(bid, id).then((r) => r.data)
+    },
+  })
+}
+
 export function useUpdateChannel() {
   const qc = useQueryClient()
   const bid = botId()
   return useMutation({
     mutationFn: async ({ id, ...body }: { id: string; name?: string; isActive?: boolean; config?: Record<string, unknown> }) => {
-      if (isDemoMode()) return { data: { id, ...body } }
+      if (isDemoMode()) return { data: null }
       return api.channels.update(bid, id, body)
     },
-    onSuccess: (_data, vars) => {
+    onSuccess: (result, vars) => {
+      const { config: _sent, ...plain } = vars
       qc.setQueryData(['channels', bid], (prev: api.Channel[] | undefined) =>
-        (prev ?? []).map((channel) => channel.id === vars.id ? { ...channel, ...vars } : channel),
+        (prev ?? []).map((channel) => channel.id !== vars.id ? channel : result.data ?? { ...channel, ...plain }),
       )
       if (!isDemoMode()) qc.invalidateQueries({ queryKey: ['channels', bid] })
     },
@@ -781,16 +828,6 @@ export function useAggregate(params: Record<string, string>) {
     queryFn: () => api.analytics.aggregate(params).then((r) => r.data),
     staleTime: 60_000,
     placeholderData: keepPreviousData,
-  })
-}
-
-export function useTrainingRuns() {
-  const bid = botId()
-  return useQuery({
-    queryKey: ['training-runs', bid],
-    queryFn: () => bid ? api.knowledge.training.runs(bid).then((r) => r.data) : Promise.resolve([]),
-    staleTime: 30_000,
-    enabled: !!bid,
   })
 }
 

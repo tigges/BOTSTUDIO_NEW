@@ -1,4 +1,4 @@
-import { hoursFromCatalog, takeBookingTime, type HandoverRequest } from '@ybot/shared'
+import { hoursFromCatalog, numberedChoice, takeBookingTime, type HandoverRequest } from '@ybot/shared'
 import { usableContactName } from './contact-speech.js'
 import type { NodeContext, NodeResult, Session, ExecutionServices } from './types.js'
 import {
@@ -129,7 +129,7 @@ export class SessionMachine {
           session.variables.flow[variable] = incomingText
         }
       } else {
-        session.variables.flow[variable] = incomingText
+        session.variables.flow[variable] = numberedChoice(session.waitingFor.choices, incomingText) ?? incomingText
       }
       session.waitingFor = undefined
       session.status = 'running'

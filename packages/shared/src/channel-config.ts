@@ -87,3 +87,107 @@ export function numbersMatch(left: string, right: string): boolean {
   const b = digitsOnly(right)
   return a.length > 0 && a === b
 }
+
+/** Keys never sent back to the browser: the secret fields plus what BotStudio generates. */
+export function channelSecretKeys(kind: string): string[] {
+  if (!isOptionalChannelKind(kind)) return []
+  return [...CHANNEL_FIELDS[kind].filter((field) => field.secret).map((field) => field.key), 'webhookSecret']
+}
+
+/** The config the console may see, and which secrets are saved. */
+export function maskChannelConfig(kind: string, config: unknown): { config: Record<string, unknown>; secretsSet: string[] } {
+  const raw = typeof config === 'object' && config !== null && !Array.isArray(config) ? config as Record<string, unknown> : {}
+  const secret = new Set(channelSecretKeys(kind))
+  const visible: Record<string, unknown> = {}
+  const secretsSet: string[] = []
+  for (const [key, value] of Object.entries(raw)) {
+    if (!secret.has(key)) visible[key] = value
+    else if (String(value ?? '').trim()) secretsSet.push(key)
+  }
+  return { config: visible, secretsSet }
+}
+
+/** A blank field in an edit keeps the saved value, so secrets need not be typed again. */
+export function mergeChannelConfig(previous: unknown, incoming: Record<string, unknown>): Record<string, unknown> {
+  const base = typeof previous === 'object' && previous !== null && !Array.isArray(previous) ? previous as Record<string, unknown> : {}
+  const next = { ...base }
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value === null || value === undefined || String(value).trim() === '') continue
+    next[key] = value
+  }
+  return next
+}
+
+export interface RoutingKey {
+  label: string
+  /** Null when the key is a secret the console never shows. */
+  value: string | null
+  how: string
+}
+
+/** What an inbound delivery carries that picks this connection out of every other. */
+export function channelRoutingKey(kind: string, config: Record<string, unknown>, channelId: string): RoutingKey {
+  const value = (key: string) => String(config[key] ?? '').trim() || null
+  switch (kind) {
+    case 'whatsapp':
+      return { label: 'Phone Number ID', value: value('phoneNumberId'), how: 'Meta sends it with every message, and BotStudio routes on it.' }
+    case 'sms':
+    case 'phone':
+      return { label: 'Twilio number', value: value('fromNumber'), how: 'Twilio sends it as "To", and BotStudio routes on it.' }
+    case 'telegram':
+      return { label: 'Webhook secret', value: null, how: 'BotStudio registers it with Telegram on save and checks it on every delivery. It is never shown.' }
+    case 'email':
+      return { label: 'From address', value: value('fromAddress'), how: 'Mail must carry the inbound secret; the address picks the connection when several share a secret.' }
+    default:
+      return { label: 'Channel ID', value: channelId, how: 'The embed script sends it with every message.' }
+  }
+}
+
+export interface StatusHelp {
+  status: number
+  /** provider: BotStudio called the provider (Connect, Check). webhook: the provider called BotStudio. */
+  where: 'provider' | 'webhook'
+  /** The field to fix; null when no field is at fault. */
+  field: string | null
+  fix: string
+}
+
+export const CHANNEL_STATUS_HELP: Record<OptionalChannelKind, StatusHelp[]> = {
+  whatsapp: [
+    { status: 401, where: 'provider', field: 'accessToken', fix: 'The access token is wrong or expired. Create a permanent token for a Meta System User.' },
+    { status: 403, where: 'provider', field: 'accessToken', fix: 'The token works but lacks the whatsapp_business_messaging permission.' },
+    { status: 400, where: 'provider', field: 'phoneNumberId', fix: 'No phone number with this ID for this token. Copy the Phone Number ID from API Setup, not the phone number itself.' },
+    { status: 404, where: 'provider', field: 'phoneNumberId', fix: 'No phone number with this ID. Copy the Phone Number ID from API Setup.' },
+    { status: 403, where: 'webhook', field: 'verifyToken', fix: 'Meta sent a verify token no connection has. Type the same string in Meta\'s webhook form.' },
+  ],
+  telegram: [
+    { status: 401, where: 'provider', field: 'botToken', fix: 'Telegram does not know this token. Copy it again from BotFather.' },
+    { status: 404, where: 'provider', field: 'botToken', fix: 'The token is incomplete. It looks like 123456:ABC…, with the part before the colon.' },
+    { status: 403, where: 'webhook', field: null, fix: 'The secret header did not match. Save the connection again so BotStudio registers the webhook afresh.' },
+  ],
+  sms: [
+    { status: 401, where: 'provider', field: 'authToken', fix: 'The Account SID and Auth Token do not match. Copy both from the Twilio Console.' },
+    { status: 404, where: 'provider', field: 'accountSid', fix: 'No Twilio account with this SID.' },
+    { status: 400, where: 'provider', field: 'fromNumber', fix: 'Twilio rejected the number. Use a number on this account, written like +447700900123.' },
+  ],
+  phone: [
+    { status: 401, where: 'provider', field: 'authToken', fix: 'The Account SID and Auth Token do not match. Copy both from the Twilio Console.' },
+    { status: 404, where: 'provider', field: 'accountSid', fix: 'No Twilio account with this SID.' },
+    { status: 400, where: 'provider', field: 'fromNumber', fix: 'Twilio rejected the number. Use a number on this account, written like +447700900123.' },
+  ],
+  email: [
+    { status: 400, where: 'webhook', field: null, fix: 'The POST is missing from, text or secret.' },
+    { status: 403, where: 'webhook', field: 'inboundSecret', fix: 'The secret did not match. Send the Inbound secret as "secret" in the body or the query.' },
+  ],
+}
+
+export function statusHelp(kind: string, status: number, where: StatusHelp['where'] = 'provider'): StatusHelp | null {
+  if (!isOptionalChannelKind(kind)) return null
+  return CHANNEL_STATUS_HELP[kind].find((row) => row.status === status && row.where === where) ?? null
+}
+
+export function channelFieldLabel(kind: string, key: string | null): string {
+  if (!key) return ''
+  if (!isOptionalChannelKind(kind)) return key
+  return CHANNEL_FIELDS[kind].find((field) => field.key === key)?.label ?? key
+}

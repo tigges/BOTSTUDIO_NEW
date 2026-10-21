@@ -28,6 +28,7 @@ import { prisma } from '@ybot/db'
 import { createLlmAdapter, createLlmAdapterForModel, type LlmMessage } from '@ybot/llm'
 import {
   alwaysHumanMatch,
+  answerLength,
   alwaysHumanRequest,
   BLOCKED_OUTPUT_LINE,
   evaluateGuardrails,
@@ -75,6 +76,8 @@ export interface TurnResult {
   ended: boolean
   /** held: a person has the chat and the bot said nothing. handover: the bot just passed it on. */
   path: 'journey' | 'name' | 'answer' | 'none' | 'held' | 'handover' | 'guardrail'
+  /** The open question's choices, for channels that show them as buttons or a numbered list. */
+  choices?: string[]
 }
 
 /** A person has the chat, so the guest waits for their reply. */
@@ -178,7 +181,8 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
     if (journey.handover) return handOver(journey.handover, 'journey', journey.messages)
     if (journey.handled) {
       const text = journey.messages.filter((line) => line.trim()).join('\n\n')
-      if (text) return reply(text, { ended: Boolean(journey.ended), path: 'journey' })
+      const choices = !journey.ended ? journey.waitingFor?.choices?.filter((choice) => choice.trim()) : undefined
+      if (text) return reply(text, { ended: Boolean(journey.ended), path: 'journey', ...(choices?.length ? { choices } : {}) })
       return { text: '', ended: Boolean(journey.ended), path: 'journey' }
     }
   } catch (err) {
@@ -292,7 +296,7 @@ export async function chatHistory(conversationId: string, current: string, limit
   return lines.reverse().slice(-limit).map(({ role, text }) => ({ role, content: text }))
 }
 
-/** The bot's model answers from the knowledge base, with its own prompt, temperature and length. */
+/** The bot's model answers from the knowledge base, with its own prompt and response length. */
 export async function answerFromKnowledge(request: AnswerRequest): Promise<AnswerResult> {
   const cfg = await prisma.botConfig.findUnique({ where: { botId: request.botId } }).catch(() => null)
   const bot = cfg ? null : await prisma.bot.findUnique({ where: { id: request.botId }, select: { name: true } }).catch(() => null)
@@ -301,12 +305,13 @@ export async function answerFromKnowledge(request: AnswerRequest): Promise<Answe
   const model = cfg?.model ?? undefined
   const hits = await searchKnowledgeHits(request.text, request.tenantId, request.botId)
   const adapter = model ? createLlmAdapterForModel(model) : defaultLlm
+  const length = answerLength(cfg?.responseLength, cfg?.maxTokens)
   await adapter.stream({
     messages: [...request.history, { role: 'user', content: request.text }],
-    systemPrompt: systemPrompt + knowledgeBlock(hits) + (request.instruction ? `\n\n${request.instruction}` : ''),
+    systemPrompt: `${systemPrompt}\n\n${length.instruction}` + knowledgeBlock(hits) + (request.instruction ? `\n\n${request.instruction}` : ''),
     model,
     temperature: cfg?.temperature ?? 0.3,
-    maxTokens: cfg?.maxTokens ?? 2048,
+    maxTokens: length.maxTokens,
     onChunk: request.onChunk,
   })
   return { sources: sourcesOf(hits) }

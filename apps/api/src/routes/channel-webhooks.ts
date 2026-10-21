@@ -32,8 +32,16 @@ interface WATextMessage {
   from: string
   id: string
   timestamp: string
-  type: 'text'
-  text: { body: string }
+  type: string
+  text?: { body: string }
+  interactive?: { type: string; button_reply?: { id: string; title: string }; list_reply?: { id: string; title: string } }
+}
+
+/** Typed text, or the title of the button or menu row the guest tapped. */
+export function whatsAppHeard(msg: WATextMessage): string | null {
+  if (msg.type === 'text') return msg.text?.body.trim() || null
+  if (msg.type === 'interactive') return (msg.interactive?.button_reply?.title ?? msg.interactive?.list_reply?.title ?? '').trim() || null
+  return null
 }
 
 interface WAChangeValue {
@@ -106,7 +114,7 @@ export async function channelWebhookRoutes(app: FastifyInstance) {
     const row = await prisma.channel.findFirst({ where: { id: channel.id } })
     if (!row) return reply.status(200).send({ ok: true })
     try {
-      const { reply: botReply } = await getBotReply({
+      const { reply: botReply, choices } = await getBotReply({
         channelId: row.id,
         botId: row.botId,
         tenantId: row.tenantId,
@@ -114,7 +122,7 @@ export async function channelWebhookRoutes(app: FastifyInstance) {
         externalId: heard.fromId,
         displayName: heard.name,
       })
-      if (botReply.trim()) await sendChannelReply('telegram', row.config, heard.chatId, botReply)
+      if (botReply.trim()) await sendChannelReply('telegram', row.config, heard.chatId, { text: botReply, choices })
     } catch (err) {
       app.log.error({ err }, '[telegram] inbound error')
     }
@@ -135,7 +143,7 @@ export async function channelWebhookRoutes(app: FastifyInstance) {
     const row = await prisma.channel.findFirst({ where: { id: channel.id } })
     if (!row) return reply.type('text/xml').send(twimlHangup('This number is not set up.'))
     try {
-      const { reply: botReply } = await getBotReply({
+      const { reply: botReply, choices } = await getBotReply({
         channelId: row.id,
         botId: row.botId,
         tenantId: row.tenantId,
@@ -143,7 +151,7 @@ export async function channelWebhookRoutes(app: FastifyInstance) {
         externalId: from,
         displayName: from,
       })
-      return reply.type('text/xml').send(twimlMessage(botReply || 'Thanks — I will follow up shortly.'))
+      return reply.type('text/xml').send(twimlMessage(botReply ? { text: botReply, choices } : 'Thanks — I will follow up shortly.'))
     } catch (err) {
       app.log.error({ err }, '[sms] inbound error')
       return reply.type('text/xml').send(twimlMessage('Sorry, I am having trouble right now.'))
@@ -165,7 +173,7 @@ export async function channelWebhookRoutes(app: FastifyInstance) {
     if (!row) return reply.type('text/xml').send(twimlHangup('This number is not set up.'))
     const userText = heard || 'hello'
     try {
-      const { reply: botReply } = await getBotReply({
+      const { reply: botReply, choices } = await getBotReply({
         channelId: row.id,
         botId: row.botId,
         tenantId: row.tenantId,
@@ -173,7 +181,7 @@ export async function channelWebhookRoutes(app: FastifyInstance) {
         externalId: callSid,
         displayName: from || 'Caller',
       })
-      return reply.type('text/xml').send(twimlGather(botReply || 'How can I help?', action))
+      return reply.type('text/xml').send(twimlGather(botReply ? { text: botReply, choices } : 'How can I help?', action))
     } catch (err) {
       app.log.error({ err }, '[phone] inbound error')
       return reply.type('text/xml').send(twimlHangup('Sorry, I am having trouble right now.'))
@@ -192,7 +200,7 @@ export async function channelWebhookRoutes(app: FastifyInstance) {
     const row = await prisma.channel.findFirst({ where: { id: channel.id } })
     if (!row) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
     try {
-      const { reply: botReply } = await getBotReply({
+      const { reply: botReply, choices } = await getBotReply({
         channelId: row.id,
         botId: row.botId,
         tenantId: row.tenantId,
@@ -200,7 +208,7 @@ export async function channelWebhookRoutes(app: FastifyInstance) {
         externalId: inbound.from,
         displayName: inbound.from,
       })
-      if (botReply.trim()) await sendChannelReply('email', row.config, inbound.from, botReply)
+      if (botReply.trim()) await sendChannelReply('email', row.config, inbound.from, { text: botReply, choices })
     } catch (err) {
       app.log.error({ err }, '[email] inbound error')
     }
@@ -229,16 +237,15 @@ async function processWhatsApp(payload: WAPayload): Promise<void> {
       if (!waConfig) continue
       for (const msg of value.messages) {
         if (!firstDelivery(row.id, msg.id)) continue
-        if (msg.type !== 'text') {
-          await sendWhatsAppText(waConfig, msg.from, 'Thanks for your message! I can currently only process text messages.').catch(() => {})
+        const userText = whatsAppHeard(msg)
+        if (!userText) {
+          await sendWhatsAppText(waConfig, msg.from, 'Thanks for your message! I can read text and the options I send, but not photos, voice notes or files yet.').catch(() => {})
           continue
         }
-        const userText = msg.text.body.trim()
-        if (!userText) continue
         const senderName = value.contacts?.find((c) => c.wa_id === msg.from)?.profile.name ?? msg.from
         try {
           await markRead(waConfig, msg.id)
-          const { reply: botReply } = await getBotReply({
+          const { reply: botReply, choices } = await getBotReply({
             channelId: row.id,
             botId: row.botId,
             tenantId: row.tenantId,
@@ -246,7 +253,7 @@ async function processWhatsApp(payload: WAPayload): Promise<void> {
             externalId: msg.from,
             displayName: senderName,
           })
-          if (botReply.trim()) await sendWhatsAppText(waConfig, msg.from, botReply)
+          if (botReply.trim()) await sendChannelReply('whatsapp', row.config, msg.from, { text: botReply, choices })
         } catch (err) {
           console.error(`[whatsapp] error processing message from ${msg.from}:`, err)
           await sendWhatsAppText(waConfig, msg.from, "Sorry, I'm having trouble right now. Please try again in a moment.").catch(() => {})

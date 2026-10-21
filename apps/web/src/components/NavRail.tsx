@@ -3,6 +3,7 @@ import { Link, useLocation } from '@tanstack/react-router'
 import { ChevronLeft, ChevronRight, Bot } from 'lucide-react'
 import { cn } from '@ybot/ui'
 import { NAV_GROUPS } from './nav-config'
+import { navItemActive } from '../lib/build-nav'
 import { shortVersion, fullVersion } from '../lib/version'
 
 interface NavRailProps {
@@ -10,15 +11,9 @@ interface NavRailProps {
   onToggleCollapse?: () => void
 }
 
-function itemActive(id: string, path: string, pathname: string, fromJourney: boolean) {
-  if (id === 'journey') return pathname === path || (fromJourney && pathname.startsWith('/build/flows/'))
-  if (id === 'flows' && fromJourney && pathname.startsWith('/build/flows/')) return false
-  return pathname === path || pathname.startsWith(path + '/')
-}
 
 export function NavRail({ collapsed = false, onToggleCollapse }: NavRailProps) {
-  const { pathname, href } = useLocation()
-  const fromJourney = href.includes('from=journey')
+  const { pathname } = useLocation()
 
   return (
     <nav
@@ -50,7 +45,7 @@ export function NavRail({ collapsed = false, onToggleCollapse }: NavRailProps) {
               </p>
             )}
             {group.items.map((item) => {
-              const isActive = itemActive(item.id, item.match ?? item.path, pathname, fromJourney)
+              const isActive = navItemActive(item.id, item.match ?? item.path, pathname)
               const Icon = item.icon
               return (
                 <Link
