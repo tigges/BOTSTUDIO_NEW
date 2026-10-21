@@ -184,6 +184,15 @@ try {
   startQuietChatSweep((message) => console.log(message))
   initQueues(process.env['REDIS_URL'] ?? 'redis://localhost:6379').catch(() => {})
   notifyDeployWebhook().catch(() => {})
+  // Watchtower stops the old container with SIGTERM during a deploy. Stop
+  // accepting connections and let requests in flight finish, so Caddy retries
+  // new requests against the replacement instead of the caller seeing a 502.
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+    process.once(signal, () => {
+      setTimeout(() => process.exit(0), 15_000).unref()
+      app.close().finally(() => process.exit(0))
+    })
+  }
 } catch (err) {
   app.log.error(err)
   process.exit(1)

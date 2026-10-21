@@ -3,6 +3,7 @@ import type {
   PrivacySettings, BotFootprint, BotStage, ChecklistItem, ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns, AggregateResult, BotSettings, DocumentQuality,
 } from '@ybot/shared'
 import { messageForStatus } from './api-error'
+import type { AppBuildInfo } from './version'
 
 const BASE = import.meta.env.VITE_API_URL ?? '/api/v1'
 
@@ -663,6 +664,7 @@ export function buildWsUrl(token: string): string {
 }
 
 export const system = {
+  version: () => apiFetch<{ data: AppBuildInfo }>('/system/version'),
   status: () => apiFetch<{ data: SystemStatus }>('/system/status'),
   config: () => apiFetch<{ data: SystemConfig }>('/system/config'),
 }

@@ -132,6 +132,7 @@ export function SystemStatusPage() {
     ? new Date(dataUpdatedAt).toLocaleTimeString()
     : '—'
 
+  const release = data?.version ?? buildInfo
   const runningCount = data?.containers.filter((c) => c.state === 'running').length ?? 0
   const totalCount = data?.containers.length ?? 0
 
@@ -278,47 +279,24 @@ export function SystemStatusPage() {
                 <div className="p-4 space-y-3 text-xs">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="text-[var(--text-muted)] mb-1">UI Version</p>
-                      <p className="font-medium text-[var(--text-primary)] font-mono">{buildInfo.version}</p>
+                      <p className="text-[var(--text-muted)] mb-1">Version</p>
+                      <p className="font-medium text-[var(--text-primary)] font-mono">{release.version}</p>
                     </div>
                     <div>
                       <p className="text-[var(--text-muted)] mb-1">Build #</p>
-                      <p className="font-medium text-[var(--text-primary)] font-mono">{buildInfo.buildNumber}</p>
+                      <p className="font-medium text-[var(--text-primary)] font-mono">{release.buildNumber}</p>
                     </div>
                     <div>
                       <p className="text-[var(--text-muted)] mb-1">Git SHA</p>
-                      <p className="font-medium text-[var(--text-primary)] font-mono">{buildInfo.gitSha.slice(0, 7)}</p>
+                      <p className="font-medium text-[var(--text-primary)] font-mono">{release.gitSha.slice(0, 7)}</p>
                     </div>
                     <div>
                       <p className="text-[var(--text-muted)] mb-1">Built</p>
-                      <p className="font-medium text-[var(--text-primary)]">{fmtAge(buildInfo.buildDate)}</p>
+                      <p className="font-medium text-[var(--text-primary)]">{fmtAge(release.buildDate)}</p>
                     </div>
                   </div>
-                  {data?.version && (
-                    <div className="pt-2 border-t border-[var(--border)]">
-                      <p className="text-[var(--text-muted)] mb-2">API Version</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-[var(--text-muted)] mb-0.5 text-[10px]">Version</p>
-                          <p className="font-mono text-[var(--text-primary)]">{data.version.version}</p>
-                        </div>
-                        <div>
-                          <p className="text-[var(--text-muted)] mb-0.5 text-[10px]">Build #</p>
-                          <p className="font-mono text-[var(--text-primary)]">{data.version.buildNumber}</p>
-                        </div>
-                        <div>
-                          <p className="text-[var(--text-muted)] mb-0.5 text-[10px]">Git SHA</p>
-                          <p className="font-mono text-[var(--text-primary)]">{data.version.gitSha.slice(0, 7)}</p>
-                        </div>
-                        <div>
-                          <p className="text-[var(--text-muted)] mb-0.5 text-[10px]">Built</p>
-                          <p className="text-[var(--text-primary)]">{fmtAge(data.version.buildDate)}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="pt-2 border-t border-[var(--border)] text-[10px] text-[var(--text-muted)] font-mono" title={fullVersion()}>
-                    {shortVersion()}
+                  <div className="pt-2 border-t border-[var(--border)] text-[10px] text-[var(--text-muted)] font-mono" title={fullVersion(release)}>
+                    {shortVersion(release)}
                   </div>
                 </div>
               </div>

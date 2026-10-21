@@ -9,7 +9,7 @@ const rootPkg = JSON.parse(readFileSync(resolve(__dirname, '../../package.json')
 const appVersion = process.env['VITE_APP_VERSION'] ?? rootPkg.version
 const buildNumber = process.env['VITE_BUILD_NUMBER'] ?? 'local'
 const gitSha     = process.env['VITE_GIT_SHA']     ?? 'dev'
-const buildDate  = process.env['VITE_BUILD_DATE']  ?? new Date().toISOString()
+const buildDate  = process.env['VITE_BUILD_DATE']  ?? ''
 
 export default defineConfig({
   // GitHub Pages serves from /<repository name>/; Docker/self-hosted serves from /.

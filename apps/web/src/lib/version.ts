@@ -1,13 +1,15 @@
 /**
- * Build-time version constants injected by vite.config.ts.
- * At runtime these are replaced with literal strings — zero runtime cost.
+ * The deployed build comes from the API at runtime (`/system/version`), so the
+ * web image does not change, and is not redeployed, when only the API changed.
+ * The constants below are the fallback for the static demo build, which has no
+ * API and receives its values from vite.config.ts.
  */
 
 export interface AppBuildInfo {
-  version:     string   // semver from package.json, e.g. "1.1.0"
+  version:     string   // e.g. "1.1.26"; the patch number is the CI build number
   buildNumber: string   // CI run number, e.g. "42"; "local" in dev
-  gitSha:      string   // short git SHA, e.g. "abc1234"; "dev" in local
-  buildDate:   string   // ISO-8601 date, e.g. "2026-09-21T06:39:00Z"
+  gitSha:      string   // full git SHA; "dev" in local
+  buildDate:   string   // ISO-8601 date; empty when unknown
 }
 
 export const buildInfo: AppBuildInfo = {
@@ -18,14 +20,14 @@ export const buildInfo: AppBuildInfo = {
 }
 
 /** Short label for compact display: "v1.1.26" (patch = build number) */
-export function shortVersion(): string {
-  const suffix = buildInfo.buildNumber === 'local' ? '-dev' : ''
-  return `v${buildInfo.version}${suffix}`
+export function shortVersion(info: AppBuildInfo = buildInfo): string {
+  const suffix = info.buildNumber === 'local' ? '-dev' : ''
+  return `v${info.version}${suffix}`
 }
 
 /** Full label for tooltip: "v1.1.26 · abc1234 · 2026-09-21" */
-export function fullVersion(): string {
-  const date = buildInfo.buildDate ? new Date(buildInfo.buildDate).toLocaleDateString() : ''
-  const sha  = buildInfo.gitSha !== 'dev' ? ` · ${buildInfo.gitSha.slice(0, 7)}` : ''
-  return `v${buildInfo.version}${sha}${date ? ' · ' + date : ''}`
+export function fullVersion(info: AppBuildInfo = buildInfo): string {
+  const date = info.buildDate ? new Date(info.buildDate).toLocaleDateString() : ''
+  const sha  = info.gitSha !== 'dev' ? ` · ${info.gitSha.slice(0, 7)}` : ''
+  return `v${info.version}${sha}${date ? ' · ' + date : ''}`
 }

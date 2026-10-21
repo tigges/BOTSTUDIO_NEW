@@ -374,12 +374,12 @@ export const DEMO_SYSTEM_STATUS: SystemStatus = {
     redis: { ok: true, latencyMs: 1 },
   },
   containers: [
-    { id: 'a1b2c3d4e5f6', name: 'ybot-api', image: 'ybot-api:latest', state: 'running', status: 'Up 3 hours (healthy)' },
-    { id: 'b2c3d4e5f6a1', name: 'ybot-web', image: 'ybot-web:latest', state: 'running', status: 'Up 3 hours' },
-    { id: 'c3d4e5f6a1b2', name: 'ybot-caddy', image: 'caddy:2-alpine', state: 'running', status: 'Up 3 hours' },
-    { id: 'd4e5f6a1b2c3', name: 'ybot-postgres', image: 'pgvector/pgvector:pg16', state: 'running', status: 'Up 3 hours (healthy)' },
-    { id: 'e5f6a1b2c3d4', name: 'ybot-valkey', image: 'valkey/valkey:7-alpine', state: 'running', status: 'Up 3 hours (healthy)' },
-    { id: 'f6a1b2c3d4e5', name: 'ybot-minio', image: 'quay.io/minio/minio:latest', state: 'running', status: 'Up 3 hours (healthy)' },
+    { id: 'a1b2c3d4e5f6', name: 'botstudio-api', image: 'ghcr.io/tigges/botstudio-api:latest', state: 'running', status: 'Up 3 hours (healthy)' },
+    { id: 'b2c3d4e5f6a1', name: 'botstudio-web', image: 'ghcr.io/tigges/botstudio-web:latest', state: 'running', status: 'Up 3 hours' },
+    { id: 'c3d4e5f6a1b2', name: 'botstudio-caddy', image: 'caddy:2-alpine', state: 'running', status: 'Up 3 hours' },
+    { id: 'd4e5f6a1b2c3', name: 'botstudio-postgres', image: 'pgvector/pgvector:pg16', state: 'running', status: 'Up 3 hours (healthy)' },
+    { id: 'e5f6a1b2c3d4', name: 'botstudio-valkey', image: 'valkey/valkey:7-alpine', state: 'running', status: 'Up 3 hours (healthy)' },
+    { id: 'f6a1b2c3d4e5', name: 'botstudio-minio', image: 'quay.io/minio/minio:latest', state: 'running', status: 'Up 3 hours (healthy)' },
   ],
   rag: {
     sources: 3,

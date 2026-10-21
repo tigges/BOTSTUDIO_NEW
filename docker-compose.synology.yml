@@ -27,21 +27,21 @@ services:
       - ${MINIO_PATH:-/volume1/docker/ybot/minio}:/data
 
   api:
-    image: ghcr.io/tigges/yai/ybot-api:${IMAGE_TAG:-latest}
+    image: ghcr.io/tigges/botstudio-api:${IMAGE_TAG:-latest}
     # Ollama may run natively on NAS or another LAN machine
     environment:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       # Set to a Slack incoming-webhook URL (or any HTTP endpoint) to receive
-      # a "YBot API is live at vX.Y.Z" notification on every container start.
+      # a "BotStudio API is live at vX.Y.Z" notification on every container start.
       DEPLOY_WEBHOOK_URL: ${DEPLOY_WEBHOOK_URL:-}
     # Label lets Watchtower target this container by scope
     labels:
-      - "com.centurylinklabs.watchtower.scope=ybot"
+      - "com.centurylinklabs.watchtower.scope=botstudio"
 
   web:
-    image: ghcr.io/tigges/yai/ybot-web:${IMAGE_TAG:-latest}
+    image: ghcr.io/tigges/botstudio-web:${IMAGE_TAG:-latest}
     labels:
-      - "com.centurylinklabs.watchtower.scope=ybot"
+      - "com.centurylinklabs.watchtower.scope=botstudio"
 
   caddy:
     volumes:
@@ -57,7 +57,7 @@ services:
       - "host.docker.internal:host-gateway"
 
   # ── Watchtower — automatic image updates ─────────────────────────────────
-  # Watches ybot-api and ybot-web (via scope label), checks GHCR for updated
+  # Watches botstudio-api and botstudio-web (via scope label), checks GHCR for updated
   # :latest images every 5 minutes, pulls them, and restarts the containers.
   # Sends a notification to DEPLOY_WEBHOOK_URL when it updates.
   #
@@ -86,7 +86,7 @@ services:
   #
   watchtower:
     image: containrrr/watchtower:latest
-    container_name: ybot-watchtower
+    container_name: botstudio-watchtower
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -100,10 +100,13 @@ services:
     environment:
       WATCHTOWER_POLL_INTERVAL: "300"        # check every 5 minutes
       WATCHTOWER_CLEANUP: "true"             # remove old images after update
+      # Replace one container at a time, so the console and the API are never
+      # both down. Caddy holds requests while a container restarts.
+      WATCHTOWER_ROLLING_RESTART: "true"
       # WATCHTOWER_SCOPE alone is enough to target labelled containers.
       # WATCHTOWER_LABEL_ENABLE would additionally require each container to
       # carry com.centurylinklabs.watchtower.enable=true — causing Scanned=0.
-      WATCHTOWER_SCOPE: "ybot"               # only watch containers with scope=ybot label
+      WATCHTOWER_SCOPE: "botstudio"          # only watch containers with scope=botstudio label
       WATCHTOWER_NOTIFICATION_URL: ${DEPLOY_WEBHOOK_URL:-}
       WATCHTOWER_NOTIFICATIONS: "shoutrrr"
       # Deploy as soon as CI pushes, instead of on the next 5-minute poll.
@@ -114,4 +117,4 @@ services:
       WATCHTOWER_HTTP_API_TOKEN: ${WATCHTOWER_HTTP_API_TOKEN:-}
       WATCHTOWER_HTTP_API_PERIODIC_POLLS: "true"
       TZ: ${TZ:-UTC}
-    networks: [ybot-net]
+    networks: [botstudio-net]

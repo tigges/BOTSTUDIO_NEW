@@ -11,17 +11,11 @@ RUN pnpm dlx turbo@2.11.2 prune @ybot/web --docker
 # ── Build stage ───────────────────────────────────────────────────────────────
 FROM base AS builder
 
+# No build number, SHA or date here: the console reads them from the API at
+# runtime. Unchanged web code then builds the same image, and Watchtower does
+# not restart the web container on an API-only deploy.
 ARG VITE_API_URL=/api/v1
-ARG VITE_APP_VERSION=1.1.0
-ARG VITE_BUILD_NUMBER=local
-ARG VITE_GIT_SHA=dev
-ARG VITE_BUILD_DATE
-
-ENV VITE_API_URL=${VITE_API_URL} \
-    VITE_APP_VERSION=${VITE_APP_VERSION} \
-    VITE_BUILD_NUMBER=${VITE_BUILD_NUMBER} \
-    VITE_GIT_SHA=${VITE_GIT_SHA} \
-    VITE_BUILD_DATE=${VITE_BUILD_DATE}
+ENV VITE_API_URL=${VITE_API_URL}
 
 COPY --from=pruner /app/out/json/ .
 RUN pnpm install --frozen-lockfile

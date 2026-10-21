@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Makefile — convenience wrappers for YBot on AVIORI
+# Makefile — convenience wrappers for BotStudio on AVIORI
 # Usage: make <target>
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -11,7 +11,7 @@ TAG      ?= latest
 
 up: pull migrate
 	$(COMPOSE) $(ENV_FILE) up -d --remove-orphans
-	@echo "YBot is running. Check: make ps"
+	@echo "BotStudio is running. Check: make ps"
 
 down:
 	$(COMPOSE) $(ENV_FILE) down

@@ -9,6 +9,7 @@ import type { BotSettings, BusinessProfile, GuardrailRule, ReturnOutcome } from 
 import * as api from './api'
 import * as demo from './demo-data'
 import { useAppStore } from '../store/app'
+import { buildInfo, type AppBuildInfo } from './version'
 
 /** True when running on GitHub Pages or VITE_DEMO_MODE=true with no API URL */
 const isDemoMode = () => import.meta.env.VITE_DEMO_MODE === 'true'
@@ -850,6 +851,17 @@ export function useAuditLog(params?: Record<string, string>) {
 }
 
 // ── System Status ─────────────────────────────────────────────────────────────
+/** The build the server runs. Falls back to the bundle's own values when the API cannot be reached. */
+export function useBuildInfo(): AppBuildInfo {
+  const query = useQuery({
+    queryKey: ['build-info'],
+    queryFn: withDemoFallback(() => api.system.version().then((r) => r.data), buildInfo),
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+  return query.data ?? buildInfo
+}
+
 export function useSystemStatus(options?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: ['system-status'],
