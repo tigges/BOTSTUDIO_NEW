@@ -1,249 +1,167 @@
 import React, { useState } from 'react'
-import {
-  Plus, Search, Filter, ChevronDown, MoreHorizontal,
-  AlertTriangle, Clock, CheckCircle2, Circle, ArrowUpRight,
-  User, MessageSquare, Tag, Calendar,
-} from 'lucide-react'
-import { Avatar, Badge, Button, Input } from '@ybot/ui'
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
-} from '@ybot/ui'
-import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
-} from '@ybot/ui'
-import { useTickets, useCreateTicket, useUpdateTicket, useTeamMembers } from '../../lib/hooks'
-import * as api from '../../lib/api'
-import { cn } from '@ybot/ui'
+import { AlertCircle, AlertTriangle, CheckCircle2, Circle, ClipboardList, Clock, MessageSquare, MoreHorizontal, Plus, Search, SearchX, User } from 'lucide-react'
+import { Avatar, Badge, Button, Input, Skeleton, cn } from '@ybot/ui'
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@ybot/ui'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@ybot/ui'
+import { useNavigate } from '@tanstack/react-router'
+import { useCreateTicket, useTeamMembers, useTickets, useUpdateTicket } from '../../lib/hooks'
+import { queueChat } from '../../lib/inbox-nav'
+import { TASK_PRIORITIES, matchesTask, taskPriority, type TaskFilter, type TaskPriority, type TaskStatus } from '../../lib/tasks'
+import { InboxTabs } from './InboxTabs'
 
-type Priority = 'urgent' | 'high' | 'medium' | 'normal' | 'low'
-type TicketStatus = 'open' | 'in_progress' | 'pending' | 'resolved' | 'closed'
-
-interface Ticket {
+interface Task {
   id: string
-  title: string
-  priority: Priority
-  status: TicketStatus
+  subject: string
+  priority: TaskPriority
+  status: TaskStatus
   assignee: string | null
   contact: string
-  channel: string
+  chatId: string | null
   createdAt: string
-  messages: number
-  labels?: string[]
+  tags: string[]
 }
 
-const MOCK_TICKETS: Ticket[] = [
-  { id: 'T-001', title: 'Order #12345 not delivered after 5 days', priority: 'urgent', status: 'open', assignee: null, contact: 'Alice Johnson', channel: 'web', createdAt: '2h ago', messages: 4, labels: ['delivery'] },
-  { id: 'T-002', title: 'Double charge on last invoice', priority: 'high', status: 'open', assignee: 'Sarah K', contact: 'Frank Moore', channel: 'email', createdAt: '3h ago', messages: 2, labels: ['billing'] },
-  { id: 'T-003', title: 'Cannot update account email address', priority: 'normal', status: 'open', assignee: 'Mike R', contact: 'Grace Park', channel: 'web', createdAt: '5h ago', messages: 6 },
-  { id: 'T-004', title: 'App crashes on iOS 17.4 when opening chat', priority: 'urgent', status: 'in_progress', assignee: 'Tom B', contact: 'Henry Kim', channel: 'web', createdAt: '1d ago', messages: 9, labels: ['technical'] },
-  { id: 'T-005', title: 'Refund request for cancelled subscription', priority: 'high', status: 'in_progress', assignee: 'Sarah K', contact: 'Iris Chen', channel: 'email', createdAt: '1d ago', messages: 3, labels: ['billing', 'refund'] },
-  { id: 'T-006', title: 'WhatsApp integration not sending messages', priority: 'normal', status: 'pending', assignee: 'Tom B', contact: 'James Liu', channel: 'whatsapp', createdAt: '2d ago', messages: 7 },
-  { id: 'T-007', title: 'Promo code SAVE20 not working at checkout', priority: 'normal', status: 'pending', assignee: null, contact: 'Karen Ng', channel: 'web', createdAt: '2d ago', messages: 2 },
-  { id: 'T-008', title: 'Wrong item shipped in order #98765', priority: 'high', status: 'resolved', assignee: 'Mike R', contact: 'Leo Wang', channel: 'web', createdAt: '3d ago', messages: 8, labels: ['delivery'] },
-  { id: 'T-009', title: 'Password reset email not received', priority: 'low', status: 'resolved', assignee: 'Sarah K', contact: 'Mia Patel', channel: 'email', createdAt: '4d ago', messages: 3 },
-  { id: 'T-010', title: 'Billing address cannot be updated', priority: 'low', status: 'closed', assignee: 'Tom B', contact: 'Nick Davis', channel: 'web', createdAt: '5d ago', messages: 5, labels: ['billing'] },
-]
-
-const COLUMNS: { status: TicketStatus; label: string; icon: React.ReactNode; color: string }[] = [
+const COLUMNS: { status: TaskStatus; label: string; icon: React.ReactNode; color: string }[] = [
   { status: 'open', label: 'Open', icon: <Circle size={13} />, color: 'text-[var(--text-muted)]' },
-  { status: 'in_progress', label: 'In Progress', icon: <Clock size={13} />, color: 'text-[var(--accent)]' },
-  { status: 'pending', label: 'Pending', icon: <AlertTriangle size={13} />, color: 'text-[var(--warning,#fbbf24)]' },
-  { status: 'resolved', label: 'Resolved', icon: <CheckCircle2 size={13} />, color: 'text-[var(--success)]' },
-  { status: 'closed', label: 'Closed', icon: <CheckCircle2 size={13} />, color: 'text-[var(--text-muted)]' },
+  { status: 'in_progress', label: 'In progress', icon: <Clock size={13} />, color: 'text-[var(--accent)]' },
+  { status: 'pending', label: 'Waiting on someone', icon: <AlertTriangle size={13} />, color: 'text-[var(--warning,#fbbf24)]' },
+  { status: 'resolved', label: 'Done', icon: <CheckCircle2 size={13} />, color: 'text-[var(--success)]' },
 ]
 
-const PRIORITY_CONFIG: Record<Priority, { label: string; variant: 'error' | 'warning' | 'info' | 'muted'; dot: boolean }> = {
-  urgent: { label: 'Urgent', variant: 'error', dot: true },
-  high: { label: 'High', variant: 'warning', dot: true },
-  medium: { label: 'Medium', variant: 'warning', dot: true },
-  normal: { label: 'Normal', variant: 'info', dot: false },
-  low: { label: 'Low', variant: 'muted', dot: false },
+const PRIORITY_BADGE: Record<TaskPriority, { variant: 'error' | 'warning' | 'info' | 'muted'; dot: boolean }> = {
+  critical: { variant: 'error', dot: true },
+  high: { variant: 'warning', dot: true },
+  medium: { variant: 'info', dot: false },
+  low: { variant: 'muted', dot: false },
 }
 
-function TicketCard({ ticket, onMove }: { ticket: Ticket; onMove: (id: string, status: TicketStatus) => void }) {
-  const p = PRIORITY_CONFIG[ticket.priority] ?? PRIORITY_CONFIG.normal
+const FIELD = 'w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40'
+
+function TaskCard({ task, onMove, onOpenChat }: { task: Task; onMove: (id: string, status: TaskStatus) => void; onOpenChat: (chatId: string) => void }) {
+  const badge = PRIORITY_BADGE[task.priority]
+  const label = TASK_PRIORITIES.find((p) => p.id === task.priority)?.label
   return (
-    <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-3 hover:border-[var(--accent)]/40 transition-colors cursor-pointer group">
+    <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-3 hover:border-[var(--accent)]/40 transition-colors group">
       <div className="flex items-start justify-between gap-2 mb-2">
-        <span className="text-[11px] font-mono text-[var(--text-muted)]">{ticket.id}</span>
+        <p className="text-sm text-[var(--text-primary)] font-medium leading-snug line-clamp-2">{task.subject}</p>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] transition-all">
+            <button type="button" aria-label={`Move “${task.subject}”`} className="p-0.5 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)]">
               <MoreHorizontal size={13} />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuSeparator />
-            {COLUMNS.filter((c) => c.status !== ticket.status).map((c) => (
-              <DropdownMenuItem key={c.status} onClick={() => onMove(ticket.id, c.status)}>
-                Move to {c.label}
-              </DropdownMenuItem>
+            {COLUMNS.filter((c) => c.status !== task.status).map((c) => (
+              <DropdownMenuItem key={c.status} onClick={() => onMove(task.id, c.status)}>Move to {c.label}</DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-
-      <p className="text-sm text-[var(--text-primary)] font-medium leading-snug mb-2 line-clamp-2">
-        {ticket.title}
-      </p>
-
       <div className="flex flex-wrap gap-1 mb-2">
-        <Badge variant={p.variant} dot={p.dot}>{p.label}</Badge>
-        {ticket.labels?.map((l) => (
-          <span key={l} className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--bg-overlay)] text-[var(--text-muted)] border border-[var(--border)]">
-            {l}
-          </span>
+        <Badge variant={badge.variant} dot={badge.dot}>{label}</Badge>
+        {task.tags.map((t) => (
+          <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--bg-overlay)] text-[var(--text-muted)] border border-[var(--border)]">{t}</span>
         ))}
       </div>
-
-      <div className="flex items-center justify-between text-[var(--text-muted)]">
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-[11px]">
-            <User size={11} /> {ticket.contact}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 text-[11px]">
-          <span className="flex items-center gap-1">
-            <MessageSquare size={11} /> {ticket.messages}
-          </span>
-          <span>{ticket.createdAt}</span>
-        </div>
+      <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+        <span className="flex items-center gap-1"><User size={11} /> {task.contact}</span>
+        <span>{task.createdAt}</span>
       </div>
-
-      {ticket.assignee && (
-        <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-[var(--border)]">
-          <Avatar name={ticket.assignee} size="xs" />
-          <span className="text-[11px] text-[var(--text-muted)]">{ticket.assignee}</span>
-        </div>
-      )}
+      <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-[var(--border)]">
+        <span className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
+          {task.assignee ? <><Avatar name={task.assignee} size="xs" /> {task.assignee}</> : 'Unassigned'}
+        </span>
+        {task.chatId && (
+          <button type="button" onClick={() => onOpenChat(task.chatId!)} className="flex items-center gap-1 text-[11px] text-[var(--accent)] hover:underline">
+            <MessageSquare size={11} /> Open chat
+          </button>
+        )}
+      </div>
     </div>
   )
 }
 
-export function TicketsPage() {
-  const { data: apiTickets = [], isLoading } = useTickets()
-  const createTicket = useCreateTicket()
-  const updateTicket = useUpdateTicket()
+export function TasksPage() {
+  const tickets = useTickets()
+  const createTask = useCreateTicket()
+  const updateTask = useUpdateTicket()
   const { data: members = [] } = useTeamMembers()
+  const navigate = useNavigate()
+  const [filter, setFilter] = useState<TaskFilter>({ search: '', priority: 'all' })
   const [showNew, setShowNew] = useState(false)
-  const [newTitle, setNewTitle] = useState('')
-  const [newDescription, setNewDescription] = useState('')
-  const [newAssignee, setNewAssignee] = useState('')
-  const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all')
-  const [newPriority, setNewPriority] = useState<Priority>('normal')
-  const [view, setView] = useState<'kanban' | 'list'>('kanban')
-  const [search, setSearch] = useState('')
 
-  const tickets: Ticket[] = apiTickets.map((t) => {
-    if ('subject' in t) {
-      return {
-        id: t.id,
-        title: (t as api.Ticket).subject,
-        priority: (({ medium: 'normal', critical: 'urgent' } as Record<string, Priority>)[(t as api.Ticket).priority] ?? (t as api.Ticket).priority) as Priority,
-        status: ((t as api.Ticket).status as TicketStatus) ?? 'open',
-        assignee: members.find((m) => m.id === (t as api.Ticket).assignedTo)?.displayName ?? (t as api.Ticket).assignedTo ?? null,
-        contact: (t as api.Ticket).conversation?.contact?.displayName ?? 'Unknown',
-        channel: 'web',
-        createdAt: new Date((t as api.Ticket).createdAt).toLocaleDateString(),
-        messages: 0,
-        labels: (t as api.Ticket).tags ?? [],
-      } as Ticket
-    }
-    return t as Ticket
-  })
+  const tasks: Task[] = (tickets.data ?? []).map((t) => ({
+    id: t.id,
+    subject: t.subject,
+    priority: taskPriority(t.priority),
+    status: (t.status === 'closed' ? 'resolved' : t.status) as TaskStatus,
+    assignee: members.find((m) => m.id === t.assignedTo)?.displayName ?? null,
+    contact: t.conversation?.contact?.displayName ?? 'No contact',
+    chatId: t.conversationId ?? null,
+    createdAt: new Date(t.createdAt).toLocaleDateString(),
+    tags: t.tags ?? [],
+  }))
+  const shown = tasks.filter((task) => matchesTask(task, filter))
+  const filtered = filter.search.trim() !== '' || filter.priority !== 'all'
 
-  const filtered = tickets.filter((t) => {
-    const matchesSearch = !search || t.title.toLowerCase().includes(search.toLowerCase()) || t.id.includes(search)
-    const matchesPriority = priorityFilter === 'all' || t.priority === priorityFilter
-    return matchesSearch && matchesPriority
-  })
-
-  function moveTicket(id: string, status: TicketStatus) {
-    updateTicket.mutate({ id, status })
-  }
-
-  async function handleCreateTicket() {
-    if (!newTitle.trim()) return
-    try {
-      await createTicket.mutateAsync({
-        subject: newTitle.trim(),
-        description: newDescription.trim() || undefined,
-        priority: newPriority,
-        assignedTo: newAssignee || undefined,
-      })
-      setNewTitle('')
-      setNewDescription('')
-      setNewAssignee('')
-      setShowNew(false)
-    } catch { /* ignore */ }
+  function openChat(chatId: string) {
+    queueChat(chatId)
+    void navigate({ to: '/inbox/chats' })
   }
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 py-4 shrink-0">
-        <h1 className="text-base font-semibold text-[var(--text-primary)]">Tickets</h1>
-      </div>
-
-      {/* Toolbar */}
+      <InboxTabs />
       <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-surface)] shrink-0">
+        <p className="text-xs text-[var(--text-muted)] mr-2">Follow-ups and approvals that outlive a chat.</p>
         <Input
-          placeholder="Search tickets…"
+          placeholder="Search tasks or contacts…"
+          aria-label="Search tasks"
           leftIcon={<Search size={13} />}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={filter.search}
+          onChange={(e) => setFilter({ ...filter, search: e.target.value })}
           className="w-64"
         />
-        <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setPriorityFilter((current) => current === 'all' ? 'high' : current === 'high' ? 'urgent' : current === 'urgent' ? 'normal' : current === 'normal' ? 'low' : 'all')}>
-          <Filter size={13} /> {priorityFilter === 'all' ? 'Filter' : priorityFilter}
+        <select aria-label="Priority" className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-2 py-1.5 text-xs text-[var(--text-primary)]" value={filter.priority} onChange={(e) => setFilter({ ...filter, priority: e.target.value as TaskFilter['priority'] })}>
+          <option value="all">Any priority</option>
+          {TASK_PRIORITIES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+        </select>
+        <Button size="sm" className="ml-auto gap-1.5" onClick={() => setShowNew(true)}>
+          <Plus size={14} /> New task
         </Button>
-        <div className="ml-auto flex items-center gap-2">
-          <div className="flex rounded-[var(--radius-md)] border border-[var(--border)] overflow-hidden">
-            <button
-              onClick={() => setView('kanban')}
-              className={cn('px-3 py-1.5 text-xs font-medium transition-colors', view === 'kanban' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)]')}
-            >
-              Kanban
-            </button>
-            <button
-              onClick={() => setView('list')}
-              className={cn('px-3 py-1.5 text-xs font-medium transition-colors', view === 'list' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)]')}
-            >
-              List
-            </button>
-          </div>
-          <Button size="sm" className="gap-1.5" onClick={() => setShowNew(true)}>
-            <Plus size={14} /> New Ticket
-          </Button>
-        </div>
       </div>
 
-      {apiTickets.length === 0 && !isLoading && (
-        <div className="px-6 py-3 border-b border-[var(--border)] text-sm text-[var(--text-muted)]">No tickets yet.</div>
-      )}
-
-      {/* Kanban / List body */}
-      {view === 'kanban' ? (
+      {tickets.isLoading ? (
+        <div className="flex gap-4 p-4">{COLUMNS.map((c) => <Skeleton key={c.status} className="h-40 w-[260px] rounded-[var(--radius-md)]" />)}</div>
+      ) : tickets.isError ? (
+        <Message icon={<AlertCircle size={18} />} title="Tasks could not be loaded" body="Check your connection, then try again.">
+          <Button size="sm" variant="secondary" onClick={() => void tickets.refetch()}>Retry</Button>
+        </Message>
+      ) : tasks.length === 0 ? (
+        <Message icon={<ClipboardList size={18} />} title="No tasks yet" body="Add one from a chat (More → Add a task) when something needs a follow-up after the chat ends, or start one here.">
+          <Button size="sm" onClick={() => setShowNew(true)}>New task</Button>
+        </Message>
+      ) : shown.length === 0 && filtered ? (
+        <Message icon={<SearchX size={18} />} title="No tasks match" body="Nothing fits this search and priority.">
+          <Button size="sm" variant="secondary" onClick={() => setFilter({ search: '', priority: 'all' })}>Show all tasks</Button>
+        </Message>
+      ) : (
         <div className="flex-1 overflow-x-auto overflow-y-hidden">
           <div className="flex h-full gap-4 p-4 min-w-max">
             {COLUMNS.map((col) => {
-              const colTickets = filtered.filter((t) => t.status === col.status)
+              const column = shown.filter((t) => t.status === col.status)
               return (
                 <div key={col.status} className="flex flex-col w-[260px] shrink-0">
                   <div className={cn('flex items-center gap-1.5 mb-3 px-1', col.color)}>
                     {col.icon}
                     <span className="text-sm font-semibold">{col.label}</span>
-                    <span className="ml-auto text-xs font-medium bg-[var(--bg-overlay)] px-1.5 py-0.5 rounded-full text-[var(--text-muted)]">
-                      {colTickets.length}
-                    </span>
+                    <span className="ml-auto text-xs font-medium bg-[var(--bg-overlay)] px-1.5 py-0.5 rounded-full text-[var(--text-muted)]">{column.length}</span>
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
-                    {colTickets.map((t) => (
-                      <TicketCard key={t.id} ticket={t} onMove={moveTicket} />
-                    ))}
-                    {colTickets.length === 0 && (
+                    {column.map((t) => <TaskCard key={t.id} task={t} onMove={(id, status) => updateTask.mutate({ id, status })} onOpenChat={openChat} />)}
+                    {column.length === 0 && (
                       <div className="flex items-center justify-center h-24 rounded-[var(--radius-md)] border-2 border-dashed border-[var(--border)]">
-                        <p className="text-xs text-[var(--text-muted)]">No tickets</p>
+                        <p className="text-xs text-[var(--text-muted)]">Nothing here</p>
                       </div>
                     )}
                   </div>
@@ -252,106 +170,87 @@ export function TicketsPage() {
             })}
           </div>
         </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-[var(--bg-surface)] border-b border-[var(--border)]">
-              <tr>
-                {['ID', 'Title', 'Priority', 'Status', 'Assignee', 'Contact', 'Created'].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-left text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {filtered.map((t) => {
-                const p = PRIORITY_CONFIG[t.priority] ?? PRIORITY_CONFIG.normal
-                const col = COLUMNS.find((c) => c.status === t.status)!
-                return (
-                  <tr key={t.id} className="hover:bg-[var(--bg-hover)] transition-colors cursor-pointer">
-                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-muted)]">{t.id}</td>
-                    <td className="px-4 py-2.5 max-w-xs">
-                      <p className="text-sm text-[var(--text-primary)] truncate">{t.title}</p>
-                      {t.labels && t.labels.length > 0 && (
-                        <div className="flex gap-1 mt-0.5">
-                          {t.labels.map((l) => <span key={l} className="text-[10px] text-[var(--text-muted)]">#{l}</span>)}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5"><Badge variant={p.variant} dot={p.dot}>{p.label}</Badge></td>
-                    <td className="px-4 py-2.5">
-                      <span className={cn('flex items-center gap-1 text-xs font-medium', col.color)}>
-                        {col.icon} {col.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {t.assignee ? (
-                        <span className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                          <Avatar name={t.assignee} size="xs" /> {t.assignee}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-[var(--text-muted)]">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--text-secondary)]">{t.contact}</td>
-                    <td className="px-4 py-2.5 text-xs text-[var(--text-muted)]">{t.createdAt}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
       )}
 
-      {/* New ticket dialog */}
-      <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent size="md">
-          <DialogHeader>
-            <DialogTitle>Create new ticket</DialogTitle>
-          </DialogHeader>
-          <DialogBody className="space-y-4">
-            <div>
-              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Title *</label>
-              <input
-                autoFocus
-                className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
-                placeholder="Describe the issue…"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') void handleCreateTicket() }}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Priority</label>
-                <select value={newPriority} onChange={(e) => setNewPriority(e.target.value as Priority)} className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
-                  <option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option><option value="low">Low</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Assign to</label>
-                <select value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)} className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
-                  <option value="">Unassigned</option>
-                  {members.map((member) => <option key={member.id} value={member.id}>{member.displayName}</option>)}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Description</label>
-              <textarea
-                rows={3}
-                className="w-full resize-none rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
-                placeholder="Additional details…"
-                value={newDescription}
-                onChange={(e) => setNewDescription(e.target.value)}
-              />
-            </div>
-          </DialogBody>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button disabled={!newTitle.trim() || createTicket.isPending} onClick={() => void handleCreateTicket()}>Create ticket</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <NewTaskDialog open={showNew} onOpenChange={setShowNew} members={members} pending={createTask.isPending} onCreate={(body) => createTask.mutateAsync(body).then(() => undefined)} />
     </div>
+  )
+}
+
+function Message(props: { icon: React.ReactNode; title: string; body: string; children?: React.ReactNode }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-16 text-center">
+      <span className="text-[var(--text-muted)]">{props.icon}</span>
+      <p className="text-sm font-medium text-[var(--text-primary)]">{props.title}</p>
+      <p className="max-w-sm text-xs text-[var(--text-muted)]">{props.body}</p>
+      {props.children}
+    </div>
+  )
+}
+
+function NewTaskDialog(props: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  members: Array<{ id: string; displayName: string }>
+  pending: boolean
+  onCreate: (body: { subject: string; priority: string; description?: string; assignedTo?: string }) => Promise<void>
+}) {
+  const [subject, setSubject] = useState('')
+  const [description, setDescription] = useState('')
+  const [priority, setPriority] = useState<TaskPriority>('medium')
+  const [assignee, setAssignee] = useState('')
+  const [error, setError] = useState<string | undefined>()
+
+  async function save() {
+    if (!subject.trim()) return
+    setError(undefined)
+    try {
+      await props.onCreate({ subject: subject.trim(), priority, ...(description.trim() ? { description: description.trim() } : {}), ...(assignee ? { assignedTo: assignee } : {}) })
+      setSubject('')
+      setDescription('')
+      setAssignee('')
+      setPriority('medium')
+      props.onOpenChange(false)
+    } catch (err) {
+      setError(err instanceof Error ? `The task was not saved: ${err.message}` : 'The task was not saved. Try again.')
+    }
+  }
+
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent size="md">
+        <DialogHeader><DialogTitle>New task</DialogTitle></DialogHeader>
+        <DialogBody className="space-y-4">
+          <div>
+            <label htmlFor="new-task-subject" className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">What needs doing</label>
+            <input id="new-task-subject" autoFocus className={FIELD} placeholder="e.g. Approve the refund for order 1042" value={subject} onChange={(e) => setSubject(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void save() }} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="new-task-priority" className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Priority</label>
+              <select id="new-task-priority" value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} className={FIELD}>
+                {TASK_PRIORITIES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="new-task-assignee" className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Assign to</label>
+              <select id="new-task-assignee" value={assignee} onChange={(e) => setAssignee(e.target.value)} className={FIELD}>
+                <option value="">Unassigned</option>
+                {props.members.map((member) => <option key={member.id} value={member.id}>{member.displayName}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label htmlFor="new-task-description" className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Details (optional)</label>
+            <textarea id="new-task-description" rows={3} className={cn(FIELD, 'resize-none')} value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          {error && <p className="text-xs text-[var(--error)]">{error}</p>}
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => props.onOpenChange(false)}>Cancel</Button>
+          <Button disabled={!subject.trim() || props.pending} onClick={() => void save()}>{props.pending ? 'Saving…' : 'Add task'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
