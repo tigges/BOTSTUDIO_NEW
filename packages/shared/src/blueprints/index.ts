@@ -3,6 +3,7 @@ import { DENTAL_BLUEPRINT } from './dental.js'
 
 export * from './blueprint.js'
 export * from './business.js'
+export * from './conflicts.js'
 export * from './extract.js'
 export * from './dental.js'
 
