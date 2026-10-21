@@ -150,6 +150,17 @@ test('a chat logged into a named chapter counts there, and a missing chapter wri
 })
 
 test('each chapter reports how its chats ended, on the chosen environment only', async () => {
+  const chat = (id: string, status: string, environmentId: string, extra: { assignedTo?: string; testRunId?: string } = {}) =>
+    ({ id, status, assignedTo: extra.assignedTo ?? null, environmentId, testRunId: extra.testRunId ?? null })
+  const all = [
+    chat('c1', 'resolved', 'prod'),
+    chat('c2', 'active', 'prod'),
+    chat('c3', 'escalated', 'prod'),
+    chat('c4', 'resolved', 'prod', { assignedTo: 'agent-1', testRunId: 'run-1' }),
+    chat('greeted', 'active', 'prod'),
+    chat('sandbox', 'resolved', 'sand'),
+  ]
+  const old = chat('old', 'resolved', 'prod')
   const db = {
     flowVersion: { findMany: async () => [{ id: 'v-book', flowId: 'book' }, { id: 'v-person', flowId: 'person' }] },
     stepLog: {
@@ -159,23 +170,29 @@ test('each chapter reports how its chats ended, on the chosen environment only',
         { conversationId: 'c3', flowVersionId: 'v-book' },
         { conversationId: 'c3', flowVersionId: 'v-person' },
         { conversationId: 'c4', flowVersionId: 'v-book' },
+        { conversationId: 'old', flowVersionId: 'v-book' },
         { conversationId: 'sandbox', flowVersionId: 'v-book' },
       ],
     },
     conversation: {
-      findMany: async () => [
-        { id: 'c1', status: 'resolved', assignedTo: null, environmentId: 'prod' },
-        { id: 'c2', status: 'active', assignedTo: null, environmentId: 'prod' },
-        { id: 'c3', status: 'escalated', assignedTo: null, environmentId: 'prod' },
-        { id: 'c4', status: 'resolved', assignedTo: 'agent-1', environmentId: 'prod' },
-        { id: 'sandbox', status: 'resolved', assignedTo: null, environmentId: 'sand' },
-      ],
+      findMany: async (args: { where: { id?: { in: string[] } } }) => args.where.id ? [old].filter((row) => args.where.id!.in.includes(row.id)) : all,
     },
   } as unknown as Parameters<typeof journeyTraffic>[0]
-  const traffic = await journeyTraffic(db, 't', 'b', new Date(0), 'prod')
-  assert.deepEqual(traffic.chats, { book: 4, person: 1 })
-  assert.deepEqual(traffic.outcomes['book'], { chats: 4, bot: 1, person: 2, open: 1 })
+  const traffic = await journeyTraffic(db, 't', 'b', new Date(0), { environmentId: 'prod' })
+  assert.deepEqual(traffic.chats, { book: 5, person: 1 })
+  assert.deepEqual(traffic.outcomes['book'], { chats: 5, bot: 2, person: 2, open: 1 })
   assert.deepEqual(traffic.outcomes['person'], { chats: 1, bot: 0, person: 1, open: 0 })
-  assert.deepEqual(traffic.total, { chats: 4, bot: 1, person: 2, open: 1 })
-  assert.deepEqual((await journeyTraffic(db, 't', 'b', new Date(0))).total, { chats: 5, bot: 2, person: 2, open: 1 })
+  assert.deepEqual(traffic.total, { chats: 5, bot: 2, person: 2, open: 1 })
+  assert.deepEqual(traffic.byEnvironment, { prod: 5, sand: 1 })
+  assert.equal(traffic.unstarted, 1, 'the chat that only got the greeting')
+  assert.equal(traffic.testRuns, 1)
+  assert.deepEqual((await journeyTraffic(db, 't', 'b', new Date(0))).total, { chats: 6, bot: 3, person: 2, open: 1 })
+
+  const real = await journeyTraffic(db, 't', 'b', new Date(0), { environmentId: 'prod', includeTestRuns: false })
+  assert.deepEqual(real.total, { chats: 4, bot: 2, person: 1, open: 1 })
+  assert.deepEqual(real.byEnvironment, { prod: 4, sand: 1 })
+  assert.equal(real.testRuns, 0)
+
+  const empty = await journeyTraffic(db, 't', 'b', new Date(0), { environmentId: 'sand' })
+  assert.deepEqual(empty.total, { chats: 1, bot: 1, person: 0, open: 0 })
 })

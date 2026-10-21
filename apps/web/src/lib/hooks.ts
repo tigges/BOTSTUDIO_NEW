@@ -33,12 +33,12 @@ export function useFlows() {
   })
 }
 
-export function useJourneyTraffic(enabled: boolean, environmentId?: string) {
+export function useJourneyTraffic(enabled: boolean, environmentId?: string, includeTestRuns = true) {
   const bid = botId()
   return useQuery({
-    queryKey: ['journey-traffic', bid, environmentId ?? ''],
+    queryKey: ['journey-traffic', bid, environmentId ?? '', includeTestRuns],
     enabled: enabled && !!bid && !isDemoMode(),
-    queryFn: () => api.flows.traffic(bid, environmentId).then((r) => r.data),
+    queryFn: () => api.flows.traffic(bid, environmentId, includeTestRuns).then((r) => r.data),
   })
 }
 
