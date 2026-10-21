@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Play, Plus } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import { Button, PageHeader, Skeleton } from '@ybot/ui'
 import { cn } from '@ybot/ui'
 import {
@@ -24,7 +24,7 @@ import { reviewFlow } from './PublishCheck'
 import { useCreateFlow, useEntities, useFlows, useJourneyTraffic, usePublishFlow, useSaveCanvas, useWorkflows } from '../../lib/hooks'
 import type { ChapterOutcome, Flow, FlowGraph } from '../../lib/api'
 import { useAppStore } from '../../store/app'
-import { journeySummary, outcomeLine } from '../../lib/journey-health'
+import { busierEnvironment, journeySummary, outcomeLine } from '../../lib/journey-health'
 
 const NO_ENVIRONMENTS: Array<{ id: string; kind: string; name: string }> = []
 const LENSES: Array<{ id: JourneyLens; label: string }> = [
@@ -55,6 +55,45 @@ function LensTabs({ lens, onChange }: { lens: JourneyLens; onChange: (lens: Jour
   )
 }
 
+function TrafficFilters({
+  environments,
+  environmentKind,
+  includeTestRuns,
+  onEnvironment,
+  onTestRuns,
+}: {
+  environments: Array<{ id: string; kind: string; name: string }>
+  environmentKind: string
+  includeTestRuns: boolean
+  onEnvironment: (kind: 'production' | 'sandbox') => void
+  onTestRuns: (include: boolean) => void
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-4 text-sm">
+      <div className="inline-flex rounded-lg border border-[var(--border)] p-0.5" role="group" aria-label="Count chats from">
+        {(['production', 'sandbox'] as const).filter((kind) => environments.some((env) => env.kind === kind)).map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            aria-pressed={environmentKind === kind}
+            onClick={() => onEnvironment(kind)}
+            className={cn(
+              'rounded-md px-3 py-1 text-xs font-medium',
+              environmentKind === kind ? 'bg-[var(--accent-muted)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]',
+            )}
+          >
+            {kind === 'production' ? 'Production chats' : 'Sandbox chats'}
+          </button>
+        ))}
+      </div>
+      <label className="inline-flex items-center gap-2 text-[var(--text-secondary)]">
+        <input type="checkbox" checked={includeTestRuns} onChange={(event) => onTestRuns(event.target.checked)} />
+        Include scheduled test runs
+      </label>
+    </div>
+  )
+}
+
 function chartCheck(graph: FlowGraph | undefined, names: string[]): string {
   if (!graph) return 'No chart on this environment'
   const review = reviewFlow(graph, { flowNames: names })
@@ -71,7 +110,14 @@ function healthForChapter(outcome: ChapterOutcome | undefined, graph: FlowGraph 
 
 export function JourneyPage() {
   const navigate = useNavigate()
-  const [lens, setLens] = useState<JourneyLens>('design')
+  const search = useSearch({ from: '/app/build/journey' })
+  const lens: JourneyLens = search.lens ?? 'design'
+  const setSearch = (next: Partial<typeof search>) => {
+    const merged = { ...search, ...next }
+    const clean = Object.fromEntries(Object.entries(merged).filter(([, value]) => value !== undefined)) as typeof search
+    void navigate({ to: '/build/journey', search: clean, replace: true })
+  }
+  const setLens = (next: JourneyLens) => setSearch({ lens: next === 'design' ? undefined : next })
   const [showNew, setShowNew] = useState(false)
   const [createError, setCreateError] = useState('')
   const [connectingId, setConnectingId] = useState('')
@@ -97,11 +143,18 @@ export function JourneyPage() {
   const selectedBotId = useAppStore((s) => s.selectedBotId)
   const environments = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments) ?? NO_ENVIRONMENTS
   const selectedEnv = useAppStore((s) => s.selectedEnv)
-  const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((env) => env.kind === s.selectedEnv)?.id ?? '')
+  const editingId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((env) => env.kind === s.selectedEnv)?.id ?? '')
   const sandboxId = environments.find((env) => env.kind === 'sandbox')?.id ?? ''
-  const traffic = useJourneyTraffic(lens === 'traffic' || lens === 'health', environmentId || undefined)
+  // Traffic comes from visitors, and they are on Production, so the counts default there whatever is being edited.
+  const trafficKind = search.env ?? 'production'
+  const trafficId = environments.find((env) => env.kind === trafficKind)?.id ?? ''
+  const includeTestRuns = search.tests !== 'hide'
+  const traffic = useJourneyTraffic(lens === 'traffic' || lens === 'health', trafficId || undefined, includeTestRuns)
+  const busier = busierEnvironment(traffic.data?.byEnvironment, environments, trafficId)
+  const viewKind = lens === 'design' ? selectedEnv : trafficKind
+  const environmentId = lens === 'design' ? editingId : trafficId
 
-  const shown = (flow: Flow) => versionForEnvironment(flow.versions, environmentId, selectedEnv)
+  const shown = (flow: Flow) => versionForEnvironment(flow.versions, environmentId, viewKind)
   const named = useMemo(() => flows.flatMap((flow) => {
     const version = shown(flow)
     if (!version) return []
@@ -112,7 +165,7 @@ export function JourneyPage() {
       published: version.status === 'published',
       graph: version.graph,
     }]
-  }), [flows, environmentId, selectedEnv])
+  }), [flows, environmentId, viewKind])
   const catalog = useMemo(() => {
     const row = entities.data?.find((entity) => entity.name === CATALOG_ENTITY)
     return catalogFromValues(row?.values)
@@ -125,6 +178,7 @@ export function JourneyPage() {
   }), [named, suggestedIds])
   const welcome = layout.roots.find((chapter) => chapter.welcome)
   const environmentLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
+  const trafficLabel = trafficKind === 'production' ? 'Production' : 'Sandbox'
   const selectedBot = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId))
   const botName = selectedBot?.personaName?.trim() || selectedBot?.name || 'Bot'
   const chapterKey = guestChapters.map((chapter) => chapter.name).join('|')
@@ -282,6 +336,15 @@ export function JourneyPage() {
       />
       <div className="flex min-h-0 flex-1">
       <div className="flex-1 overflow-auto p-6">
+        {lens !== 'design' && (
+          <TrafficFilters
+            environments={environments}
+            environmentKind={trafficKind}
+            includeTestRuns={includeTestRuns}
+            onEnvironment={(kind) => setSearch({ env: kind === 'production' ? undefined : kind })}
+            onTestRuns={(include) => setSearch({ tests: include ? undefined : 'hide' })}
+          />
+        )}
         {lens !== 'design' && traffic.isError && (
           <p className="mb-4 text-sm text-[var(--text-secondary)]">
             Chat counts are unavailable right now. The chapters are still here.{' '}
@@ -291,7 +354,20 @@ export function JourneyPage() {
         {lens !== 'design' && traffic.isLoading && <Skeleton className="mb-4 h-5 w-96 rounded" />}
         {lens !== 'design' && traffic.data && (
           <p className="mb-4 text-sm text-[var(--text-secondary)]" data-testid="journey-summary">
-            {journeySummary(traffic.data.total, environmentLabel, traffic.data.days)}
+            {journeySummary(traffic.data.total, trafficLabel, traffic.data.days, { unstarted: traffic.data.unstarted, testRuns: traffic.data.testRuns })}
+            {busier && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  className="font-medium text-[var(--accent)]"
+                  data-testid="journey-busier-environment"
+                  onClick={() => setSearch({ env: busier.kind === 'production' ? undefined : busier.kind as 'sandbox' })}
+                >
+                  {busier.name} has {busier.chats} {busier.chats === 1 ? 'chat' : 'chats'}. Show {busier.name}
+                </button>
+              </>
+            )}
           </p>
         )}
         {connectError && <p className="mb-4 text-sm text-[var(--danger)]">{connectError}</p>}

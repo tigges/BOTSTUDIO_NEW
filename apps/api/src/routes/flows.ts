@@ -32,13 +32,13 @@ export async function flowsRoutes(app: FastifyInstance) {
     }
   })
 
-  // GET /bots/:botId/journey-traffic
+  // GET /bots/:botId/journey-traffic?environmentId=&testRuns=exclude
   app.get('/:botId/journey-traffic', async (request) => {
     const { tenantId } = request.user as JWT
     const { botId } = request.params as { botId: string }
-    const { environmentId } = request.query as { environmentId?: string }
+    const { environmentId, testRuns } = request.query as { environmentId?: string; testRuns?: string }
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    const traffic = await journeyTraffic(prisma, tenantId, botId, since, environmentId || undefined)
+    const traffic = await journeyTraffic(prisma, tenantId, botId, since, { environmentId: environmentId || undefined, includeTestRuns: testRuns !== 'exclude' })
     return { data: { days: 30, ...traffic } }
   })
 

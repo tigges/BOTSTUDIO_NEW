@@ -121,8 +121,10 @@ export const flows = {
     apiFetch<{ data: FlowVersion & { forked: boolean } }>(`/bots/${botId}/flows/${flowId}/versions/${version}/canvas`, { method: 'PUT', body: JSON.stringify({ graph }) }),
   publish: (botId: string, flowId: string, environmentId: string, version?: number) =>
     apiFetch<{ data: FlowVersion }>(`/bots/${botId}/flows/${flowId}/publish`, { method: 'POST', body: JSON.stringify({ environmentId, ...(version ? { version } : {}) }) }),
-  traffic: (botId: string, environmentId?: string) =>
-    apiFetch<{ data: JourneyTraffic }>(`/bots/${botId}/journey-traffic${environmentId ? `?environmentId=${encodeURIComponent(environmentId)}` : ''}`),
+  traffic: (botId: string, environmentId?: string, includeTestRuns = true) => {
+    const query = new URLSearchParams({ ...(environmentId ? { environmentId } : {}), ...(includeTestRuns ? {} : { testRuns: 'exclude' }) }).toString()
+    return apiFetch<{ data: JourneyTraffic }>(`/bots/${botId}/journey-traffic${query ? `?${query}` : ''}`)
+  },
 }
 
 export interface ChapterOutcome {
@@ -137,6 +139,12 @@ export interface JourneyTraffic {
   chats: Record<string, number>
   outcomes?: Record<string, ChapterOutcome>
   total?: ChapterOutcome
+  /** Chats that started a chapter, per environment id. */
+  byEnvironment?: Record<string, number>
+  /** Chats opened in the window that never started a chapter. */
+  unstarted?: number
+  /** Scheduled test-run chats among the counted chats. */
+  testRuns?: number
 }
 
 export interface LearnedSiteDoor {

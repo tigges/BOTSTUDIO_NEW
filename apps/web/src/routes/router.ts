@@ -123,7 +123,22 @@ const overviewRoute = createRoute({
 })
 
 // ── Build ─────────────────────────────────────────────────────────────────────
-const journeyRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/journey', component: JourneyPage })
+/** Journey filters live in the URL so a shared link opens the same counts. */
+interface JourneySearch {
+  lens?: 'traffic' | 'health'
+  env?: 'production' | 'sandbox'
+  tests?: 'hide'
+}
+const journeyRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/build/journey',
+  validateSearch: (search: Record<string, unknown>): JourneySearch => ({
+    ...(search.lens === 'traffic' || search.lens === 'health' ? { lens: search.lens } : {}),
+    ...(search.env === 'sandbox' || search.env === 'production' ? { env: search.env } : {}),
+    ...(search.tests === 'hide' ? { tests: 'hide' as const } : {}),
+  }),
+  component: JourneyPage,
+})
 const flowsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/flows', component: FlowsPage })
 const flowCanvasRoute = createRoute({
   getParentRoute: () => appRoute,
