@@ -46,12 +46,6 @@
         }
     }
 
-    # MinIO console (optional)
-    handle /minio/* {
-        uri strip_prefix /minio
-        reverse_proxy minio:9001
-    }
-
     # Web container. nginx serves the landing page when the host is
     # botstudio.uk, and the console for app.botstudio.uk. Pass the Host header.
     handle {

@@ -191,7 +191,7 @@ The layout is desktop-only with a fixed 260px sidebar. Consider a collapsible si
 | # | Feature | Detail |
 |---|---------|--------|
 | 14 | **Custom analytics dashboards** | Widget builder on top of `Dashboard/Widget` models |
-| 15 | **Scheduled reports** | `report-generate` queue slot exists; needs email delivery |
+| 15 | **Scheduled reports** | Not started: needs a report job and email delivery |
 | 16 | **LLM cost metering** | Per-conversation token usage → billing line item |
 | 17 | **Flow A/B testing** | Publish two flow variants; route traffic; compare CSAT |
 | 18 | **Bot version diff & rollback** | `FlowVersion` history exists; no diff UI |

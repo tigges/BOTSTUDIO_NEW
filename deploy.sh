@@ -37,7 +37,6 @@ if $FIRST_RUN; then
   mkdir -p \
     /volume1/docker/ybot/pgdata \
     /volume1/docker/ybot/valkey \
-    /volume1/docker/ybot/minio \
     /volume1/docker/ybot/caddy/data \
     /volume1/docker/ybot/caddy/config
 
@@ -58,10 +57,10 @@ export IMAGE_TAG
 info "Pulling images (tag: ${IMAGE_TAG}) ..."
 docker compose ${COMPOSE_FILES} --env-file "${ENV_FILE}" pull
 
-# ── Start infrastructure (postgres, valkey, minio) ──────────────────────────
+# ── Start infrastructure (postgres, valkey) ─────────────────────────────────
 info "Starting infrastructure services ..."
 docker compose ${COMPOSE_FILES} --env-file "${ENV_FILE}" \
-  up -d postgres valkey minio
+  up -d postgres valkey
 
 info "Waiting for PostgreSQL to be healthy ..."
 until docker compose ${COMPOSE_FILES} --env-file "${ENV_FILE}" \

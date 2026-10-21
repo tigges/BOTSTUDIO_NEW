@@ -379,7 +379,8 @@ export const DEMO_SYSTEM_STATUS: SystemStatus = {
     { id: 'c3d4e5f6a1b2', name: 'botstudio-caddy', image: 'caddy:2-alpine', state: 'running', status: 'Up 3 hours' },
     { id: 'd4e5f6a1b2c3', name: 'botstudio-postgres', image: 'pgvector/pgvector:pg16', state: 'running', status: 'Up 3 hours (healthy)' },
     { id: 'e5f6a1b2c3d4', name: 'botstudio-valkey', image: 'valkey/valkey:7-alpine', state: 'running', status: 'Up 3 hours (healthy)' },
-    { id: 'f6a1b2c3d4e5', name: 'botstudio-minio', image: 'quay.io/minio/minio:latest', state: 'running', status: 'Up 3 hours (healthy)' },
+    { id: 'f6a1b2c3d4e5', name: 'botstudio-worker', image: 'ghcr.io/tigges/botstudio-api:latest', state: 'running', status: 'Up 3 hours' },
+    { id: 'a6b1c2d3e4f5', name: 'botstudio-docker-proxy', image: 'tecnativa/docker-socket-proxy:latest', state: 'running', status: 'Up 3 hours' },
   ],
   rag: {
     sources: 3,
@@ -413,11 +414,6 @@ export const DEMO_SYSTEM_CONFIG: SystemConfig = {
   },
   cache: {
     REDIS_URL: { set: true, label: 'Redis / Valkey', endpoint: 'redis://valkey:6379' },
-  },
-  storage: {
-    S3_ENDPOINT: { set: true, label: 'S3 / MinIO endpoint', endpoint: 'http://minio:9000' },
-    S3_BUCKET:   { set: true, label: 'S3 Bucket', value: 'ybot-uploads' },
-    S3_REGION:   { set: true, label: 'S3 Region', value: 'us-east-1' },
   },
   llm: {
     LLM_PROVIDER:      { set: true, label: 'Tried in order: Ollama (llama3.2)', value: null },

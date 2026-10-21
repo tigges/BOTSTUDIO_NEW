@@ -218,11 +218,8 @@ async function configHandler() {
         cache: {
           REDIS_URL: { set: isSet('REDIS_URL'), label: 'Redis / Valkey', endpoint: maskUrl(e['REDIS_URL']) },
         },
-        storage: {
-          S3_ENDPOINT: { set: isSet('S3_ENDPOINT'), label: 'S3 / MinIO endpoint', endpoint: e['S3_ENDPOINT'] ?? null },
-          S3_BUCKET:   { set: isSet('S3_BUCKET'),   label: 'S3 Bucket',           value: e['S3_BUCKET'] ?? null },
-          S3_REGION:   { set: isSet('S3_REGION'),   label: 'S3 Region',           value: e['S3_REGION'] ?? null },
-        },
+        // Web builds before MinIO was dropped iterate over this group.
+        storage: {},
         llm: {
           LLM_PROVIDER:      { set: true, label: `Tried in order: ${llmOrder()}`, value: e['LLM_PROVIDER'] || null },
           GEMINI_API_KEY:    { set: isSet('GEMINI_API_KEY'),    label: 'Gemini API Key', value: isSet('GEMINI_API_KEY') ? currentModelId(e['GEMINI_MODEL'] || DEFAULT_MODELS.gemini) : null },

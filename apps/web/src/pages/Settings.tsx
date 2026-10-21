@@ -6,7 +6,7 @@ import type { ConfigEntry } from '../lib/api'
 import { bots as botsApi } from '../lib/api'
 import {
   CheckCircle2, XCircle, Key, Database, Radio,
-  HardDrive, Cpu, Globe, Settings2, User, Lock,
+  Cpu, Globe, Settings2, User, Lock,
   RefreshCw, ChevronRight, Copy, ExternalLink,
   Bot, Zap, Sparkles,
 } from 'lucide-react'
@@ -86,7 +86,6 @@ function SecretsTab() {
     ...Object.entries(cfg.auth).map(([k, v]) => ({ group: 'auth', key: k, entry: v as ConfigEntry })),
     ...Object.entries(cfg.database).map(([k, v]) => ({ group: 'database', key: k, entry: v as ConfigEntry })),
     ...Object.entries(cfg.cache).map(([k, v]) => ({ group: 'cache', key: k, entry: v as ConfigEntry })),
-    ...Object.entries(cfg.storage).map(([k, v]) => ({ group: 'storage', key: k, entry: v as ConfigEntry })),
     ...Object.entries(cfg.llm).map(([k, v]) => ({ group: 'llm', key: k, entry: v as ConfigEntry })),
     ...Object.entries(cfg.app).map(([k, v]) => ({ group: 'app', key: k, entry: v as ConfigEntry })),
   ] : []
@@ -155,11 +154,6 @@ function SecretsTab() {
                   : <><XCircle size={12} /> Not reachable</>}
               </div>
             )}
-          </SectionCard>
-
-          {/* Storage */}
-          <SectionCard title="Object Storage (S3 / MinIO)" icon={HardDrive}>
-            {Object.entries(cfg.storage).map(([k, v]) => <SecretRow key={k} envKey={k} entry={v as ConfigEntry} />)}
           </SectionCard>
 
           {/* LLM */}

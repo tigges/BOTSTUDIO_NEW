@@ -11,11 +11,6 @@ services:
   valkey:
     ports: ["6379:6379"]
 
-  minio:
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-
   # In development the API runs on host via `pnpm --filter @ybot/api dev`
   # Uncomment below to run API in Docker instead:
   # api:

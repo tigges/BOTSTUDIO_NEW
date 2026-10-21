@@ -22,10 +22,6 @@ services:
     volumes:
       - ${VALKEY_PATH:-/volume1/docker/ybot/valkey}:/data
 
-  minio:
-    volumes:
-      - ${MINIO_PATH:-/volume1/docker/ybot/minio}:/data
-
   api:
     image: ghcr.io/tigges/botstudio-api:${IMAGE_TAG:-latest}
     # Ollama may run natively on NAS or another LAN machine

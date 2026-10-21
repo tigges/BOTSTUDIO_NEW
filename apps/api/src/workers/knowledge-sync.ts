@@ -124,7 +124,7 @@ export async function ingestKnowledgeSource(jobData: {
     const crawled = await crawlWebsite(baseUrl, depth)
     pages.push(...crawled.map((p) => ({ url: p.url, text: p.text })))
   } else if (kind === 'file') {
-    // For uploaded files, content should already be in config.text or fetched from MinIO
+    // For uploaded files, content should already be in config.text
     const text = String(config['text'] ?? config['content'] ?? '')
     if (text) pages.push({ text })
   }

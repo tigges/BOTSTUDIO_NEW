@@ -1038,7 +1038,6 @@ export interface SystemConfig {
   auth: { JWT_SECRET: ConfigEntry }
   database: { DATABASE_URL: ConfigEntry }
   cache: { REDIS_URL: ConfigEntry }
-  storage: { S3_ENDPOINT: ConfigEntry; S3_BUCKET: ConfigEntry; S3_REGION: ConfigEntry }
   llm: { LLM_PROVIDER?: ConfigEntry; GEMINI_API_KEY: ConfigEntry; ANTHROPIC_API_KEY: ConfigEntry; OLLAMA_BASE_URL: ConfigEntry; OPENAI_API_KEY: ConfigEntry; GROQ_API_KEY: ConfigEntry }
   app: { NODE_ENV: ConfigEntry; FRONTEND_URL: ConfigEntry }
 }
