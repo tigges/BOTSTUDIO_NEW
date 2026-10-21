@@ -3,7 +3,7 @@
  * Personal data in log lines follows the bot's "Logs" render mode (mask by default).
  */
 
-import { renderPersonalData, readerMode } from '@ybot/shared'
+import { renderPersonalData, readerMode } from '@botstudio/shared'
 import { currentLlmScope } from './llm-ledger.js'
 import { privacyNow, revealText } from './privacy.js'
 

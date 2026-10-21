@@ -8,8 +8,8 @@
  */
 
 import { createHash, createHmac } from 'node:crypto'
-import { prisma } from '@ybot/db'
-import { setLlmPrivacy } from '@ybot/llm'
+import { prisma } from '@botstudio/db'
+import { setLlmPrivacy } from '@botstudio/llm'
 import {
   DEFAULT_PRIVACY,
   findPersonalData,
@@ -21,7 +21,7 @@ import {
   type CustomPattern,
   type PrivacyReader,
   type PrivacySettings,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { currentLlmScope } from './llm-ledger.js'
 
 function tokenKey(): Buffer {

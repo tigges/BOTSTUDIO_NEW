@@ -4,8 +4,8 @@ import {
   RefreshCw, CheckCircle2, XCircle, Clock, Box,
   BookOpen, FileText, Layers, Activity, ChevronRight, Tag, AlertTriangle,
 } from 'lucide-react'
-import { Badge, Button } from '@ybot/ui'
-import { cn } from '@ybot/ui'
+import { Badge, Button } from '@botstudio/ui'
+import { cn } from '@botstudio/ui'
 import { useSystemStatus } from '../../lib/hooks'
 import type { DockerContainer, RagSourceEntry } from '../../lib/api'
 import { shortVersion, fullVersion, buildInfo } from '../../lib/version'

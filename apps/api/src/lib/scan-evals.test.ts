@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { draftWebsiteChat, pageFromHtml } from '@ybot/shared'
+import { draftWebsiteChat, pageFromHtml } from '@botstudio/shared'
 import {
   draftWebsiteChatWithModel,
   jobsFromModelPages,

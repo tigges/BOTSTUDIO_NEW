@@ -9,9 +9,9 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { prisma } from '@ybot/db'
-import { judgeScenario, parseEvalScenarios, scenarioPassed, type EvalLine, type EvalScenario, type EvalScenarioResult } from '@ybot/shared'
-import type { FlowGraph } from '@ybot/runtime'
+import { prisma } from '@botstudio/db'
+import { judgeScenario, parseEvalScenarios, scenarioPassed, type EvalLine, type EvalScenario, type EvalScenarioResult } from '@botstudio/shared'
+import type { FlowGraph } from '@botstudio/runtime'
 import { withLlmScope } from './llm-ledger.js'
 import type { JourneySnapshot } from './releases.js'
 import { runTestTurn, type TestChatState } from './test-chat.js'

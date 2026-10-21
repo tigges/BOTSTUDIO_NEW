@@ -1,13 +1,13 @@
 import React, { useState } from 'react'
 import { Workflow, Plus, Search, Play, Trash2, Pencil } from 'lucide-react'
-import { Button, Input, Badge, Table, THead, TBody, TR, TH, TD, EmptyState, PageHeader, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
+import { Button, Input, Badge, Table, THead, TBody, TR, TH, TD, EmptyState, PageHeader, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@botstudio/ui'
 import { useNavigate } from '@tanstack/react-router'
 import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, useSaveCanvas, useImportStarterPack, useRemoveStarterPack } from '../../lib/hooks'
 import type { CorporatePackResult, PackRemovalResult } from '../../lib/api'
 import { FlowWizard } from './FlowWizard'
 import type { Flow, FlowGraph } from '../../lib/api'
 import { useAppStore } from '../../store/app'
-import { versionForEnvironment } from '@ybot/shared'
+import { versionForEnvironment } from '@botstudio/shared'
 
 const NO_ENVIRONMENTS: Array<{ id: string; kind: string; name: string }> = []
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { DENTAL_BLUEPRINT, DENTAL_CHAPTERS } from '@ybot/shared'
+import { DENTAL_BLUEPRINT, DENTAL_CHAPTERS } from '@botstudio/shared'
 import { REFERENCE_CHATS, playReferenceChat, referenceJourney } from './dental-reference-chats.js'
 
 const journey = referenceJourney(DENTAL_BLUEPRINT.sample())

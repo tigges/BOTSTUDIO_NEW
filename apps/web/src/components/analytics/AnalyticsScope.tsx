@@ -1,8 +1,8 @@
 import React from 'react'
 import { useLocation, useNavigate, useSearch } from '@tanstack/react-router'
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
-import { Button, Card, Skeleton, cn } from '@ybot/ui'
-import { METRIC_INFO, denominatorLine, formatMetric, movement, type AnalyticsMetric } from '@ybot/shared'
+import { Button, Card, Skeleton, cn } from '@botstudio/ui'
+import { METRIC_INFO, denominatorLine, formatMetric, movement, type AnalyticsMetric } from '@botstudio/shared'
 import { useAggregate, useChannels } from '../../lib/hooks'
 import { useAppStore } from '../../store/app'
 import {

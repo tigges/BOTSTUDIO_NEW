@@ -7,7 +7,7 @@ import {
   routeDecision,
   routerRoutes,
   type RouterRoute,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 
 type RawRoute = Record<string, unknown>
 

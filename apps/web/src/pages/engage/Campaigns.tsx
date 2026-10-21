@@ -4,14 +4,14 @@ import {
   Calendar, Users, BarChart2, Play, Pause, CheckCircle2,
   Clock, AlertCircle, Send, Loader2, Tag, X,
 } from 'lucide-react'
-import { Avatar, Badge, Button, Input } from '@ybot/ui'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
+import { Avatar, Badge, Button, Input } from '@botstudio/ui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@botstudio/ui'
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuSeparator,
-} from '@ybot/ui'
+} from '@botstudio/ui'
 import { SubNav } from '../../components/SubNav'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 import { useCampaigns, useCreateCampaign, useUpdateCampaign, useLaunchCampaign, usePauseCampaign, useDeleteCampaign, useCampaignDeliveries, useAudienceCount } from '../../lib/hooks'
 
 const SUBNAV = [

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import type { ReturnOutcome } from '@ybot/shared'
+import type { ReturnOutcome } from '@botstudio/shared'
 import {
   useAssignConversation, useCannedReplies, useConversation, useCreateConversation, useHandBackConversation,
   useInboxChats, useResolveConversation, useSendMessage, useTeamMembers,

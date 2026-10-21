@@ -1,5 +1,5 @@
-import { inspectFlowGraph, repairFlowGraph, type CheckGraph, type CheckOptions, type FlowIssue } from '@ybot/shared'
-import { Button, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
+import { inspectFlowGraph, repairFlowGraph, type CheckGraph, type CheckOptions, type FlowIssue } from '@botstudio/shared'
+import { Button, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@botstudio/ui'
 
 export function reviewFlow(graph: CheckGraph | null | undefined, options: CheckOptions = {}) {
   const current = graph ?? { nodes: [], edges: [] }

@@ -1,4 +1,4 @@
-import { chatPlain, fillNameTokens } from '@ybot/shared'
+import { chatPlain, fillNameTokens } from '@botstudio/shared'
 
 /** Fill name tokens and keep markdown links so the bubble can render Phorest as a named link. */
 export function chatMarkup(text: string | undefined, displayName?: string | null): string {

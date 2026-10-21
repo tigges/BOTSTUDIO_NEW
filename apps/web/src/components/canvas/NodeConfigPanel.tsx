@@ -1,11 +1,11 @@
 import React, { useState } from 'react'
 import { X, ChevronDown, ChevronUp } from 'lucide-react'
-import { Button, Input } from '@ybot/ui'
-import type { FlowIssue, NodeKind } from '@ybot/shared'
+import { Button, Input } from '@botstudio/ui'
+import type { FlowIssue, NodeKind } from '@botstudio/shared'
 import {
   AI_DEFAULT_TURNS, AI_MAX_TURNS, HANDOVER_PRIORITIES, NODE_DEFINITIONS, SWITCHABLE_STEP_KINDS,
   handoverContext, handoverPriority, stepMode,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import type { Node } from '@xyflow/react'
 import type { FlowNodeData } from './FlowNode'
 import { RouterEditor } from './RouterEditor'

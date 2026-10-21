@@ -1,5 +1,5 @@
 import React from 'react'
-import { PageHeader, EmptyState, Button } from '@ybot/ui'
+import { PageHeader, EmptyState, Button } from '@botstudio/ui'
 import { Plus } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 

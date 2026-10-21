@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { Button } from '@ybot/ui'
+import { Button } from '@botstudio/ui'
 import { Check, Copy, CheckCircle2, ChevronRight, Globe, ArrowLeft, ExternalLink, Sparkles } from 'lucide-react'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 import { useChannels, useCreateChannel, useUpdateChannel } from '../../lib/hooks'
 import { useAppStore } from '../../store/app'
 

@@ -23,6 +23,18 @@ importers:
 
   apps/api:
     dependencies:
+      '@botstudio/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@botstudio/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
+      '@botstudio/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@botstudio/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/cookie':
         specifier: ^11.0.1
         version: 11.1.2
@@ -41,18 +53,6 @@ importers:
       '@fastify/websocket':
         specifier: ^11.0.1
         version: 11.3.1
-      '@ybot/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@ybot/llm':
-        specifier: workspace:*
-        version: link:../../packages/llm
-      '@ybot/runtime':
-        specifier: workspace:*
-        version: link:../../packages/runtime
-      '@ybot/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
@@ -117,6 +117,15 @@ importers:
 
   apps/web:
     dependencies:
+      '@botstudio/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@botstudio/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@botstudio/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@tanstack/react-query':
         specifier: ^5.64.1
         version: 5.103.1(react@19.3.0)
@@ -129,15 +138,6 @@ importers:
       '@xyflow/react':
         specifier: ^12.11.6
         version: 12.11.6(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@ybot/runtime':
-        specifier: workspace:*
-        version: link:../../packages/runtime
-      '@ybot/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
-      '@ybot/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@19.3.0)
@@ -219,10 +219,10 @@ importers:
 
   packages/runtime:
     dependencies:
-      '@ybot/llm':
+      '@botstudio/llm':
         specifier: workspace:*
         version: link:../llm
-      '@ybot/shared':
+      '@botstudio/shared':
         specifier: workspace:*
         version: link:../shared
       ioredis:

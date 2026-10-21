@@ -2,7 +2,7 @@
  * Plays one test run against a live server and prints the scorecard.
  *
  *   LIVE_URL=https://app.botstudio.uk TARGET=harbour-dental KIND=traffic \
- *   QA_EMAIL=qa@acme.com QA_PASSWORD=... pnpm --filter @ybot/api exec tsx src/scripts/test-run.ts
+ *   QA_EMAIL=qa@acme.com QA_PASSWORD=... pnpm --filter @botstudio/api exec tsx src/scripts/test-run.ts
  *
  * Bella signs in with BELLA_EMAIL / BELLA_PASSWORD. MAX_COST_USD (default 0.25)
  * fails the run when its model calls cost more. Writes the JSON report to

@@ -1,5 +1,5 @@
-import { prisma } from '@ybot/db'
-import { emptyCatalog, type WebsiteChatDraft } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { emptyCatalog, type WebsiteChatDraft } from '@botstudio/shared'
 import { upsertStudioCatalog } from './studio-catalog.js'
 import { syncFaqKnowledge } from './faq-knowledge.js'
 

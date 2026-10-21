@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link } from '@tanstack/react-router'
-import { TOOL_EFFECT_LABELS, TOOL_KIND_LABELS } from '@ybot/shared'
+import { TOOL_EFFECT_LABELS, TOOL_KIND_LABELS } from '@botstudio/shared'
 import { useTools } from '../../lib/hooks'
 
 interface RunToolEditorProps {

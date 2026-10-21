@@ -1,5 +1,5 @@
-import { prisma } from '@ybot/db'
-import { createEmbeddingAdapter } from '@ybot/llm'
+import { prisma } from '@botstudio/db'
+import { createEmbeddingAdapter } from '@botstudio/llm'
 
 const embedder = createEmbeddingAdapter()
 

@@ -9,8 +9,8 @@
  * the working copy.
  */
 
-import { prisma } from '@ybot/db'
-import { parseReleaseChapters, releaseDiff, withChapter, type ReleaseChapter, type ReleaseDiff } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { parseReleaseChapters, releaseDiff, withChapter, type ReleaseChapter, type ReleaseDiff } from '@botstudio/shared'
 import { isEntryFlow, newestByFlow, pickEntry } from './entry-flow.js'
 import type { VersionRow } from './flow-runner.js'
 import { destinationPhrases, withDestination } from './welcome-routes.js'

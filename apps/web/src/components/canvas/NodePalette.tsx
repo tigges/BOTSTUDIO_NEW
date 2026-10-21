@@ -1,6 +1,6 @@
 import React from 'react'
-import { cn } from '@ybot/ui'
-import { NODE_DEFINITIONS, type NodeKind } from '@ybot/shared'
+import { cn } from '@botstudio/ui'
+import { NODE_DEFINITIONS, type NodeKind } from '@botstudio/shared'
 import {
   Play, MessageSquare, HelpCircle, GitBranch, Variable,
   Globe, Workflow, Headphones, CheckCircle, Clock, Mail,

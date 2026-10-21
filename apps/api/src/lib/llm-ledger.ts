@@ -5,8 +5,8 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
-import { prisma } from '@ybot/db'
-import { setLlmRecorder, type LlmCallRecord } from '@ybot/llm'
+import { prisma } from '@botstudio/db'
+import { setLlmRecorder, type LlmCallRecord } from '@botstudio/llm'
 
 export type LlmSource = 'runtime' | 'retrieval' | 'guardrail' | 'eval' | 'summarisation' | 'authoring'
 

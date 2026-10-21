@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { extractPlanTiers, spokenPrice } from '@ybot/shared'
+import { extractPlanTiers, spokenPrice } from '@botstudio/shared'
 
 test('£7/mo/seat is spoken as a month per seat', () => {
   assert.equal(spokenPrice('£7/mo/seat'), '£7 a month per seat')

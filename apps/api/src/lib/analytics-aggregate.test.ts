@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { aggregateSamples, formatMetric, measure, movement, previousRange, readAnalyticsQuery, timeBucket, type AnalyticsQuery } from '@ybot/shared'
+import { aggregateSamples, formatMetric, measure, movement, previousRange, readAnalyticsQuery, timeBucket, type AnalyticsQuery } from '@botstudio/shared'
 import { chatSamples, chatWhere } from './analytics-aggregate.js'
 
 const NOW = new Date('2026-10-21T12:00:00Z')

@@ -5,7 +5,7 @@
  */
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import React from 'react'
-import type { BotSettings, BusinessProfile, GuardrailRule, ReturnOutcome } from '@ybot/shared'
+import type { BotSettings, BusinessProfile, GuardrailRule, ReturnOutcome } from '@botstudio/shared'
 import * as api from './api'
 import * as demo from './demo-data'
 import { useAppStore } from '../store/app'

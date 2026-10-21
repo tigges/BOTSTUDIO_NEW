@@ -1,8 +1,8 @@
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import {
   aggregateSamples, previousRange,
   type AggregateResult, type AnalyticsFilters, type AnalyticsMetric, type AnalyticsQuery, type AnalyticsSample,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { CHAT_OUTCOMES } from './chat-outcome.js'
 
 type Range = { from: string; to: string }

@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 import { HelpCircle, Plus, Search, Save, CheckCircle, Trash2 } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
-import { Button, Input, Badge, EmptyState, Skeleton } from '@ybot/ui'
-import { cn } from '@ybot/ui'
+import { Button, Input, Badge, EmptyState, Skeleton } from '@botstudio/ui'
+import { cn } from '@botstudio/ui'
 import { KnowledgeSubNav } from './subnav'
 import { useFaqs, useCreateFaq, useDeleteFaq, useUpdateFaq } from '../../../lib/hooks'
 

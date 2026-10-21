@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { List, Play, Plus } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
-import { Button, PageHeader, Skeleton } from '@ybot/ui'
-import { cn } from '@ybot/ui'
+import { Button, PageHeader, Skeleton } from '@botstudio/ui'
+import { cn } from '@botstudio/ui'
 import {
   CATALOG_ENTITY,
   applyChatFindings,
@@ -15,8 +15,8 @@ import {
   versionForEnvironment,
   type ChatFinding,
   type OptimizeChapter,
-} from '@ybot/shared'
-import type { FlowGraph as RuntimeGraph } from '@ybot/runtime'
+} from '@botstudio/shared'
+import type { FlowGraph as RuntimeGraph } from '@botstudio/runtime'
 import { FlowWizard } from './FlowWizard'
 import { LearnFromChats } from './LearnFromChats'
 import { JourneyMap, type ChapterHealth, type JourneyLens } from './JourneyMap'

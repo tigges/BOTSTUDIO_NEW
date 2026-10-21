@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { hoursFromCatalog, parseOpeningHours, takeBookingTime } from '@ybot/shared'
+import { hoursFromCatalog, parseOpeningHours, takeBookingTime } from '@botstudio/shared'
 
 const YUZU_HOURS = 'Yuzu is open Tuesday to Friday 10am to 8pm. Saturday 9am to 6pm. Monday and Sunday closed.'
 const BELLA_HOURS = 'Bella Hair Studio is open Monday to Saturday, 09:00 to 18:00. You can message any time.'

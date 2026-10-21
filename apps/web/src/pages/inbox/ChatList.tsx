@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { AlertCircle, ChevronDown, Inbox, Plus, Search, SearchX } from 'lucide-react'
-import { Avatar, Button, Input, Skeleton, cn } from '@ybot/ui'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@ybot/ui'
+import { Avatar, Button, Input, Skeleton, cn } from '@botstudio/ui'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@botstudio/ui'
 import { DEFAULT_INBOX_FILTERS, SORT_LABELS, listState, type InboxFilters, type InboxSort, type InboxView } from '../../lib/inbox-list'
 import { ChannelIcon, SlaChip, TestRunChip, type Convo } from './chat-model'
 

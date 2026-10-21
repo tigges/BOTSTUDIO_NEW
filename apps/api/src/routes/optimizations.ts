@@ -10,7 +10,7 @@
 
 import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 
 type JWT = { sub: string; tenantId: string; role: string }
 

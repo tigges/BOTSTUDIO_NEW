@@ -1,5 +1,5 @@
-import { prisma } from '@ybot/db'
-import { type ScannedPage } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { type ScannedPage } from '@botstudio/shared'
 import { draftWebsiteChatWithModel } from './site-jobs.js'
 import { upsertStudioCatalog } from './studio-catalog.js'
 

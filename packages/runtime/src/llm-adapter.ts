@@ -1,1 +1,1 @@
-export type { LlmAdapter } from '@ybot/llm'
+export type { LlmAdapter } from '@botstudio/llm'

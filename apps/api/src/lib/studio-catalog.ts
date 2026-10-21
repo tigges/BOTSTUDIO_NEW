@@ -1,5 +1,5 @@
-import { prisma } from '@ybot/db'
-import { CATALOG_ENTITY, valuesFromCatalog, type StudioCatalog } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { CATALOG_ENTITY, valuesFromCatalog, type StudioCatalog } from '@botstudio/shared'
 
 export async function upsertStudioCatalog(tenantId: string, botId: string, catalog: StudioCatalog) {
   const values = valuesFromCatalog(catalog) as object[]

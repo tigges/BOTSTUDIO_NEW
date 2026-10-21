@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { LlmCallRecord } from '@ybot/llm'
+import type { LlmCallRecord } from '@botstudio/llm'
 import { currentLlmScope, enterLlmScope, ledgerRow, withLlmScope } from './llm-ledger.js'
 
 const record = (operation: LlmCallRecord['operation']): LlmCallRecord => ({

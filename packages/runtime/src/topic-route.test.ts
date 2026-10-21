@@ -251,7 +251,7 @@ test('a booking sentence is not kept as the guest name', async () => {
 })
 
 test('the hair studio welcome sends cancel and move requests to their own chapters, not to booking', async () => {
-  const { hairStudioPack, SALON_WELCOME_NAME } = await import('@ybot/shared')
+  const { hairStudioPack, SALON_WELCOME_NAME } = await import('@botstudio/shared')
   const welcome = hairStudioPack('Bella Hair Studio').flows.find((flow) => flow.name === SALON_WELCOME_NAME)!
   const route = (welcome.graph as { nodes: Array<{ id: string; data: { config: { routes?: Array<{ handle: string; phrases: string[]; flowName: string }> } } }> })
     .nodes.find((node) => node.id === 'route')!.data.config.routes!

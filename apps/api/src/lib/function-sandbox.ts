@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { FUNCTION_TIMEOUT_MAX_MS } from '@ybot/shared'
+import { FUNCTION_TIMEOUT_MAX_MS } from '@botstudio/shared'
 
 const PERMISSION_FLAG = process.allowedNodeEnvironmentFlags.has('--permission') ? '--permission' : '--experimental-permission'
 const OUTPUT_LIMIT = 256 * 1024

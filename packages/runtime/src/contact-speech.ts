@@ -1,7 +1,7 @@
 // These rules match packages/shared/src/contact-speech.ts.
 // This file stays inside the runtime package on purpose. The production image
-// loads the flow runner from @ybot/runtime, and that directory has no
-// node_modules, so `import … from '@ybot/shared'` crashes the API on startup.
+// loads the flow runner from @botstudio/runtime, and that directory has no
+// node_modules, so `import … from '@botstudio/shared'` crashes the API on startup.
 
 const PLACEHOLDER = /^(visitor|guest|there|unknown|user)$/i
 const GREETING = /^(hi|hello|hey|hiya|yo|good morning|good afternoon|good evening)[!?.\s]*$/i

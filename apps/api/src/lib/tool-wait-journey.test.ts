@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { FlowGraph } from '@ybot/runtime'
+import type { FlowGraph } from '@botstudio/runtime'
 import { runJourney } from './flow-runner.js'
 import { newTestState, testJourneyStore, type TestChatDeps } from './test-chat.js'
 

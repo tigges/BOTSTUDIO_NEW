@@ -4,8 +4,8 @@ import { AlertCircle, AlertTriangle, CheckCircle2, Download, FileUp, History, Lo
 import {
   Badge, Button, EmptyState, PageHeader, cn,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody, DialogFooter,
-} from '@ybot/ui'
-import type { ReleaseDiff } from '@ybot/shared'
+} from '@botstudio/ui'
+import type { ReleaseDiff } from '@botstudio/shared'
 import { ApiError, bundle as bundleApi, type EvalRunRow, type ImportPlanItem, type ImportPlanView, type ReleaseRow } from '../../lib/api'
 import { useImportBundle, usePublishRelease, useReleases, useRollback } from '../../lib/hooks'
 import { useAppStore } from '../../store/app'

@@ -8,8 +8,8 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import { Send, Loader2, Sparkles, Database, X, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react'
-import { Button, Avatar } from '@ybot/ui'
-import { cn } from '@ybot/ui'
+import { Button, Avatar } from '@botstudio/ui'
+import { cn } from '@botstudio/ui'
 import { ChatText } from './ChatText'
 import { preview, type TestChatPath, type TestChatState, type TestToolCall } from '../lib/api'
 import { joinNotes, testChatNote, testToolNote } from '../lib/test-chat-format'

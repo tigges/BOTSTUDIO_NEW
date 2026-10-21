@@ -9,7 +9,7 @@
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { readFile } from 'node:fs/promises'
 import { resolve, dirname } from 'node:path'
 import { proposeDraftFlows, textMightStartDraft } from '../lib/draft-flows.js'

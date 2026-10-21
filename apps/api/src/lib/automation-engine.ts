@@ -39,8 +39,8 @@
  *   "call_webhook"                dispatch webhooks registered for this event
  */
 
-import { prisma } from '@ybot/db'
-import { fillNameTokens } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { fillNameTokens } from '@botstudio/shared'
 import { dispatchWebhookEvent } from '../queues.js'
 import { outcomeAfterStatus } from './chat-outcome.js'
 

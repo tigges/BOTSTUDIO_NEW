@@ -4,11 +4,11 @@ import {
   Send, CheckCircle2, Circle, Pencil, Trash2, Code2,
   Copy, Loader2, FlaskConical, Wand2,
 } from 'lucide-react'
-import { Badge, Button } from '@ybot/ui'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@ybot/ui'
+import { Badge, Button } from '@botstudio/ui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@botstudio/ui'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@botstudio/ui'
 import { SubNav } from '../../components/SubNav'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 import { useChannels, useCreateChannel, useDeleteChannel, useUpdateChannel } from '../../lib/hooks'
 import { ApiError, type Channel } from '../../lib/api'
 import { useAppStore } from '../../store/app'
@@ -20,7 +20,7 @@ import {
   CHANNEL_FIELDS,
   channelConfigReady,
   isOptionalChannelKind,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 
 const SUBNAV = [
   { label: 'Channels',      path: '/configure/channels' },

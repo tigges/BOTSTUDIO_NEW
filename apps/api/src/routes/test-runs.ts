@@ -15,7 +15,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { openSecret } from '../lib/secrets.js'
 import { DENTAL_REF_BOT_ID, PRACTICE_PROFILE_NAME, SandboxHolds, sandboxSlots } from '../lib/practice-sandbox.js'
 import {

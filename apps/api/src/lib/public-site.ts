@@ -6,7 +6,7 @@
 
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
-import { chooseShopHomes, chooseSitePages, isMissingPage, isPricingPage, pageFromHtml, suggestCluster, type ScannedPage } from '@ybot/shared'
+import { chooseShopHomes, chooseSitePages, isMissingPage, isPricingPage, pageFromHtml, suggestCluster, type ScannedPage } from '@botstudio/shared'
 import { chooseShopHomesWithModel, chooseSitePagesWithModel } from './site-jobs.js'
 
 export class PublicSiteError extends Error {

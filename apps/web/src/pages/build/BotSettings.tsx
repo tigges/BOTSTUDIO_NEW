@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { CheckCircle } from 'lucide-react'
-import { Badge, Button, Card, PageHeader, Skeleton } from '@ybot/ui'
-import { cn } from '@ybot/ui'
+import { Badge, Button, Card, PageHeader, Skeleton } from '@botstudio/ui'
+import { cn } from '@botstudio/ui'
 import {
   MODEL_GROUPS,
   MODEL_IDS,
@@ -12,7 +12,7 @@ import {
   readBotSettings,
   type BotSettings,
   type ResponseLength,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { useBotSettings, useSaveBotSettings } from '../../lib/hooks'
 import { ApiError } from '../../lib/api'
 

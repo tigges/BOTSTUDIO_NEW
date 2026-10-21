@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { hairStudioCatalog } from '@ybot/shared'
+import { hairStudioCatalog } from '@botstudio/shared'
 import { matchCatalog, pickCatalog } from './catalog-lookup.js'
 
 test('a haircut matches one price, not the whole list', () => {

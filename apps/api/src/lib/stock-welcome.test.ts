@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { starterFlows } from '@ybot/shared'
+import { starterFlows } from '@botstudio/shared'
 import { stockWelcomeKind } from './stock-welcome.js'
 
 test('a stock stacked welcome is recognised and the new greeting is not', () => {

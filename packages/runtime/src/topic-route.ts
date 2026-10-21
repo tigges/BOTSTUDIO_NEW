@@ -1,4 +1,4 @@
-import { FALLBACK_ROUTE, guardPasses, type RouterRoute } from '@ybot/shared'
+import { FALLBACK_ROUTE, guardPasses, type RouterRoute } from '@botstudio/shared'
 
 export interface TopicRoute {
   handle: string

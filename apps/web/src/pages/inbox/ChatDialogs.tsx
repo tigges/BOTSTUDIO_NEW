@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { Avatar, Button, cn } from '@ybot/ui'
-import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@ybot/ui'
+import { Avatar, Button, cn } from '@botstudio/ui'
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@botstudio/ui'
 import { useQueryClient } from '@tanstack/react-query'
 import * as api from '../../lib/api'
 import { useCreateLabel, useCreateTicket, useLabels } from '../../lib/hooks'

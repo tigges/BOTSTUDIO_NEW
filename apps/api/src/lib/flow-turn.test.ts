@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { SessionMachine, type ExecutionServices, type FlowGraph, type Session } from '@ybot/runtime'
+import { SessionMachine, type ExecutionServices, type FlowGraph, type Session } from '@botstudio/runtime'
 import { runFlowTurn } from './flow-turn.js'
 
 const services = {

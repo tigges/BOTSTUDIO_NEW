@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { SessionMachine, type FlowGraph } from '@ybot/runtime'
-import type { ExecutionServices, Session } from '@ybot/runtime'
+import { SessionMachine, type FlowGraph } from '@botstudio/runtime'
+import type { ExecutionServices, Session } from '@botstudio/runtime'
 import {
   BELLA_SAMPLE,
   LEARNING_KEEPS,
@@ -13,7 +13,7 @@ import {
   suggestionFromRated,
   suggestionFromSamples,
   type RatedChatInput,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 
 function session(text: string, name = 'there'): Session {
   return {

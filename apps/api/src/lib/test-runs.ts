@@ -10,9 +10,9 @@
  */
 
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
-import { prisma, withAuditActor } from '@ybot/db'
-import { HANDOVER_PRIORITIES, RETURN_OUTCOMES } from '@ybot/shared'
-import { createLlmAdapter, hasCloudLlm, setLlmOutboundWatch } from '@ybot/llm'
+import { prisma, withAuditActor } from '@botstudio/db'
+import { HANDOVER_PRIORITIES, RETURN_OUTCOMES } from '@botstudio/shared'
+import { createLlmAdapter, hasCloudLlm, setLlmOutboundWatch } from '@botstudio/llm'
 import { openSecret, sealSecret, secretHint } from './secrets.js'
 import { currentLlmScope, withLlmScope } from './llm-ledger.js'
 import { DENTAL_REF_BOT_ID, PRACTICE_PLACEHOLDER_BASE, PRACTICE_PROFILE_NAME, SANDBOX_PATH } from './practice-sandbox.js'

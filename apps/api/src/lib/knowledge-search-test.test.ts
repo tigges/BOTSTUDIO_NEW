@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { documentQuality, textStats } from '@ybot/shared'
+import { documentQuality, textStats } from '@botstudio/shared'
 import { explain, fuseRankings, matchedTerms, type EngineHit } from './knowledge-search-test.js'
 
 function hit(id: string, raw: number, extra: Partial<EngineHit> = {}): EngineHit {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { hairStudioPack, journeyLayout, journeyTrail } from '@ybot/shared'
+import { hairStudioPack, journeyLayout, journeyTrail } from '@botstudio/shared'
 import { journeyTraffic, logChapterEntry, tallyJourneyChats } from './journey-traffic.js'
 
 function input(flow: { name: string; tags?: string[]; graph: unknown }, index: number, published = true) {

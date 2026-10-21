@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { ArrowLeftRight, Bot, CheckCheck, ClipboardList, Hand } from 'lucide-react'
-import { Badge, Button } from '@ybot/ui'
-import { RETURN_LABELS, type HandoverContract, type ReturnOutcome } from '@ybot/shared'
+import { Badge, Button } from '@botstudio/ui'
+import { RETURN_LABELS, type HandoverContract, type ReturnOutcome } from '@botstudio/shared'
 import { contextLine, held, priorityTone, returnedLine, routingLine, sourceLine } from '../../lib/handover-format'
 
 interface HandoverCardProps {

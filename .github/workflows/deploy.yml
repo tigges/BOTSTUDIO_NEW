@@ -36,7 +36,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build web app
-        run: pnpm exec turbo run build --filter=@ybot/web --ui=stream
+        run: pnpm exec turbo run build --filter=@botstudio/web --ui=stream
         env:
           VITE_DEMO_MODE: "true"
           VITE_API_URL: "/api/v1"

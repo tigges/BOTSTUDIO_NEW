@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { botStage, filledBusinessFields, setupChecklist, type BotFootprint } from '@ybot/shared'
+import { botStage, filledBusinessFields, setupChecklist, type BotFootprint } from '@botstudio/shared'
 import { costPerChat, isUntouchedStarterWelcome } from './bot-overview.js'
 
 const blank: BotFootprint = {

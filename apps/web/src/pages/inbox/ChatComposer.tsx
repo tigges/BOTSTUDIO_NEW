@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { MessageCircle, Send, StickyNote, Wrench, Zap } from 'lucide-react'
-import { Button, cn } from '@ybot/ui'
+import { Button, cn } from '@botstudio/ui'
 import { RunToolPanel } from './RunToolPanel'
 
 type Mode = 'reply' | 'note'

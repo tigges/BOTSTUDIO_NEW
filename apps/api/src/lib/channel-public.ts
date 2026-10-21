@@ -1,4 +1,4 @@
-import { maskChannelConfig } from '@ybot/shared'
+import { maskChannelConfig } from '@botstudio/shared'
 
 /** The connection as the console sees it: secrets removed, with the names of the ones that are saved. */
 export function publicChannel<T extends { kind: string; config: unknown }>(row: T): Omit<T, 'config'> & { config: Record<string, unknown>; secretsSet: string[] } {

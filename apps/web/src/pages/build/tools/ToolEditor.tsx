@@ -3,12 +3,12 @@ import { Loader2, Plus, RefreshCw, Trash2, Play, CheckCircle2, XCircle, MinusCir
 import {
   Button, Badge, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, DialogDescription,
   Tabs, TabsList, TabsTrigger, TabsContent,
-} from '@ybot/ui'
+} from '@botstudio/ui'
 import {
   TOOL_EFFECTS, TOOL_EFFECT_LABELS, TOOL_KIND_LABELS, TOOL_PARAM_TYPES,
   defaultToolConfig, httpConfig, toolChangesData, toolIssues, toolParametersSchema,
   type ToolDraft, type ToolKind, type ToolParameter, type ToolEffect,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import type { ToolSummary } from '../../../lib/api'
 import { ApiError } from '../../../lib/api'
 import { useAuthProfiles, useRefreshTool, useSaveTool, useTestTool, useToolRuns, useWorkflows } from '../../../lib/hooks'

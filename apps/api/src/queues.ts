@@ -3,7 +3,7 @@
 // enqueued is never dropped silently: it is logged, counted for System Status,
 // and the caller gets BackgroundJobsUnavailableError.
 
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 
 export const QUEUE_KNOWLEDGE_SYNC    = 'knowledge-sync'
 export const QUEUE_CAMPAIGN_SEND     = 'campaign-send'

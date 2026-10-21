@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { ChevronLeft, ChevronRight, Bot } from 'lucide-react'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 import { NAV_GROUPS } from './nav-config'
 import { navItemActive } from '../lib/build-nav'
 import { shortVersion, fullVersion } from '../lib/version'

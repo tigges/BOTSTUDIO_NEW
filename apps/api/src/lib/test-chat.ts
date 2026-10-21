@@ -9,9 +9,9 @@
  * Model calls are recorded in the ledger as the test environment.
  */
 
-import { prisma } from '@ybot/db'
-import { handoverSummary, type HandoverContract, type StudioCatalog } from '@ybot/shared'
-import type { FlowGraph, ToolCallResult } from '@ybot/runtime'
+import { prisma } from '@botstudio/db'
+import { handoverSummary, type HandoverContract, type StudioCatalog } from '@botstudio/shared'
+import type { FlowGraph, ToolCallResult } from '@botstudio/runtime'
 import { turnSafety, type TurnSafety } from './guardrails.js'
 import { handoverRulesFor, type HandoverRules } from './handover.js'
 import { botCatalog, botLlm, botToolName, botToolWaitSeconds, runJourney, type JourneyLlm, type JourneyStore, type SavedSession, type VersionRow } from './flow-runner.js'

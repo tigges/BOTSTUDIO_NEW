@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Building2, CheckCircle2, Loader2, RefreshCw, Save } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
-import { Button, EmptyState, PageHeader, cn } from '@ybot/ui'
-import type { BusinessProfile, FieldChange, KnowledgeConflict } from '@ybot/shared'
+import { Button, EmptyState, PageHeader, cn } from '@botstudio/ui'
+import type { BusinessProfile, FieldChange, KnowledgeConflict } from '@botstudio/shared'
 import { BusinessFieldRow, takeAlternative, withValue } from '../../components/BusinessFields'
 import { useAcceptBusiness, useBusiness, useRereadBusiness, useSaveBusiness } from '../../lib/hooks'
 

@@ -46,7 +46,7 @@ export default defineConfig({
           'vendor-query':   ['@tanstack/react-query'],
           'vendor-charts':  ['recharts'],
           'vendor-flow':    ['@xyflow/react'],
-          'vendor-ui':      ['@ybot/ui'],
+          'vendor-ui':      ['@botstudio/ui'],
         },
       },
     },

@@ -1,5 +1,5 @@
-import { prisma } from '@ybot/db'
-import { parseGuardrailRules, type GuardrailRule, type PrivacySettings } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { parseGuardrailRules, type GuardrailRule, type PrivacySettings } from '@botstudio/shared'
 import { loadPrivacy } from './privacy.js'
 
 const TTL_MS = 30_000

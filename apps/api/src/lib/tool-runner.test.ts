@@ -1,6 +1,6 @@
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULT_PRIVACY, checkToolArgs, fillJsonTemplate, toolIssues, toolParametersSchema, type ToolDraft } from '@ybot/shared'
+import { DEFAULT_PRIVACY, checkToolArgs, fillJsonTemplate, toolIssues, toolParametersSchema, type ToolDraft } from '@botstudio/shared'
 import { defaultToolDeps, resetCircuitBreakers, runTool, type RunnableTool, type ToolDeps } from './tool-runner.js'
 import { sealSecret, openSecret, secretHint } from './secrets.js'
 import { applyAuthProfile } from './auth-profiles.js'

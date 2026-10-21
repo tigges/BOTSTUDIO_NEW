@@ -3,8 +3,8 @@ import { Wrench, Plus, Server, Search, AlertCircle, Loader2, Trash2, CheckCircle
 import {
   Badge, Button, EmptyState, cn,
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
-} from '@ybot/ui'
-import { TOOL_EFFECT_LABELS, TOOL_KINDS, TOOL_KIND_LABELS, toolChangesData, type ToolDraft, type ToolKind } from '@ybot/shared'
+} from '@botstudio/ui'
+import { TOOL_EFFECT_LABELS, TOOL_KINDS, TOOL_KIND_LABELS, toolChangesData, type ToolDraft, type ToolKind } from '@botstudio/shared'
 import type { ToolSummary } from '../../lib/api'
 import { useDeleteTool, useTools } from '../../lib/hooks'
 import { ToolEditor, blankTool } from './tools/ToolEditor'

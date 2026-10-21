@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Card, Button, Input, Badge, Avatar } from '@ybot/ui'
+import { Card, Button, Input, Badge, Avatar } from '@botstudio/ui'
 import { useAppStore } from '../store/app'
 import { useSystemConfig, useSystemStatus } from '../lib/hooks'
 import type { ConfigEntry } from '../lib/api'
@@ -10,7 +10,7 @@ import {
   RefreshCw, ChevronRight, Copy, ExternalLink,
   Bot, Zap, Sparkles,
 } from 'lucide-react'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 import { useUpdateProfile } from '../lib/hooks'
 
 // ── helpers ───────────────────────────────────────────────────────────────────

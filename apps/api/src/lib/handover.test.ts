@@ -6,7 +6,7 @@ import {
   handoverFromConfig,
   handoverSummary,
   inspectFlowGraph,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { isHeld, returnChange, ticketPriority, withHeldChats } from './handover.js'
 import { streamDoneEvent } from './widget-rating.js'
 

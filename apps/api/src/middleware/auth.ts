@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
-import { setAuditActor } from '@ybot/db'
+import { setAuditActor } from '@botstudio/db'
 
 // ── Role hierarchy (lowest to highest privilege) ──────────────────────────────
 // AGENT      — inbox only: conversations, tickets, contacts

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { bookingWorkflowsIn, chatParts, chatPlain, rewriteChatLinks } from '@ybot/shared'
+import { bookingWorkflowsIn, chatParts, chatPlain, rewriteChatLinks } from '@botstudio/shared'
 
 test('a Phorest URL becomes a named link, not the raw address', () => {
   const dumped = 'Book on Phorest: https://www.phorest.com/salon/yuzuhairandbeauty'

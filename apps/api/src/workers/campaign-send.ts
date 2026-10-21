@@ -12,7 +12,7 @@
  * Without external credentials the worker marks deliveries as "simulated".
  */
 
-import { prisma, type Prisma } from '@ybot/db'
+import { prisma, type Prisma } from '@botstudio/db'
 
 let cuidCounter = 0
 function createId() { return `cmp_${Date.now()}_${++cuidCounter}` }

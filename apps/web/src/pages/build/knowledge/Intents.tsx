@@ -3,8 +3,8 @@ import {
   Brain, Plus, Trash2, Save, ChevronRight, Search,
   MessageCircle, X, CheckCircle
 } from 'lucide-react'
-import { Button, Input, Badge, EmptyState } from '@ybot/ui'
-import { cn } from '@ybot/ui'
+import { Button, Input, Badge, EmptyState } from '@botstudio/ui'
+import { cn } from '@botstudio/ui'
 import { KnowledgeSubNav } from './subnav'
 import { useIntents, useUpdateIntent, useCreateIntent, useDeleteIntent } from '../../../lib/hooks'
 

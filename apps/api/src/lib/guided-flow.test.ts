@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { guidedFlowGraph, starterFlows } from '@ybot/shared'
+import { guidedFlowGraph, starterFlows } from '@botstudio/shared'
 
 test('a guided flow asks a question and can hand off', () => {
   const graph = guidedFlowGraph({ greeting: 'Hello', question: 'Order number?', handoff: true })

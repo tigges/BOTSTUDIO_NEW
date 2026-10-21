@@ -1,5 +1,5 @@
 import React from 'react'
-import { chatParts } from '@ybot/shared'
+import { chatParts } from '@botstudio/shared'
 
 /** Spoken chat with booking hosts as a named link, never a long URL. */
 export function ChatText({ text }: { text: string }) {

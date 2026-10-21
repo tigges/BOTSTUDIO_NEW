@@ -1,4 +1,4 @@
-import type { AuthProfileKind } from '@ybot/shared'
+import type { AuthProfileKind } from '@botstudio/shared'
 import { openSecret } from './secrets.js'
 
 export interface AuthSettings {

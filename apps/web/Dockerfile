@@ -3,10 +3,10 @@ FROM node:22-alpine AS base
 RUN corepack enable
 WORKDIR /app
 
-# ── Prune: only the packages @ybot/web depends on ─────────────────────────────
+# ── Prune: only the packages @botstudio/web depends on ─────────────────────────────
 FROM base AS pruner
 COPY . .
-RUN pnpm dlx turbo@2.11.2 prune @ybot/web --docker
+RUN pnpm dlx turbo@2.11.2 prune @botstudio/web --docker
 
 # ── Build stage ───────────────────────────────────────────────────────────────
 FROM base AS builder
@@ -22,7 +22,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY --from=pruner /app/out/full/ .
 COPY tsconfig.base.json ./
-RUN pnpm exec turbo run build --filter=@ybot/web --ui=stream
+RUN pnpm exec turbo run build --filter=@botstudio/web --ui=stream
 
 # ── Serve stage ───────────────────────────────────────────────────────────────
 FROM nginx:stable-alpine AS runner

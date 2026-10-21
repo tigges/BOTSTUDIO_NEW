@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { z } from 'zod'
-import { CONNECTORS, isConnector } from '@ybot/shared'
+import { CONNECTORS, isConnector } from '@botstudio/shared'
 import { requireRole } from '../middleware/auth.js'
 import { IntegrationError, connectIntegration, connectionGaps, disconnectIntegration, installConnectorTools } from '../lib/integrations.js'
 

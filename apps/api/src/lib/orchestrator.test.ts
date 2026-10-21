@@ -8,7 +8,7 @@ import {
   routeDecision,
   routerRoutes,
   stepMode,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 
 function routerFlow(routes: unknown[], extra: { fallback?: boolean } = {}) {
   return {

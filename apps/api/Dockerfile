@@ -3,10 +3,10 @@ FROM node:22-alpine AS base
 RUN corepack enable
 WORKDIR /app
 
-# ── Prune: only the packages @ybot/api depends on ─────────────────────────────
+# ── Prune: only the packages @botstudio/api depends on ─────────────────────────────
 FROM base AS pruner
 COPY . .
-RUN pnpm dlx turbo@2.11.2 prune @ybot/api --docker
+RUN pnpm dlx turbo@2.11.2 prune @botstudio/api --docker
 
 # ── Build stage ───────────────────────────────────────────────────────────────
 FROM base AS builder
@@ -16,7 +16,7 @@ RUN pnpm install --frozen-lockfile
 COPY --from=pruner /app/out/full/ .
 COPY tsconfig.base.json ./
 ENV DATABASE_URL=postgresql://dummy:dummy@localhost/dummy
-RUN pnpm exec turbo run build --filter=@ybot/api --ui=stream
+RUN pnpm exec turbo run build --filter=@botstudio/api --ui=stream
 
 # ── Production dependencies only ──────────────────────────────────────────────
 # Install scripts stay on so @prisma/engines fetches its engines here, not at
@@ -45,7 +45,7 @@ RUN apk add --no-cache curl
 
 WORKDIR /app
 
-# The Prisma CLI is a dependency of @ybot/db; docker-entrypoint.sh runs it
+# The Prisma CLI is a dependency of @botstudio/db; docker-entrypoint.sh runs it
 # for migrations at start.
 ENV PATH="/app/packages/db/node_modules/.bin:${PATH}"
 

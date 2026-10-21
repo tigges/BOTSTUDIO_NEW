@@ -1,7 +1,7 @@
 import type {
   AuthProfileKind, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, KnowledgeConflict, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader,
   PrivacySettings, BotFootprint, BotStage, ChecklistItem, ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns, AggregateResult, BotSettings, DocumentQuality,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { messageForStatus } from './api-error'
 import type { AppBuildInfo } from './version'
 import { storedToken } from './storage-keys'

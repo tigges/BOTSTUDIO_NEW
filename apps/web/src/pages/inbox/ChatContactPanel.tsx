@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { ClipboardList, Globe, Mail, MessageCircle, Phone, Star, UserPlus } from 'lucide-react'
-import { Avatar, Badge, Button, cn } from '@ybot/ui'
+import { Avatar, Badge, Button, cn } from '@botstudio/ui'
 import { useNavigate } from '@tanstack/react-router'
 import { queueContact } from '../../lib/inbox-nav'
 import { useChatMemory } from '../../lib/hooks'

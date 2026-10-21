@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from '@tanstack/react-router'
 import { Bot, Eye, EyeOff, FlaskConical } from 'lucide-react'
-import { Button, Input, Card } from '@ybot/ui'
+import { Button, Input, Card } from '@botstudio/ui'
 import { useAppStore } from '../store/app'
 import { apiFetch } from '../lib/api'
 

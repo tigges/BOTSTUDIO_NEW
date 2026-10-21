@@ -10,11 +10,11 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { SessionMachine, acceptedHoursOffer, hoursChapterName, copyJumpVariables, missingChapterLine, hearChapter, offerOnMap, isSmallTalk, isTopicSwitch, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn, basicAct, basicsReply } from '@ybot/runtime'
-import type { Session, SessionVariables, FlowGraph, ToolCallResult } from '@ybot/runtime'
-import { prisma } from '@ybot/db'
-import { CATALOG_ENTITY, catalogFromValues, numberedChoice, type HandoverRequest, type StudioCatalog } from '@ybot/shared'
-import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
+import { SessionMachine, acceptedHoursOffer, hoursChapterName, copyJumpVariables, missingChapterLine, hearChapter, offerOnMap, isSmallTalk, isTopicSwitch, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn, basicAct, basicsReply } from '@botstudio/runtime'
+import type { Session, SessionVariables, FlowGraph, ToolCallResult } from '@botstudio/runtime'
+import { prisma } from '@botstudio/db'
+import { CATALOG_ENTITY, catalogFromValues, numberedChoice, type HandoverRequest, type StudioCatalog } from '@botstudio/shared'
+import { createLlmAdapter, createLlmAdapterForModel } from '@botstudio/llm'
 import { newestByFlow, pickWorkingCopy } from './entry-flow.js'
 import { runFlowTurn } from './flow-turn.js'
 import { finishBotLines, nameThanksEndsTurn, saveContactName, takeNameTurn, type NamePlan, type VisitorName } from './visitor-name.js'

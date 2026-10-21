@@ -1,4 +1,4 @@
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 
 export type TestRunFilter = 'include' | 'exclude' | 'only'
 

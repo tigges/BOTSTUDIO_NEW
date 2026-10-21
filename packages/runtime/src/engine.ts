@@ -1,4 +1,4 @@
-import { hoursFromCatalog, numberedChoice, takeBookingTime, type HandoverRequest } from '@ybot/shared'
+import { hoursFromCatalog, numberedChoice, takeBookingTime, type HandoverRequest } from '@botstudio/shared'
 import { usableContactName } from './contact-speech.js'
 import type { NodeContext, NodeResult, Session, ExecutionServices } from './types.js'
 import {

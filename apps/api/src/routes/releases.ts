@@ -7,7 +7,7 @@
  */
 
 import type { FastifyInstance, FastifyReply } from 'fastify'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { z } from 'zod'
 import { requireRole } from '../middleware/auth.js'
 import { listReleases, productionEnvironment, releaseCandidate, ReleaseError, rollback } from '../lib/releases.js'

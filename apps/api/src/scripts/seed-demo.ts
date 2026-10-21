@@ -6,7 +6,7 @@
  */
 export { ensureDemos as seedDemo } from './ensure-demos.js'
 import { ensureDemos } from './ensure-demos.js'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 
 const isDirectRun = process.argv[1]?.endsWith('seed-demo.ts') || process.argv[1]?.endsWith('seed-demo.js')
 if (isDirectRun) {

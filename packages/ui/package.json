@@ -1,5 +1,5 @@
 {
-  "name": "@ybot/ui",
+  "name": "@botstudio/ui",
   "version": "0.0.1",
   "private": true,
   "main": "./src/index.ts",

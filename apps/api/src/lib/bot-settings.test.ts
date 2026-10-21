@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { MODEL_IDS, answerLength, documentQuality, readBotSettings, toolWaitHandoverConfig } from '@ybot/shared'
+import { MODEL_IDS, answerLength, documentQuality, readBotSettings, toolWaitHandoverConfig } from '@botstudio/shared'
 
 const valid = { model: 'gemini-flash-latest', responseLength: 'short', toolWaitEscalateSeconds: 10 }
 

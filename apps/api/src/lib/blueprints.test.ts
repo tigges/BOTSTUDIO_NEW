@@ -21,8 +21,8 @@ import {
   type BusinessProfile,
   type EvalScenario,
   type PriceItem,
-} from '@ybot/shared'
-import type { FlowGraph } from '@ybot/runtime'
+} from '@botstudio/shared'
+import type { FlowGraph } from '@botstudio/runtime'
 import { playScenario } from './evals.js'
 import { runTestTurn, type TestChatDeps } from './test-chat.js'
 

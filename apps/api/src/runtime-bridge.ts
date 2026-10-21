@@ -4,8 +4,8 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import { prisma } from '@ybot/db'
-import { readerMode } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { readerMode } from '@botstudio/shared'
 import { loadPrivacy } from './lib/privacy.js'
 import { runTurn } from './lib/turn-pipeline.js'
 

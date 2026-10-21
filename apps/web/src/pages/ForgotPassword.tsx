@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Bot } from 'lucide-react'
-import { Button, Input, Card } from '@ybot/ui'
+import { Button, Input, Card } from '@botstudio/ui'
 import { auth } from '../lib/api'
 
 export function ForgotPasswordPage() {

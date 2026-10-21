@@ -69,12 +69,12 @@ BotStudio is a hybrid agent workforce platform: AI agents and human agents work 
 
 ## Naming
 - The product is BotStudio. Do not add YBot, Ybot or YAI to code, copy, images, containers, headers, storage keys or docs.
-- Never rename these. They are baked into stored data: the `ybot-secrets:` key salt in `apps/api/src/lib/secrets.ts` (it unseals every Auth Profile secret), the `ybot-pii:` prefix in `apps/api/src/lib/privacy.ts` (stable PII tokens), the Postgres database and user `ybot`, and the host data folder `/volume1/docker/ybot`.
+- Never rename these. They are baked into stored data: the `ybot-secrets:` key salt in `apps/api/src/lib/secrets.ts` (it unseals every Auth Profile secret), the `ybot-pii:` prefix in `apps/api/src/lib/privacy.ts` (stable PII tokens), the Postgres database and user `ybot`, the host data folder `/volume1/docker/ybot`, and the demo login emails seeded on the live host.
 - Old names that are still accepted so live customers keep working: widget globals `window.YBot*`, the `X-YBot-*` webhook headers (sent next to `X-BotStudio-*`), the `ybot_token` cookie and the `ybot-app` and `ybot-theme` browser keys (migrated on load). New code writes only the BotStudio names. Remove an alias only in a change that says so.
 
 ## Cursor Cloud specific instructions
 - Install with `pnpm install --frozen-lockfile` (Node 22, pnpm 10). Build everything with `pnpm exec turbo run build`.
-- Build `packages/shared` and the runtime package after editing them; the API and web consume their `dist`.
+- Workspace packages are scoped `@botstudio/*`: apps in `apps/` (api, web, embed), libraries in `packages/` (shared, llm, db, ui, runtime). Build `packages/shared` and `packages/runtime` after editing them; the API and web consume their `dist`.
 - Tests: `pnpm test` in `apps/api` and `apps/web` (or `pnpm exec turbo run test`). Typecheck a package with `pnpm exec tsc --noEmit -p .`.
 - Live QA runs Playwright against https://app.botstudio.uk: `pnpm test:live`. Demo logins are in `qa/tests/helpers.ts`; `demo@bella.com` is the read-only check account.
 - Every merge to `main` deploys to the Synology host through GHCR and Watchtower. The compose files, `Caddyfile` and `.env.production` on the host are copied there by hand, so a change to them only takes effect after someone follows `docs/deploy-synology.md`. Code must keep working with the host files that are already there.

@@ -4,8 +4,8 @@
  * every turn. Values are stored as given; every reader renders them through
  * its privacy mode, and model calls see them tokenised like any other text.
  */
-import { prisma } from '@ybot/db'
-import { factsToRemember, memoryExpiry, parseMemorySettings, recallFacts, type MemorySettings } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { factsToRemember, memoryExpiry, parseMemorySettings, recallFacts, type MemorySettings } from '@botstudio/shared'
 
 const DAY = 86_400_000
 

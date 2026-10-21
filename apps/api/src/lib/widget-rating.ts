@@ -1,4 +1,4 @@
-import { renderForChannel } from '@ybot/shared'
+import { renderForChannel } from '@botstudio/shared'
 
 /**
  * The widget asks for a rating only after the published flow has finished.

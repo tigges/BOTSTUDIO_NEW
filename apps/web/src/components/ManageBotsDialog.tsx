@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { Button, Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, Input } from '@ybot/ui'
+import { Button, Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, Input } from '@botstudio/ui'
 import { bots as botsApi } from '../lib/api'
 import { useAppStore, type Bot } from '../store/app'
 

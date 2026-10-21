@@ -4,8 +4,8 @@
  * in Production. Production numbers leave test-run chats out.
  */
 
-import { prisma } from '@ybot/db'
-import { botStage, filledBusinessFields, setupChecklist, type BotFootprint, type BotStage, type ChecklistItem } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { botStage, filledBusinessFields, setupChecklist, type BotFootprint, type BotStage, type ChecklistItem } from '@botstudio/shared'
 
 const DAY = 86_400_000
 

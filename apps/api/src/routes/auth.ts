@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { clearSessionCookies, setSessionCookie } from '../lib/session-cookie.js'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { sendEmail, passwordResetEmail, inviteEmail } from '../lib/email.js'

@@ -6,11 +6,11 @@ import {
   FileText, Clock, Download, Mail, CalendarDays, RefreshCw,
   Pencil, Copy, Loader2,
 } from 'lucide-react'
-import { Button, Badge } from '@ybot/ui'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@ybot/ui'
+import { Button, Badge } from '@botstudio/ui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@botstudio/ui'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@botstudio/ui'
 import { SubNav } from '../../components/SubNav'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 import { useDashboards, useCreateDashboard, useDeleteDashboard, useReports, useCreateReport, useRunReport, useDeleteReport } from '../../lib/hooks'
 import { AnalyticsFilterBar, MetricCard, useAnalyticsScope } from '../../components/analytics/AnalyticsScope'
 import { DASHBOARD_TEMPLATES, templateWidgets, widgetMetric } from '../../lib/dashboard-widgets'

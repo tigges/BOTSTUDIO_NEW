@@ -6,11 +6,11 @@
       "cache": false,
       "passThroughEnv": ["DATABASE_URL"]
     },
-    "@ybot/db#build": {
+    "@botstudio/db#build": {
       "dependsOn": ["generate"],
       "outputs": ["dist/**"]
     },
-    "@ybot/db#typecheck": {
+    "@botstudio/db#typecheck": {
       "dependsOn": ["generate"]
     },
     "build": {

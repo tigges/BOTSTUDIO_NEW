@@ -6,10 +6,10 @@ import {
   Shield, UserPlus, Send, RefreshCw, Key, Bell, Tag,
   MessageSquare,
 } from 'lucide-react'
-import { Avatar, Badge, Button, Input } from '@ybot/ui'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@ybot/ui'
+import { Avatar, Badge, Button, Input } from '@botstudio/ui'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@botstudio/ui'
 import { SubNav } from '../../components/SubNav'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 import { useAuditLog } from '../../lib/hooks'
 
 const SUBNAV = [

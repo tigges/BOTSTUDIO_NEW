@@ -1,7 +1,7 @@
 import React from 'react'
 import { Clock, Globe, Mail, MessageCircle, Phone } from 'lucide-react'
-import { cn } from '@ybot/ui'
-import { GUARDRAIL_ACTION_LABELS, type GuardrailHit } from '@ybot/shared'
+import { cn } from '@botstudio/ui'
+import { GUARDRAIL_ACTION_LABELS, type GuardrailHit } from '@botstudio/shared'
 import type * as api from '../../lib/api'
 import { chatMarkup, chatText } from '../../lib/chat-text'
 

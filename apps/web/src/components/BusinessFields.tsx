@@ -1,6 +1,6 @@
 import React from 'react'
 import { ExternalLink, Plus, Trash2 } from 'lucide-react'
-import { Badge, cn } from '@ybot/ui'
+import { Badge, cn } from '@botstudio/ui'
 import {
   WEEKDAYS,
   WEEKDAY_NAMES,
@@ -15,7 +15,7 @@ import {
   type PriceItem,
   type ProfileIssue,
   type TopicItem,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 
 const input = 'w-full rounded border border-[var(--border)] bg-[var(--bg-overlay)] px-2 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none'
 

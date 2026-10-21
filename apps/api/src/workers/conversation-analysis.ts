@@ -10,8 +10,8 @@
  * review/approval via the Configure > Optimizations UI.
  */
 
-import { prisma } from '@ybot/db'
-import { createLlmAdapter } from '@ybot/llm'
+import { prisma } from '@botstudio/db'
+import { createLlmAdapter } from '@botstudio/llm'
 import { withLlmScope } from '../lib/llm-ledger.js'
 
 const llm = createLlmAdapter()

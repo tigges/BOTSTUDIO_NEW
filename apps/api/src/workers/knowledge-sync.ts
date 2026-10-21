@@ -10,8 +10,8 @@
  * Schema note: add `DocumentChunk` model to Prisma schema if not already present.
  */
 
-import { prisma } from '@ybot/db'
-import { createEmbeddingAdapter } from '@ybot/llm'
+import { prisma } from '@botstudio/db'
+import { createEmbeddingAdapter } from '@botstudio/llm'
 import { withLlmScope } from '../lib/llm-ledger.js'
 
 const embedder = createEmbeddingAdapter()

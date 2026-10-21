@@ -1,4 +1,4 @@
-import { CHANNEL_FIELDS, isOptionalChannelKind } from '@ybot/shared'
+import { CHANNEL_FIELDS, isOptionalChannelKind } from '@botstudio/shared'
 
 export type ConnectionTab = 'overview' | 'credentials' | 'configuration' | 'deployment'
 

@@ -11,7 +11,7 @@
  * POST   /bots/:botId/safety/test                        Live Test with unsaved settings
  */
 import type { FastifyInstance, FastifyReply } from 'fastify'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { z } from 'zod'
 import {
   evaluateGuardrails,
@@ -24,7 +24,7 @@ import {
   RENDER_MODES,
   type GuardrailRule,
   type PrivacyReader,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { requireRole } from '../middleware/auth.js'
 import { forgetPrivacy, protectText, renderFor } from '../lib/privacy.js'
 import { forgetGuardrails } from '../lib/guardrails.js'

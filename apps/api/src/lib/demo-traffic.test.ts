@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
-import { QUALIFY_COLOUR, UPSELL_CUT } from '@ybot/shared'
+import { QUALIFY_COLOUR, UPSELL_CUT } from '@botstudio/shared'
 import {
   ACME_TRAFFIC_CHATS,
   BELLA_TRAFFIC_CHATS,

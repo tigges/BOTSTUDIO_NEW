@@ -4,13 +4,13 @@ import {
   BookOpen, Plus, Globe, FileText, Link2, RefreshCw,
   CheckCircle, AlertCircle, Clock, Trash2, Loader2, Upload, Building2, HelpCircle,
 } from 'lucide-react'
-import { Button, Badge, EmptyState, Card } from '@ybot/ui'
+import { Button, Badge, EmptyState, Card } from '@botstudio/ui'
 import { KnowledgeSubNav } from './subnav'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
   Input,
-} from '@ybot/ui'
-import { cn } from '@ybot/ui'
+} from '@botstudio/ui'
+import { cn } from '@botstudio/ui'
 import { useSources, useCreateSource, useUploadSource, useSyncSource, useDeleteSource, useBusiness } from '../../../lib/hooks'
 
 const BUSINESS_KIND = 'business'

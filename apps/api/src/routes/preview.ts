@@ -17,10 +17,10 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
-import { prisma } from '@ybot/db'
-import { type FlowGraph } from '@ybot/runtime'
+import { prisma } from '@botstudio/db'
+import { type FlowGraph } from '@botstudio/runtime'
 import { z } from 'zod'
-import type { StudioCatalog } from '@ybot/shared'
+import type { StudioCatalog } from '@botstudio/shared'
 import { savedJourney } from '../lib/flow-runner.js'
 import { openEventStream } from '../lib/event-stream.js'
 import { runTestTurn, withWorkingCopy, type TestChatDeps, type TestChatState } from '../lib/test-chat.js'

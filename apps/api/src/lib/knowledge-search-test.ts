@@ -5,8 +5,8 @@
  * is embedded); this module never changes what the bot answers from.
  */
 
-import { prisma } from '@ybot/db'
-import { createEmbeddingAdapter } from '@ybot/llm'
+import { prisma } from '@botstudio/db'
+import { createEmbeddingAdapter } from '@botstudio/llm'
 import { BUSINESS_KIND, keywordQuery, preferBusiness } from './knowledge-search.js'
 
 export const SEARCH_MODES = ['hybrid', 'semantic', 'keyword'] as const

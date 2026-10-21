@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { DENTAL_BLUEPRINT, hoursMentionedIn, knowledgeConflicts, type KnowledgeText } from '@ybot/shared'
+import { DENTAL_BLUEPRINT, hoursMentionedIn, knowledgeConflicts, type KnowledgeText } from '@botstudio/shared'
 
 const sample = DENTAL_BLUEPRINT.sample()
 const specs = DENTAL_BLUEPRINT.fields
