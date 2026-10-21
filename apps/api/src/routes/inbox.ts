@@ -101,7 +101,7 @@ export async function conversationsRoutes(app: FastifyInstance) {
     const held = q['status'] || skip || query.search || query.sort === 'oldest'
       ? []
       : await prisma.conversation.findMany({ where: { ...where, ...HELD_WHERE }, include, orderBy: { updatedAt: 'desc' }, take: 200 })
-    const conversations = withHeldChats(recent, held)
+    const conversations = query.sort === 'oldest' ? recent : withHeldChats(recent, held)
     const data = await attachSlaLabels(conversations).catch(() => conversations.map((c) => ({ ...c, sla: null as string | null })))
     const costs = await costByConversation(data.map((c) => c.id)).catch(() => new Map())
     const viewOf = await agentViewsFor(data.map((c) => c.botId), tenantId)
