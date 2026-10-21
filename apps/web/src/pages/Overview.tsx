@@ -160,7 +160,7 @@ function RecentChats({ botId }: { botId: string }) {
           </div>
         )}
         {!isLoading && !error && chats.length === 0 && <p className="px-4 pb-4 text-sm text-[var(--text-muted)]">No chats yet.</p>}
-        {chats.map((c) => {
+        {chats.slice(0, 5).map((c) => {
           const lastMsg = (c as { messages?: Array<{ content: { text?: string } }> }).messages?.[0]
           const contact = (c as { contact?: { displayName?: string } }).contact
           return (
@@ -180,7 +180,7 @@ function RecentChats({ botId }: { botId: string }) {
 
 function LiveView({ overview, botId, isAdmin }: { overview: BotOverview; botId: string; isAdmin: boolean }) {
   const p = overview.production
-  const left = overview.checklist.filter((item) => !item.done)
+  const left = overview.checklist.filter((item) => !item.done && item.id !== 'sandbox')
   const scope = 'Production, last 7 days, test runs left out'
   return (
     <div className="space-y-6">
@@ -194,7 +194,7 @@ function LiveView({ overview, botId, isAdmin }: { overview: BotOverview; botId: 
         <Card className="flex items-center gap-3">
           <AlertTriangle size={16} className="shrink-0 text-[var(--warning)]" />
           <p className="flex-1 text-sm text-[var(--text-secondary)]">
-            {left.length === 1 ? 'One setup step is still open' : `${left.length} setup steps are still open`}: {left.map((item) => item.label.toLowerCase()).join(', ')}.
+            {left.length === 1 ? 'One setup step is still open' : `${left.length} setup steps are still open`}: {left.map((item) => item.label).join('; ')}.
           </p>
           <Link to={left[0]!.path} className="text-sm font-medium text-[var(--accent)]">Finish</Link>
         </Card>

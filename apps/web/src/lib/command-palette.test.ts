@@ -47,6 +47,8 @@ test('a prefix beats a word prefix, which beats a substring, which beats letters
   assert.ok(matchScore('rel', 'Go releases') > matchScore('eas', 'Releases'))
   assert.ok(matchScore('eas', 'Releases') > matchScore('rls', 'Releases'))
   assert.equal(matchScore('xyz', 'Releases'), 0)
+  assert.equal(matchScore('book', 'Webhooks'), 0)
+  assert.ok(matchScore('pbp', 'Publish to Production') > 0)
   assert.equal(matchScore('', 'Anything'), 1)
 })
 
@@ -54,6 +56,7 @@ test('a query ranks matches across groups, keywords included', () => {
   const ranked = rankCommands('book', paletteCommands(sources))
   assert.equal(ranked[0]?.label, 'Book an appointment')
   assert.ok(ranked.some((cmd) => cmd.label === 'Cancel a booking'))
+  assert.ok(!ranked.some((cmd) => cmd.group === 'Pages'))
   const deploy = rankCommands('deploy', paletteCommands(sources))
   assert.equal(deploy[0]?.id, 'act-publish')
 })

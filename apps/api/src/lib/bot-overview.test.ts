@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { botStage, filledBusinessFields, setupChecklist, type BotFootprint } from '@ybot/shared'
-import { costPerChat } from './bot-overview.js'
+import { costPerChat, isUntouchedStarterWelcome } from './bot-overview.js'
 
 const blank: BotFootprint = {
   businessFields: 0,
@@ -50,4 +50,15 @@ test('cost per chat is a dash with no chats or no ledger rows, never zero', () =
   assert.equal(costPerChat(null, 10), null)
   assert.equal(costPerChat(1.2, 0), null)
   assert.equal(costPerChat(1.2, 4), 0.3)
+})
+
+test('the draft welcome a new bot starts with is not counted until someone edits it', () => {
+  const at = new Date('2026-10-21T10:00:00Z')
+  const later = new Date('2026-10-21T10:05:00Z')
+  const draft = { version: 1, status: 'draft', createdAt: at, updatedAt: at }
+  assert.equal(isUntouchedStarterWelcome({ name: 'Welcome', versions: [draft] }), true)
+  assert.equal(isUntouchedStarterWelcome({ name: 'Welcome', versions: [{ ...draft, updatedAt: later }] }), false)
+  assert.equal(isUntouchedStarterWelcome({ name: 'Welcome', versions: [draft, { ...draft, version: 2 }] }), false)
+  assert.equal(isUntouchedStarterWelcome({ name: 'Welcome', versions: [{ ...draft, status: 'published' }] }), false)
+  assert.equal(isUntouchedStarterWelcome({ name: 'Book a visit', versions: [draft] }), false)
 })

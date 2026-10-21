@@ -74,7 +74,9 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     else if (event.key === 'Escape') { event.preventDefault(); onOpenChange(false) }
   }
 
-  const grouped = query.trim()
+  const grouped = results.length === 0
+    ? []
+    : query.trim()
     ? [{ group: 'Results', items: results }]
     : COMMAND_GROUPS.map((group) => ({ group, items: results.filter((cmd) => cmd.group === group) })).filter((row) => row.items.length)
 
@@ -100,7 +102,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
             aria-expanded="true"
             aria-controls="palette-results"
             aria-activedescendant={results[active] ? `palette-${results[active].id}` : undefined}
-            className="h-12 flex-1 bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+            className="h-12 flex-1 bg-transparent text-sm text-[var(--text-primary)] outline-none focus-visible:outline-none placeholder:text-[var(--text-muted)]"
           />
           <kbd className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)]">Esc</kbd>
         </div>

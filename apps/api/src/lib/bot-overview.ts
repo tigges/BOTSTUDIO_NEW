@@ -43,6 +43,18 @@ export interface BotOverview {
   activity: OverviewActivity[] | null
 }
 
+interface FlowSketch {
+  name: string
+  versions: Array<{ version: number; status: string; createdAt: Date; updatedAt: Date }>
+}
+
+/** The draft welcome every new bot starts with does not count as built until someone edits or publishes it. */
+export function isUntouchedStarterWelcome(flow: FlowSketch): boolean {
+  if (flow.name !== 'Welcome' || flow.versions.length !== 1) return false
+  const only = flow.versions[0]!
+  return only.version === 1 && only.status === 'draft' && only.updatedAt.getTime() - only.createdAt.getTime() < 1000
+}
+
 export function costPerChat(costUsd: number | null, chats: number): number | null {
   if (costUsd == null || chats === 0) return null
   return costUsd / chats
@@ -59,7 +71,7 @@ export async function loadBotOverview(tenantId: string, botId: string, opts: { c
   const [documents, faqs, flows, tools, productionChannels, sandboxChats, prodChats, cost, releases, liveRelease] = await Promise.all([
     prisma.document.count({ where: { tenantId, knowledgeSource: { botId } } }),
     prisma.faq.count({ where: { tenantId, botId } }),
-    prisma.flow.findMany({ where: { tenantId, botId }, select: { id: true } }),
+    prisma.flow.findMany({ where: { tenantId, botId }, select: { id: true, name: true, versions: { select: { version: true, status: true, createdAt: true, updatedAt: true } } } }),
     prisma.tool.count({ where: { tenantId, botId } }),
     production ? prisma.channel.count({ where: { tenantId, botId, environmentId: production.id, isActive: true } }) : 0,
     sandbox ? prisma.conversation.count({ where: { tenantId, botId, environmentId: sandbox.id, testRunId: null } }) : 0,
@@ -87,7 +99,7 @@ export async function loadBotOverview(tenantId: string, botId: string, opts: { c
   const footprint: BotFootprint = {
     businessFields: filledBusinessFields(bot.config?.business),
     knowledgeItems: documents + faqs,
-    flows: flows.length,
+    flows: flows.filter((flow) => !isUntouchedStarterWelcome(flow)).length,
     tools,
     productionChannels,
     sandboxChats,

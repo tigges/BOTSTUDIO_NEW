@@ -69,7 +69,7 @@ export function paletteCommands(src: PaletteSources): PaletteCommand[] {
 
 /**
  * 0 means no match. Whole-label prefix beats a word prefix, which beats a
- * substring, which beats the letters appearing in order.
+ * substring, which beats the letters appearing in order from the start of a word.
  */
 export function matchScore(query: string, text: string): number {
   const q = query.trim().toLowerCase()
@@ -78,9 +78,11 @@ export function matchScore(query: string, text: string): number {
   if (t.startsWith(q)) return 100 - Math.min(t.length - q.length, 50) / 10
   if (t.split(/[\s/·-]+/).some((word) => word.startsWith(q))) return 70
   if (t.includes(q)) return 50
-  let at = 0
-  for (const ch of q) {
-    if (ch === ' ') continue
+  const letters = q.replace(/\s+/g, '')
+  const starts = [0, ...[...t.matchAll(/[\s/·-]+/g)].map((m) => m.index! + m[0].length)]
+  let at = starts.find((i) => t[i] === letters[0]) ?? -1
+  if (at < 0) return 0
+  for (const ch of letters) {
     at = t.indexOf(ch, at)
     if (at < 0) return 0
     at += 1
