@@ -135,7 +135,7 @@ export function AnalyticsOverviewPage() {
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
           <MetricTile label="Total Conversations" value={String(overview?.totalConversations ?? 0)} icon={<MessageSquare size={20} />} sub={openLine(outcomes) || undefined} />
           <MetricTile label="Resolved by bot" value={percentOrDash(outcomes?.rates.resolvedByBot)} icon={<CheckCircle size={20} />} sub={ofFinished(outcomes?.counts.contained_resolved ?? 0, outcomes)} />
-          <MetricTile label="CSAT Score" value={overview?.csatScore ? String(overview.csatScore) : '—'} icon={<ThumbsUp size={20} />} sub="Out of 100" />
+          <MetricTile label="CSAT Score" value={overview?.csatScore != null ? String(overview.csatScore) : '—'} icon={<ThumbsUp size={20} />} sub="Out of 100" />
           <MetricTile label="Avg Response Time" value={avgRespDisplay} icon={<Clock size={20} />} sub="First bot reply latency" />
         </div>
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
@@ -185,7 +185,7 @@ export function AnalyticsOverviewPage() {
           <Card padding="none">
             <CardHeader className="px-5 pt-4 pb-2">
               <CardTitle>CSAT score trend</CardTitle>
-              {overview?.csatScore ? (
+              {overview?.csatScore != null ? (
                 <span className="text-sm font-semibold text-[var(--success)]">{overview.csatScore}</span>
               ) : null}
             </CardHeader>

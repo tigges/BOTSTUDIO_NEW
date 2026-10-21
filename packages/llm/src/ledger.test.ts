@@ -107,3 +107,16 @@ test('prices: unknown models have no price, ollama is free, overrides win', () =
   process.env['LLM_PRICING_JSON'] = JSON.stringify({ 'some-new-model': { input: 2, output: 4 } })
   assert.equal(costFor('openai', 'some-new-model', { input: 1_000_000, cached: 0, output: 500_000 }), 4)
 })
+
+test('the outbound watch sees the system prompt and every message, and a throwing watch never breaks the call', async () => {
+  const { setLlmOutboundWatch } = await import('./ledger.js')
+  const seen: string[] = []
+  setLlmOutboundWatch((text) => seen.push(text))
+  const inner = { name: 'x', complete: async () => ({ content: 'ok', model: 'm' }) } as unknown as ConstructorParameters<typeof RecordingProvider>[1]
+  await new RecordingProvider('anthropic', inner).complete({ systemPrompt: 'Be kind.', messages: [{ role: 'user', content: 'Call me on [PHONE_1A2B3C4D]' }] })
+  assert.equal(seen[0], 'Be kind.\nCall me on [PHONE_1A2B3C4D]')
+  setLlmOutboundWatch(() => { throw new Error('boom') })
+  const result = await new RecordingProvider('anthropic', inner).complete({ messages: [] })
+  assert.equal(result.content, 'ok')
+  setLlmOutboundWatch(null)
+})

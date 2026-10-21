@@ -227,7 +227,7 @@
       const res = await fetch(`${API_BASE}/public/chat/${channelId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, sessionId, history }),
+        body: JSON.stringify({ message: text, sessionId, history, messageId: `${sessionId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}` }),
       })
 
       if (!res.ok || !res.body) {

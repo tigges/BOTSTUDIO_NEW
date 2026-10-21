@@ -30,6 +30,23 @@ export function setLlmRecorder(next: LlmRecorder | null): void {
   recorder = next
 }
 
+/** Sees the text of every chat call as it leaves for the provider, after personal data became tokens. */
+export type LlmOutboundWatch = (text: string) => void
+
+let outboundWatch: LlmOutboundWatch | null = null
+
+export function setLlmOutboundWatch(next: LlmOutboundWatch | null): void {
+  outboundWatch = next
+}
+
+function watchOutbound(params: { messages: LlmCompleteParams['messages']; systemPrompt?: string }): void {
+  if (!outboundWatch) return
+  try {
+    const parts = [params.systemPrompt ?? '', ...params.messages.map((message) => typeof message.content === 'string' ? message.content : JSON.stringify(message.content))]
+    outboundWatch(parts.join('\n'))
+  } catch { /* a watch never breaks a reply */ }
+}
+
 function report(record: LlmCallRecord): void {
   if (!recorder) return
   try {
@@ -129,6 +146,7 @@ export class RecordingProvider implements LlmProvider {
   async complete(params: LlmCompleteParams): Promise<LlmCompleteResult> {
     const started = Date.now()
     const model = params.model ?? ''
+    watchOutbound(params)
     try {
       const result = await this.inner.complete(params)
       const used = result.model || model
@@ -148,6 +166,7 @@ export class RecordingProvider implements LlmProvider {
       if (chunk && firstAt === null) firstAt = Date.now()
       params.onChunk(chunk)
     }
+    watchOutbound(params)
     try {
       const result = this.inner.stream
         ? await this.inner.stream({ ...params, onChunk })

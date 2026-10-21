@@ -249,3 +249,15 @@ test('a booking sentence is not kept as the guest name', async () => {
   const named = await machine.run(askedAgain.session, graph, 'Sophie')
   assert.equal(named.session.variables.flow['guest_name'], 'Sophie')
 })
+
+test('the hair studio welcome sends cancel and move requests to their own chapters, not to booking', async () => {
+  const { hairStudioPack, SALON_WELCOME_NAME } = await import('@ybot/shared')
+  const welcome = hairStudioPack('Bella Hair Studio').flows.find((flow) => flow.name === SALON_WELCOME_NAME)!
+  const route = (welcome.graph as { nodes: Array<{ id: string; data: { config: { routes?: Array<{ handle: string; phrases: string[]; flowName: string }> } } }> })
+    .nodes.find((node) => node.id === 'route')!.data.config.routes!
+  const chapter = (text: string) => route.find((r) => r.handle === matchTopic(text, route))?.flowName
+  assert.equal(chapter('I need to cancel my appointment tomorrow.'), 'Cancel appointment')
+  assert.equal(chapter('Can I move my appointment to Friday?'), 'Reschedule')
+  assert.equal(chapter('I want to book an appointment'), 'Book an appointment')
+  assert.equal(chapter('how much is a haircut'), 'Services and prices')
+})

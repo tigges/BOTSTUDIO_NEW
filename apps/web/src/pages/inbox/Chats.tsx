@@ -4,7 +4,7 @@ import {
   AlertCircle, Clock, CheckCheck, MoreHorizontal, Tag,
   UserPlus, ArrowRightLeft, Ticket, StickyNote, MessageCircle,
   Phone, Mail, Globe, Hash, ChevronRight, X, Mic,
-  Circle, Zap, Star, Wrench, ShieldAlert,
+  Circle, Zap, Star, Wrench, ShieldAlert, BookOpen,
 } from 'lucide-react'
 import { Avatar, Badge, Input, Button, Skeleton } from '@ybot/ui'
 import {
@@ -75,6 +75,7 @@ interface Message {
   isNote?: boolean
   tool?: api.ToolNote
   guardrails?: GuardrailHit[]
+  sources?: api.KnowledgeSourceRef[]
 }
 
 const CANNED_RESPONSES = [
@@ -223,6 +224,7 @@ export function ChatsPage() {
     isNote: Boolean(m.content?.internal),
     tool: m.content?.tool,
     guardrails: m.content?.guardrails,
+    sources: m.content?.sources,
   }))
 
   const selected = convos.find((c) => c.id === selectedId) ?? (selectedId ? undefined : convos[0])
@@ -563,6 +565,16 @@ export function ChatsPage() {
                         >
                           <ShieldAlert size={9} /> {guardrailFlag(msg.guardrails)}
                         </span>
+                      )}
+                      {msg.sources && msg.sources.length > 0 && (
+                        <p data-testid="answer-sources" className="mt-1 flex flex-wrap items-center justify-end gap-1 text-[10px] text-[var(--text-muted)]">
+                          <BookOpen size={9} /> From:
+                          {msg.sources.map((ref) => (
+                            <span key={ref.documentId} title={`${ref.source}: ${ref.title}`} className="rounded-full border border-[var(--border)] bg-[var(--bg-overlay)] px-1.5 py-0.5 text-[var(--text-secondary)]">
+                              {ref.title}
+                            </span>
+                          ))}
+                        </p>
                       )}
                     </div>
                   </div>

@@ -43,7 +43,7 @@ import { triggerRules } from './automation-engine.js'
 import { keepWithBot, markNoTeam } from './chat-outcome.js'
 import { runFlowIfPublished, type FlowRunResult } from './flow-runner.js'
 import { chatIsHeld, handOverChat, handoverRulesFor, HANDOVER_LINE, type HandoverRules } from './handover.js'
-import { knowledgeBlock, searchKnowledge } from './knowledge-search.js'
+import { knowledgeBlock, searchKnowledgeHits, sourcesOf, type KnowledgeSourceRef } from './knowledge-search.js'
 import { turnSafety, type TurnSafety } from './guardrails.js'
 import { conversationScope, withLlmScope } from './llm-ledger.js'
 import { agentViewFor, presentMessages } from './present-chat.js'
@@ -94,6 +94,12 @@ export interface AnswerRequest {
 
 export interface SavedLineExtra {
   guardrails?: GuardrailHit[]
+  /** The knowledge documents the answer was written from. */
+  sources?: KnowledgeSourceRef[]
+}
+
+export interface AnswerResult {
+  sources?: KnowledgeSourceRef[]
 }
 
 export interface TurnPorts {
@@ -106,7 +112,7 @@ export interface TurnPorts {
   runJourney(input: TurnInput): Promise<FlowRunResult>
   nameTurn(conversationId: string, text: string): Promise<NamePlan & { contact: VisitorName | null }>
   history(conversationId: string, current: string): Promise<LlmMessage[]>
-  answer(request: AnswerRequest): Promise<void>
+  answer(request: AnswerRequest): Promise<AnswerResult | void>
   saveOutbound(input: TurnInput, text: string, extra?: SavedLineExtra): Promise<void>
   saveContactName(contactId: string, change: { metadata?: Record<string, unknown> }): Promise<void>
   warn(message: string, err: unknown): void
@@ -185,11 +191,13 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
   if (named.thanks) return reply(named.thanks, { ended: false, path: 'name' })
 
   const hold = holdsReplies(safety.rules) || readerMode(safety.privacy, 'end_user') !== 'original'
+  let sources: KnowledgeSourceRef[] = []
   const answerOnce = async (instruction?: string): Promise<string> => {
     let streamed = ''
+    sources = []
     try {
       const history = await ports.history(input.conversationId, input.text)
-      await ports.answer({
+      const answered = await ports.answer({
         tenantId: input.tenantId,
         botId: input.botId,
         text: input.text,
@@ -201,6 +209,7 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
           if (!hold) emit(clean)
         },
       })
+      sources = answered?.sources ?? []
     } catch (err) {
       ports.warn('answer failed', err)
       if (!streamed) {
@@ -212,6 +221,7 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
       if (!hold) emit(ANSWER_FAILED)
       streamed = ANSWER_FAILED
     }
+    if (streamed === ANSWER_FAILED) sources = []
     return streamed
   }
 
@@ -220,6 +230,7 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
   let finished = finish(streamed)
   let text = finished.lines.filter((line) => line.trim()).join('\n\n')
   let hits: GuardrailHit[] = []
+  let blocked = false
 
   if (!hold) {
     if (text.startsWith(streamed) && text.length > streamed.length) emit(text.slice(streamed.length))
@@ -235,14 +246,17 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
     }
     if (decision.outcome === 'escalate') return handOver(guardrailHandoverRequest(decision.rule!, 'output'), 'guardrail', [])
     hits = decision.hits
-    text = toGuest(decision.outcome === 'block' ? blockedLine(decision.rule) : decision.text)
+    blocked = decision.outcome === 'block'
+    text = toGuest(blocked ? blockedLine(decision.rule) : decision.text)
     emit(text)
   }
 
   if (named.contact?.id && finished.metadata) {
     await ports.saveContactName(named.contact.id, { metadata: finished.metadata }).catch(() => {})
   }
-  await ports.saveOutbound(input, text, hits.length ? { guardrails: hits } : undefined)
+  const cited = blocked ? [] : sources
+  const extra: SavedLineExtra = { ...(hits.length ? { guardrails: hits } : {}), ...(cited.length ? { sources: cited } : {}) }
+  await ports.saveOutbound(input, text, Object.keys(extra).length ? extra : undefined)
   return { text, ended: false, path: 'answer' }
 }
 
@@ -279,13 +293,14 @@ export async function chatHistory(conversationId: string, current: string, limit
 }
 
 /** The bot's model answers from the knowledge base, with its own prompt, temperature and length. */
-export async function answerFromKnowledge(request: AnswerRequest): Promise<void> {
+export async function answerFromKnowledge(request: AnswerRequest): Promise<AnswerResult> {
   const cfg = await prisma.botConfig.findUnique({ where: { botId: request.botId } }).catch(() => null)
   const bot = cfg ? null : await prisma.bot.findUnique({ where: { id: request.botId }, select: { name: true } }).catch(() => null)
   const systemPrompt = cfg?.systemPrompt
     ?? `You are a helpful assistant for ${bot?.name ?? 'this business'}. Answer using the knowledge base context.`
   const model = cfg?.model ?? undefined
-  const chunks = await searchKnowledge(request.text, request.tenantId, request.botId)
+  const hits = await searchKnowledgeHits(request.text, request.tenantId, request.botId)
+  const chunks = hits.map((hit) => hit.content)
   const adapter = model ? createLlmAdapterForModel(model) : defaultLlm
   await adapter.stream({
     messages: [...request.history, { role: 'user', content: request.text }],
@@ -295,10 +310,15 @@ export async function answerFromKnowledge(request: AnswerRequest): Promise<void>
     maxTokens: cfg?.maxTokens ?? 2048,
     onChunk: request.onChunk,
   })
+  return { sources: sourcesOf(hits) }
 }
 
-function lineContent(text: string, guardrails: GuardrailHit[] | undefined) {
-  return guardrails?.length ? { text, guardrails: guardrails as object[] } : { text }
+function lineContent(text: string, guardrails: GuardrailHit[] | undefined, sources?: KnowledgeSourceRef[]) {
+  return {
+    text,
+    ...(guardrails?.length ? { guardrails: guardrails as object[] } : {}),
+    ...(sources?.length ? { sources: sources as unknown as object[] } : {}),
+  }
 }
 
 async function toInbox(input: TurnInput, saved: { content: unknown } | null): Promise<void> {
@@ -344,7 +364,7 @@ const ports: TurnPorts = {
   async saveOutbound(input, text, extra) {
     if (!text.trim()) return
     const saved = await prisma.message.create({
-      data: { tenantId: input.tenantId, conversationId: input.conversationId, direction: 'outbound', authorKind: 'bot', content: lineContent(text, extra?.guardrails) },
+      data: { tenantId: input.tenantId, conversationId: input.conversationId, direction: 'outbound', authorKind: 'bot', content: lineContent(text, extra?.guardrails, extra?.sources) },
     }).catch(() => null)
     await prisma.conversation.update({ where: { id: input.conversationId }, data: { updatedAt: new Date() } }).catch(() => {})
     await onOutboundReply(input.conversationId).catch(() => {})

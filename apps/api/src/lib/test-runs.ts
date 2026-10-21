@@ -12,9 +12,9 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { prisma, withAuditActor } from '@ybot/db'
 import { HANDOVER_PRIORITIES, RETURN_OUTCOMES } from '@ybot/shared'
-import { createLlmAdapter, hasCloudLlm } from '@ybot/llm'
+import { createLlmAdapter, hasCloudLlm, setLlmOutboundWatch } from '@ybot/llm'
 import { openSecret, sealSecret, secretHint } from './secrets.js'
-import { withLlmScope } from './llm-ledger.js'
+import { currentLlmScope, withLlmScope } from './llm-ledger.js'
 import { DENTAL_REF_BOT_ID, PRACTICE_PLACEHOLDER_BASE, PRACTICE_PROFILE_NAME, SANDBOX_PATH } from './practice-sandbox.js'
 
 export const TEST_RUN_HEADER = 'x-test-run'
@@ -39,6 +39,61 @@ export class TestRunError extends Error {
   constructor(public status: number, message: string, public code = 'TEST_RUN') {
     super(message)
   }
+}
+
+/**
+ * Personal details the runner types into run chats, watched in every model call
+ * those chats make. In memory: the live site runs one API process, and a restart
+ * mid-run only loses the watch, never a reply.
+ */
+interface PrivacyWatch {
+  sentinels: string[]
+  chats: Set<string>
+  inspected: number
+  tokenised: number
+  leaks: Array<{ conversationId: string; found: string }>
+}
+
+const privacyWatches = new Map<string, PrivacyWatch>()
+const PII_TOKEN = /\[[A-Z][A-Z0-9_]*_[0-9A-F]{6,}\]/
+
+/** Called by the outbound watch with the text of one model call and the chat it belongs to. */
+export function inspectOutbound(text: string, conversationId: string | undefined, watches = privacyWatches): void {
+  if (!conversationId) return
+  for (const watch of watches.values()) {
+    if (!watch.chats.has(conversationId)) continue
+    watch.inspected++
+    if (PII_TOKEN.test(text)) watch.tokenised++
+    for (const sentinel of watch.sentinels) {
+      if (text.includes(sentinel)) watch.leaks.push({ conversationId, found: sentinel.replace(/[^\s@.]/g, (ch, i) => (i < 2 ? ch : '•')) })
+    }
+  }
+}
+
+setLlmOutboundWatch((text) => inspectOutbound(text, currentLlmScope()?.conversationId ?? undefined))
+
+/** The widget calls this when it opens a chat for a running run. */
+export function noteRunChat(runId: string, conversationId: string): void {
+  privacyWatches.get(runId)?.chats.add(conversationId)
+}
+
+export function privacyCheck(watch: PrivacyWatch | undefined): RunCheck | undefined {
+  if (!watch) return undefined
+  return {
+    name: 'Models never received the visitors\' personal details in plain text',
+    ok: watch.leaks.length === 0,
+    detail: watch.leaks.length
+      ? `${watch.leaks.length} model calls carried ${[...new Set(watch.leaks.map((leak) => leak.found))].join(', ')}`
+      : `${watch.inspected} model calls in run chats inspected, ${watch.tokenised} carried tokens in place of personal details`,
+    ...(watch.leaks[0] ? { conversationId: watch.leaks[0].conversationId } : {}),
+    by: 'server',
+  }
+}
+
+export function watchRun(runId: string, sentinels: string[], watches = privacyWatches): PrivacyWatch {
+  const watch: PrivacyWatch = { sentinels: sentinels.filter((value) => value.trim().length >= 5), chats: new Set(), inspected: 0, tokenised: 0, leaks: [] }
+  watches.set(runId, watch)
+  return watch
 }
 
 function runSecret(): string | undefined {
@@ -125,6 +180,8 @@ export async function startTestRun(input: {
   kind: TestRunKind
   seed?: string
   baseUrl?: string
+  /** Synthetic personal details the runner will type; no model call in a run chat may carry them in plain text. */
+  sentinels?: string[]
   /** The signed-in caller. Missing when the server secret was used. */
   caller?: { userId: string; tenantId: string }
 }) {
@@ -154,6 +211,7 @@ export async function startTestRun(input: {
       startedBy: input.caller?.userId ?? null,
     },
   })
+  if (input.sentinels?.length) watchRun(run.id, input.sentinels)
   await prisma.activity.create({
     data: { tenantId: bot.tenantId, userId: input.caller?.userId ?? null, action: 'test_run.started', resource: 'bot', resourceId: bot.id, metadata: { runId: run.id, kind: run.kind, seed: run.seed } },
   }).catch(() => {})
@@ -271,13 +329,30 @@ export async function pruneTestRuns(botId: string, now = new Date()) {
   return ids.length
 }
 
-export async function finishTestRun(runId: string, input: { checks: RunCheck[]; summary: Record<string, unknown>; conversationIds: string[] }) {
+/** Chat and simulator model cost together must stay under the ceiling, so a prompt or model change that gets expensive fails the run. */
+export function costCheck(summary: Record<string, unknown>, maxCostUsd: number): RunCheck {
+  const chat = typeof summary['chatCostUsd'] === 'number' ? summary['chatCostUsd'] : 0
+  const simulator = typeof summary['simulatorCostUsd'] === 'number' ? summary['simulatorCostUsd'] : 0
+  const total = chat + simulator
+  return {
+    name: `The run's model cost stays under $${maxCostUsd.toFixed(2)}`,
+    ok: total <= maxCostUsd,
+    detail: `$${total.toFixed(4)} (chats $${chat.toFixed(4)}, simulated visitors $${simulator.toFixed(4)})`,
+    by: 'server',
+  }
+}
+
+export async function finishTestRun(runId: string, input: { checks: RunCheck[]; summary: Record<string, unknown>; conversationIds: string[]; maxCostUsd?: number }) {
   const run = await runningRun(runId)
   if (run.status !== 'running') throw new TestRunError(409, 'This test run has already finished.', 'FINISHED')
   const server = await serverChecks(run.id, run.botId, input.conversationIds, run.startedAt)
   const userId = await auditUser(run.tenantId, run.startedBy ?? undefined)
   const pruned = await asSystem(run.tenantId, userId, () => pruneTestRuns(run.botId))
   const checks = [...input.checks.map((check) => ({ ...check, by: 'runner' as const })), ...server.checks]
+  if (input.maxCostUsd !== undefined) checks.push(costCheck(server.summary, input.maxCostUsd))
+  const privacy = privacyCheck(privacyWatches.get(run.id))
+  if (privacy) checks.push(privacy)
+  privacyWatches.delete(run.id)
   const passed = checks.every((check) => check.ok)
   const summary = { ...input.summary, ...server.summary, pruned, failed: checks.filter((check) => !check.ok).length, total: checks.length }
   const saved = await prisma.testRun.update({

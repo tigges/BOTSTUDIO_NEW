@@ -4,6 +4,7 @@ import { DENTAL_BLUEPRINT } from '@ybot/shared'
 import { referenceJourney } from '../scripts/dental-reference-chats.js'
 import { runTestTurn } from '../lib/test-chat.js'
 import { dentalScenarios, pick, pickVisitor, planFor, seeded } from './scenarios.js'
+import { passagesWithSources } from './runner.js'
 
 const journey = referenceJourney(DENTAL_BLUEPRINT.sample())
 const now = new Date('2026-10-21T10:00:00Z')
@@ -65,4 +66,19 @@ test('scenario ids are unique, and only Harbour Dental runs the Inbox person', (
   assert.equal(planFor('harbour-dental').inbox, true)
   assert.equal(planFor('bella').inbox, false)
   assert.equal(planFor('acme').inbox, false)
+})
+
+test('a Knowledge tool answer counts only when every passage names its document', () => {
+  assert.equal(passagesWithSources({ found: true, chunks: [{ text: 'New patient exam: £85', title: 'Harbour Dental: Price list', source: 'Business details' }] }), true)
+  assert.equal(passagesWithSources({ found: true, chunks: ['New patient exam: £85'] }), false)
+  assert.equal(passagesWithSources({ found: false, chunks: [] }), false)
+  assert.equal(passagesWithSources(null), false)
+})
+
+test('every plan registers the personal details its scenarios type', () => {
+  for (const target of ['harbour-dental', 'bella', 'acme'] as const) {
+    const plan = planFor(target, now)
+    const typed = plan.scenarios.flatMap((s) => s.visitor({ first: 'Sophie', last: 'Allen', phone: '07700 900101' })).join(' ')
+    for (const value of typed.match(/07700 9\d{5}|[\w.]+@example\.com/g) ?? []) assert.ok(plan.sentinels.includes(value), `${target}: ${value} is not watched`)
+  }
 })

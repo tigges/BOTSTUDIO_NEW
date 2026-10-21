@@ -184,9 +184,9 @@ test('knowledge, workflow and function tools run through the same entry point', 
   const knowledge = await runTool(
     { ...base, name: 'search_help', kind: 'knowledge', parameters: [{ name: 'query', type: 'string', description: 'Question', required: true }], config: { topK: 2 } },
     { query: 'opening hours' }, { source: 'bot' },
-    deps({ searchKnowledge: async (query, tenantId, botId, topK) => [`${query}|${tenantId}|${botId}|${topK}`] }),
+    deps({ searchKnowledge: async (query, tenantId, botId, topK) => [{ content: `${query}|${tenantId}|${botId}|${topK}`, documentId: 'd1', title: 'Opening hours', source: 'Business details' }] }),
   )
-  assert.deepEqual(knowledge.output, { found: true, chunks: ['opening hours|t1|b1|2'] })
+  assert.deepEqual(knowledge.output, { found: true, chunks: [{ text: 'opening hours|t1|b1|2', title: 'Opening hours', source: 'Business details' }] })
 
   let ran = ''
   const workflow = await runTool(

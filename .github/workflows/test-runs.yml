@@ -29,9 +29,14 @@ on:
       seed:
         description: Seed for visitor picks (blank for the current hour)
         required: false
+      max_cost_usd:
+        description: Fail the run when its model calls cost more than this many dollars
+        required: false
+        default: "0.25"
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: test-runs-${{ github.event.schedule || github.event.inputs.kind || 'traffic' }}
@@ -86,6 +91,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Play the run
+        id: run
         working-directory: apps/api
         env:
           LIVE_URL: https://app.botstudio.uk
@@ -98,8 +104,51 @@ jobs:
           QA_PASSWORD: ${{ secrets.QA_ACCOUNT_PASSWORD }}
           BELLA_EMAIL: demo@bella.com
           BELLA_PASSWORD: ${{ secrets.BELLA_DEMO_PASSWORD }}
+          MAX_COST_USD: ${{ github.event.inputs.max_cost_usd }}
           REPORT_FILE: ${{ runner.temp }}/test-run.json
+          SCORECARD_FILE: ${{ runner.temp }}/scorecard.md
         run: pnpm exec tsx src/scripts/test-run.ts
+
+      # One open issue per bot and kind: opened on the first failure, commented
+      # on while it keeps failing, closed by the next passing run.
+      - name: Raise or update the failure issue
+        if: failure() && steps.run.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "Test run failing: ${{ matrix.target }} (${{ needs.plan.outputs.kind }})"
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SCORECARD: ${{ runner.temp }}/scorecard.md
+          SLACK_WEBHOOK: ${{ secrets.TEST_RUNS_SLACK_WEBHOOK }}
+        run: |
+          set -euo pipefail
+          {
+            echo "The scheduled test run failed: $RUN_URL"
+            echo
+            if [ -s "$SCORECARD" ]; then cat "$SCORECARD"; else echo "The run stopped before it could score anything. Open the job log for the error."; fi
+          } > /tmp/issue.md
+          number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$TITLE\"" --json number,title --jq "map(select(.title == env.TITLE)) | .[0].number // empty")"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file /tmp/issue.md
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body-file /tmp/issue.md
+          fi
+          if [ -n "$SLACK_WEBHOOK" ]; then
+            payload="$(node -e 'process.stdout.write(JSON.stringify({ text: `${process.env.TITLE}\n${process.env.RUN_URL}` }))')"
+            curl -sS -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK" --max-time 15 || echo "Slack webhook did not answer"
+          fi
+
+      - name: Close the failure issue
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "Test run failing: ${{ matrix.target }} (${{ needs.plan.outputs.kind }})"
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$TITLE\"" --json number,title --jq "map(select(.title == env.TITLE)) | .[0].number // empty")"
+          if [ -n "$number" ]; then
+            gh issue close "$number" --repo "$GITHUB_REPOSITORY" --comment "Passing again: $RUN_URL"
+          fi
 
       - name: Keep the report
         if: always()

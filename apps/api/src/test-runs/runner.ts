@@ -32,6 +32,8 @@ export interface RunOptions {
   /** Only these fixed scenarios, by id. */
   only?: string[]
   publicGapMs?: number
+  /** Fail the run when chats plus simulated visitors cost more than this. */
+  maxCostUsd?: number
   log?: (line: string) => void
 }
 
@@ -79,9 +81,11 @@ export async function runTestRun(opts: RunOptions): Promise<RunReport> {
   const log = opts.log ?? (() => {})
   const client = new RunClient(opts.baseUrl, { publicGapMs: opts.publicGapMs })
   const me = await client.login(opts.email, opts.password)
+  const plan = planFor(opts.target)
   const started = (await client.json<StartedRun>('POST', '/api/v1/system/test-runs', {
     target: opts.target,
     kind: opts.kind,
+    sentinels: plan.sentinels,
     ...(opts.seed ? { seed: opts.seed } : {}),
     baseUrl: opts.baseUrl,
   })).data
@@ -102,7 +106,6 @@ export async function runTestRun(opts: RunOptions): Promise<RunReport> {
     if (opts.kind === 'release') {
       await releaseDrill(ctx)
     } else {
-      const plan = planFor(opts.target)
       const scenarios = opts.only?.length ? plan.scenarios.filter((s) => opts.only!.includes(s.id)) : plan.scenarios
       const handedOver: string[] = []
       for (const scenario of scenarios) {
@@ -121,6 +124,8 @@ export async function runTestRun(opts: RunOptions): Promise<RunReport> {
           check(`Generated visitor (${persona.goal}): ran to the end`, false, err instanceof Error ? err.message : String(err))
         })
       }
+      await resentMessage(ctx).catch((err: unknown) => check('A resent message: ran to the end', false, err instanceof Error ? err.message : String(err)))
+      await guardrailActions(ctx).catch((err: unknown) => check('Guardrail actions: ran to the end', false, err instanceof Error ? err.message : String(err)))
       await afterTraffic(ctx, before, handedOver)
     }
   } catch (err) {
@@ -128,7 +133,7 @@ export async function runTestRun(opts: RunOptions): Promise<RunReport> {
   }
   const finished = (await client.json<{ status: 'passed' | 'failed'; summary: Record<string, unknown>; checks: RunCheck[] }>(
     'POST', `/api/v1/system/test-runs/${started.runId}/finish`,
-    { checks, summary: { target: opts.target, kind: opts.kind }, conversationIds },
+    { checks, summary: { target: opts.target, kind: opts.kind }, conversationIds, ...(opts.maxCostUsd !== undefined ? { maxCostUsd: opts.maxCostUsd } : {}) },
   )).data
   return {
     runId: started.runId,
@@ -154,7 +159,14 @@ interface Ctx {
 
 interface Overview {
   totalConversations: number
-  outcomes?: { buckets?: { escalated?: number } }
+  resolutionRate?: number | null
+  escalationRate?: number | null
+  botHandledPct?: number | null
+  outcomes?: {
+    finished?: number
+    buckets?: { contained?: number; escalated?: number; abandoned?: number }
+    rates?: { contained: number | null; resolvedByBot: number | null; escalated: number | null; abandoned: number | null }
+  }
 }
 
 async function overview(client: RunClient, botId: string): Promise<Overview | undefined> {
@@ -198,7 +210,9 @@ async function playScenario(ctx: Ctx, scenario: Scenario, visitor: Visitor, inbo
   const said = lower(replies.join('\n'))
   const e = scenario.expect
   for (const text of e.says ?? []) check(`${label}: says "${text}"`, said.includes(lower(text)), said.includes(lower(text)) ? undefined : replies.slice(1).join(' | ').slice(0, 600), conversationId)
-  for (const text of e.neverSays ?? []) check(`${label}: never says "${text}"`, !said.includes(lower(text)), undefined, conversationId)
+  for (const text of e.neverSays ?? []) check(`${label}: never says "${text}"`, !said.includes(lower(text)), said.includes(lower(text)) ? replies.slice(1).join(' | ').slice(0, 600) : undefined, conversationId)
+  const answered = replies.slice(1).join('\n')
+  for (const { what, pattern } of e.mentions ?? []) check(`${label}: mentions ${what}`, pattern.test(answered), pattern.test(answered) ? undefined : answered.slice(0, 600) || 'no reply', conversationId)
 
   let convo = await conversation(client, conversationId)
   const handedOver = Boolean(convo.handover) || turns.some((t) => t.live)
@@ -285,8 +299,12 @@ async function personTakesOver(ctx: Ctx, script: PersonScript, conversationId: s
       const out = res.data
       if (Array.isArray(out.output)) for (const slot of out.output) if (slot && typeof slot === 'object' && 'slot_id' in slot) slots.push(String((slot as { slot_id: unknown }).slot_id))
       const shown = out.ok ? JSON.stringify(out.output ?? null).slice(0, 200) : out.error
-      const ok = step.expect === 'error' ? !out.ok : step.expect === 'empty' ? out.ok && Array.isArray(out.output) && out.output.length === 0 : out.ok && out.output !== undefined
-      check(`${label}: the person runs "${step.tool}" (${step.expect === 'error' ? 'refused' : step.expect === 'empty' ? 'no slots' : 'answers'})`, ok, shown, conversationId)
+      const ok = step.expect === 'error' ? !out.ok
+        : step.expect === 'empty' ? out.ok && Array.isArray(out.output) && out.output.length === 0
+          : step.expect === 'sources' ? out.ok && passagesWithSources(out.output)
+            : out.ok && out.output !== undefined
+      const outcome = { error: 'refused', empty: 'no slots', sources: 'passages with their sources', ok: 'answers' }[step.expect]
+      check(`${label}: the person runs "${step.tool}" (${outcome})`, ok, shown, conversationId)
     }
   }
 
@@ -323,6 +341,15 @@ async function personTakesOver(ctx: Ctx, script: PersonScript, conversationId: s
   }
 }
 
+/** A Knowledge tool answer: at least one passage, each naming its document. */
+export function passagesWithSources(output: unknown): boolean {
+  const chunks = output && typeof output === 'object' ? (output as { chunks?: unknown }).chunks : undefined
+  return Array.isArray(chunks) && chunks.length > 0 && chunks.every((chunk) => {
+    const row = chunk && typeof chunk === 'object' ? chunk as Record<string, unknown> : {}
+    return typeof row['text'] === 'string' && typeof row['title'] === 'string' && Boolean(row['title']) && typeof row['source'] === 'string'
+  })
+}
+
 async function playGenerated(ctx: Ctx, persona: GeneratedVisitor, maxTurns: number) {
   const { visitorClient, client, run, check } = ctx
   const label = `Generated visitor (${persona.goal})`
@@ -353,6 +380,59 @@ async function playGenerated(ctx: Ctx, persona: GeneratedVisitor, maxTurns: numb
   if (!failures) check(`${label}: the bot answered every message`, true, `${turns} messages`, conversationId)
 }
 
+/** The widget resends the same message id, as a browser retry or a provider webhook retry would. */
+async function resentMessage(ctx: Ctx) {
+  const { visitorClient, client, run, check } = ctx
+  const label = 'A resent message'
+  const session = `test-run-${run.runId}-resent`
+  const text = 'What are your opening hours?'
+  const messageId = `${run.runId}-resent-1`
+  const opening = await visitorClient.chat(run.channelId, { sessionId: session, runToken: run.token })
+  const conversationId = opening.conversationId
+  if (!conversationId) return check(`${label}: the widget opens a chat`, false, `HTTP ${opening.status}`)
+  ctx.conversationIds.push(conversationId)
+  const first = await visitorClient.chat(run.channelId, { sessionId: session, conversationId, message: text, messageId, runToken: run.token })
+  check(`${label}: the bot answers it the first time`, first.status === 200 && !first.duplicate && first.text.trim().length > 0, first.text.slice(0, 200) || `HTTP ${first.status}`, conversationId)
+  const again = await visitorClient.chat(run.channelId, { sessionId: session, conversationId, message: text, messageId, runToken: run.token })
+  check(`${label}: the same message id is not answered twice`, again.status === 200 && again.duplicate && !again.text.trim(), again.duplicate ? undefined : again.text.slice(0, 200) || `HTTP ${again.status}`, conversationId)
+  const messages = (await client.json<Array<{ authorKind?: string; text?: string; content?: { text?: string } }>>('GET', `/api/v1/conversations/${conversationId}/messages`)).data
+  const copies = messages.filter((m) => m.authorKind === 'user' && (m.text ?? m.content?.text ?? '') === text).length
+  check(`${label}: the Inbox shows it once`, copies === 1, `${copies} copies`, conversationId)
+}
+
+const GUARDRAIL_FIXTURES: Array<{ action: 'warn' | 'block' | 'redact' | 'escalate' | 'reask'; word: string }> = [
+  { action: 'warn', word: 'zebrawarn' },
+  { action: 'block', word: 'zebrablock' },
+  { action: 'redact', word: 'zebraredact' },
+  { action: 'escalate', word: 'zebraescalate' },
+  { action: 'reask', word: 'zebrareask' },
+]
+
+/** Every guardrail action, through the bot's own safety test with throwaway rules; the live policy is not touched. */
+async function guardrailActions(ctx: Ctx) {
+  const { client, run, check } = ctx
+  type Safety = { policies: Array<{ id: string; active: boolean }> }
+  const safety = (await client.json<Safety>('GET', `/api/v1/bots/${run.botId}/safety`)).data
+  const active = safety.policies.filter((p) => p.active).length
+  check('Guardrails: at most one policy is active', active <= 1, `${active} active of ${safety.policies.length}`)
+
+  type Decision = { outcome: string; text: string; hits: Array<{ action: string }>; line?: string }
+  const rules = GUARDRAIL_FIXTURES.map(({ action, word }) => ({ id: `run-${action}`, name: `Run ${action}`, side: 'input', check: { kind: 'words', words: [word] }, action }))
+  for (const { action, word } of GUARDRAIL_FIXTURES) {
+    const text = `Tell me about ${word} please`
+    const decision = (await client.json<{ guardrails: Decision }>('POST', `/api/v1/bots/${run.botId}/safety/test`, { text, side: 'input', rules })).data.guardrails
+    const ok = action === 'warn' ? decision.outcome === 'allow' && decision.text === text && decision.hits.some((h) => h.action === 'warn')
+      : action === 'redact' ? decision.outcome === 'allow' && !decision.text.includes(word) && decision.text.includes('[redacted]')
+        : action === 'block' || action === 'reask' ? decision.outcome === action && Boolean(decision.line?.trim())
+          : decision.outcome === 'escalate'
+    check(`Guardrails: ${action === 'escalate' ? 'an' : 'a'} ${action} rule ${{ warn: 'lets the message through and records it', block: 'stops the message with a line', redact: 'hides the matched words', escalate: 'asks for a person', reask: 'asks the visitor to rephrase' }[action]}`, ok, `${decision.outcome}: ${decision.text}${decision.line ? ` / ${decision.line}` : ''}`)
+  }
+  const unset = (await client.json<{ guardrails: Decision }>('POST', `/api/v1/bots/${run.botId}/safety/test`, {
+    text: 'zebranew', side: 'input', rules: [{ id: 'run-new', name: 'Run new rule', side: 'input', check: { kind: 'words', words: ['zebranew'] } }],
+  })).data.guardrails
+  check('Guardrails: a new rule without an action defaults to Warn', unset.outcome === 'allow' && unset.hits[0]?.action === 'warn', `${unset.outcome}, ${unset.hits.map((h) => h.action).join(', ')}`)
+}
+
 async function afterTraffic(ctx: Ctx, before: Overview | undefined, handedOver: string[]) {
   const { client, check, run, conversationIds } = ctx
   const list = (await client.json<Array<{ id: string; testRunId?: string | null }>>('GET', `/api/v1/conversations?botId=${run.botId}&limit=200`)).data
@@ -367,8 +447,23 @@ async function afterTraffic(ctx: Ctx, before: Overview | undefined, handedOver: 
     check('Analytics counts every run chat', added === conversationIds.length, `${before.totalConversations} → ${after.totalConversations}, ${conversationIds.length} opened`)
     const escalated = (after.outcomes?.buckets?.escalated ?? 0) - (before.outcomes?.buckets?.escalated ?? 0)
     check('Analytics counts the handovers as escalated', escalated >= handedOver.length, `${escalated} new escalated, ${handedOver.length} handed over`)
+    const o = after.outcomes
+    if (o?.buckets && o.rates && o.finished !== undefined) {
+      const { contained = 0, escalated: esc = 0, abandoned = 0 } = o.buckets
+      const own = o.finished > 0 ? Math.round((esc / o.finished) * 1000) / 10 : null
+      check('Analytics: escalation rate comes from escalated chats, not from containment', o.rates.escalated === own && contained + esc + abandoned === o.finished,
+        `${esc} escalated of ${o.finished} finished = ${o.rates.escalated}%; contained ${o.rates.contained}%, abandoned ${o.rates.abandoned}%`)
+    } else {
+      check('Analytics: the overview reports outcome buckets', false, JSON.stringify(after.outcomes ?? null).slice(0, 300))
+    }
   } else {
     check('Analytics overview answers', false, 'GET /analytics/overview failed')
+  }
+  const empty = await overview(client, `no-data-${run.runId}`)
+  if (empty) {
+    const values = { resolutionRate: empty.resolutionRate, escalationRate: empty.escalationRate, botHandledPct: empty.botHandledPct, ...empty.outcomes?.rates }
+    const zeros = Object.entries(values).filter(([, value]) => value !== null).map(([key, value]) => `${key} ${value}`)
+    check('Analytics: with no chats every rate is empty (a dash), never zero', empty.totalConversations === 0 && zeros.length === 0, zeros.join(', ') || undefined)
   }
 
   let compared = 0

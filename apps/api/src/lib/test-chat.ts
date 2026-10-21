@@ -16,7 +16,7 @@ import { turnSafety, type TurnSafety } from './guardrails.js'
 import { handoverRulesFor, type HandoverRules } from './handover.js'
 import { botCatalog, botLlm, runJourney, type JourneyLlm, type JourneyStore, type SavedSession, type VersionRow } from './flow-runner.js'
 import { withLlmScope, type LlmSource } from './llm-ledger.js'
-import { answerFromKnowledge, runTurnWith, type AnswerRequest, type TurnPorts, type TurnResult } from './turn-pipeline.js'
+import { answerFromKnowledge, runTurnWith, type AnswerRequest, type AnswerResult, type TurnPorts, type TurnResult } from './turn-pipeline.js'
 import { planNameTurn, type VisitorName } from './visitor-name.js'
 import type { ChatOutcome } from './chat-outcome.js'
 import { findTool } from './tools-store.js'
@@ -84,7 +84,7 @@ export interface TestToolCall {
 /** Swappable for tests. Defaults are what live chats use. */
 export interface TestChatDeps {
   handoverRules: (botId: string) => Promise<HandoverRules>
-  answer: (request: AnswerRequest) => Promise<void>
+  answer: (request: AnswerRequest) => Promise<AnswerResult | void>
   llm: (botId: string) => Promise<JourneyLlm>
   catalog: (botId: string, tenantId: string) => Promise<StudioCatalog | undefined>
   db: unknown

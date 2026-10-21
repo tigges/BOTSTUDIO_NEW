@@ -17,7 +17,8 @@ export interface ToolStep {
   tool: string
   /** `$firstSlot` in a value is replaced by the first slot an earlier step returned. */
   args: Record<string, unknown>
-  expect: 'ok' | 'empty' | 'error'
+  /** `sources`: ok, and every passage names the document it came from. */
+  expect: 'ok' | 'empty' | 'error' | 'sources'
 }
 
 /** What the person in the Inbox does once the chat reaches them. */
@@ -41,6 +42,8 @@ export interface ScenarioExpect {
   priority?: HandoverPriority
   says?: string[]
   neverSays?: string[]
+  /** Behaviour rather than wording, for bots people edit in the console: what the reply must contain. */
+  mentions?: Array<{ what: string; pattern: RegExp }>
   /** The bot raised a ticket for reception. */
   ticket?: boolean
   /** At least one model call was billed to the chat. */
@@ -68,6 +71,8 @@ export interface TargetPlan {
   generated: GeneratedVisitor[]
   /** Run the Inbox person script; off for workspaces the runner does not sign in to as a person. */
   inbox: boolean
+  /** Personal details the scenarios type. No model call in a run chat may carry them in plain text. */
+  sentinels: string[]
 }
 
 const VISITORS: Visitor[] = [
@@ -80,6 +85,9 @@ const VISITORS: Visitor[] = [
   { first: 'Ravi', last: 'Kumar', phone: '07700 900110' },
   { first: 'Freya', last: 'Hughes', phone: '07700 900111' },
 ]
+
+/** Synthetic contact details typed into chats that reach a model. */
+export const PII = { phone: '07700 900123', email: 'grace.liu@example.com', acmeEmail: 'sam.patel@example.com' }
 
 /** A small seeded generator, so the same seed picks the same visitors and personas. */
 export function seeded(seed: string): () => number {
@@ -167,6 +175,7 @@ export function dentalScenarios(now = new Date()): Scenario[] {
       expect: { ends: 'handed_over', source: 'journey' },
       person: {
         claim: true,
+        tools: [{ tool: 'Search the patient guide', args: { query: 'What happens at the first visit for a new patient?' }, expect: 'sources' }],
         replies: ['Lots of our patients feel the same. Dr Patel offers a 20-minute chat with no treatment, just to meet. Would a call tomorrow help?'],
         visitorReplies: ['Yes, a call tomorrow after 5 would be great'],
         returnAs: 'needs_follow_up',
@@ -223,7 +232,7 @@ export function dentalScenarios(now = new Date()): Scenario[] {
     {
       id: 'care-plans',
       title: 'Care plans, then a follow-up question the model answers',
-      visitor: () => ['Do you have a monthly care plan?', 'Which plan has two hygiene visits a year?'],
+      visitor: () => ['Do you have a monthly care plan?', `Which plan has two hygiene visits a year? You can reach me on ${PII.phone} or ${PII.email}`],
       expect: { says: ['£10.50'], usesModel: true },
     },
     {
@@ -276,26 +285,33 @@ export const DENTAL_VISITORS: GeneratedVisitor[] = [
   { persona: 'A grandparent asking on behalf of a grandchild.', goal: 'Find out from what age children can be seen and whether it is free on a plan.' },
 ]
 
+const UNDERSTOOD = ["didn't catch", 'something went wrong']
+const TIME = /\b\d{1,2}(:\d{2})?\s?(am|pm)\b|\b\d{1,2}:\d{2}\b/i
+const PRICE = /[£$€]\s?\d+/
+
 export function bellaScenarios(): Scenario[] {
   return [
-    { id: 'colour', title: 'Colour booking', visitor: () => ['color', 'red full head'], expect: { neverSays: ['something went wrong'] } },
-    { id: 'hours', title: 'Opening hours', visitor: () => ['What are your opening hours?'], expect: { neverSays: ['something went wrong'] } },
-    { id: 'cut-price', title: 'Cut price', visitor: () => ['how much is a haircut'], expect: { neverSays: ['something went wrong'] } },
-    { id: 'cancel', title: 'Cancel appointment', visitor: () => ['I need to cancel my appointment tomorrow.'], expect: { neverSays: ['something went wrong'] } },
+    { id: 'colour', title: 'Colour booking', visitor: () => ['color', 'red full head'], expect: { neverSays: UNDERSTOOD, mentions: [{ what: 'a follow-up question', pattern: /\?/ }] } },
+    { id: 'hours', title: 'Opening hours', visitor: () => ['What are your opening hours?'], expect: { neverSays: UNDERSTOOD, mentions: [{ what: 'opening times', pattern: TIME }] } },
+    { id: 'cut-price', title: 'Cut price', visitor: () => ['how much is a haircut'], expect: { neverSays: UNDERSTOOD, mentions: [{ what: 'a price', pattern: PRICE }] } },
+    { id: 'cancel', title: 'Cancel appointment', visitor: () => ['I need to cancel my appointment tomorrow.'], expect: { neverSays: [...UNDERSTOOD, 'What would you like done'], mentions: [{ what: 'the cancellation', pattern: /cancel/i }] } },
+    { id: 'reschedule', title: 'Move an appointment', visitor: () => ['Can I move my appointment to Friday?'], expect: { neverSays: [...UNDERSTOOD, 'What would you like done'], mentions: [{ what: 'moving the appointment', pattern: /move|reschedul|change|new time|which/i }] } },
   ]
 }
 
 export function acmeScenarios(): Scenario[] {
   return [
-    { id: 'order', title: 'Where is my order', visitor: () => ['Where is my order AC-20441?'], expect: { neverSays: ['something went wrong'] } },
-    { id: 'return', title: 'Damaged kettle return', visitor: () => ['The kettle in my order arrived cracked.'], expect: { neverSays: ['something went wrong'] } },
-    { id: 'billing', title: 'Unrecognised seats on the invoice', visitor: () => ['Our last invoice has two seats I do not recognise.'], expect: { neverSays: ['something went wrong'] } },
-    { id: 'person', title: 'Asks for a person', visitor: () => ['I would like to talk to someone on the team.'], expect: { neverSays: ['something went wrong'] } },
+    { id: 'order', title: 'Where is my order', visitor: () => ['Where is my order?', '1001'], expect: { neverSays: UNDERSTOOD, mentions: [{ what: 'the order status', pattern: /on its way|shipped|deliver|status/i }] } },
+    { id: 'return', title: 'Damaged kettle return', visitor: () => ['The kettle in my order arrived cracked.'], expect: { neverSays: UNDERSTOOD, mentions: [{ what: 'the order or a return', pattern: /order|return|refund|replace/i }] } },
+    { id: 'billing', title: 'Unrecognised seats on the invoice', visitor: () => [`Our last invoice has two seats I do not recognise. My email is ${PII.acmeEmail}`], expect: { neverSays: UNDERSTOOD, mentions: [{ what: 'the invoice', pattern: /invoice|charge|billing|account/i }] } },
+    { id: 'address', title: 'Change the delivery address', visitor: () => ['I need to change the delivery address on my order.'], expect: { neverSays: [...UNDERSTOOD, 'What do you need help with'], mentions: [{ what: 'the address change', pattern: /address/i }] } },
+    { id: 'person', title: 'Asks for a person', visitor: () => ['I would like to talk to someone on the team.'], expect: { neverSays: ['something went wrong'], mentions: [{ what: 'the team', pattern: /team|person|agent|someone|human|colleague/i }] } },
   ]
 }
 
 export function planFor(target: 'harbour-dental' | 'bella' | 'acme', now = new Date()): TargetPlan {
-  if (target === 'harbour-dental') return { scenarios: dentalScenarios(now), generated: DENTAL_VISITORS, inbox: true }
-  if (target === 'bella') return { scenarios: bellaScenarios(), generated: [], inbox: false }
-  return { scenarios: acmeScenarios(), generated: [], inbox: false }
+  const sentinels = [PII.phone, PII.email, PII.acmeEmail, ...VISITORS.map((v) => v.phone)]
+  if (target === 'harbour-dental') return { scenarios: dentalScenarios(now), generated: DENTAL_VISITORS, inbox: true, sentinels }
+  if (target === 'bella') return { scenarios: bellaScenarios(), generated: [], inbox: false, sentinels }
+  return { scenarios: acmeScenarios(), generated: [], inbox: false, sentinels }
 }

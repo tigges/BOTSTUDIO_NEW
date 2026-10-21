@@ -17,6 +17,8 @@ test('salon chapters hang off the welcome, and parked charts stay loose', () => 
     'Salon hours',
     'Services and prices',
     'Book an appointment',
+    'Cancel appointment',
+    'Reschedule',
   ])
   const book = layout.roots[0]?.children.find((chapter) => chapter.name === 'Book an appointment')
   assert.deepEqual(layout.roots[0]?.children.find((chapter) => chapter.name === 'Location')?.looksUp, ['Catalog'])

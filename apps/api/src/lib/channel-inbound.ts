@@ -54,7 +54,7 @@ export function findEmailInbound(channels: InboundChannel[], secret: string, to?
   return bySecret
 }
 
-export function telegramText(update: unknown): { chatId: string; fromId: string; name: string; text: string } | null {
+export function telegramText(update: unknown): { chatId: string; fromId: string; name: string; text: string; messageId: string } | null {
   if (typeof update !== 'object' || update === null) return null
   const message = (update as { message?: Record<string, unknown> }).message
   if (!message) return null
@@ -66,10 +66,12 @@ export function telegramText(update: unknown): { chatId: string; fromId: string;
   if (!chatId) return null
   const name = [from?.first_name, from?.last_name].filter(Boolean).join(' ') || chatId
   const fromId = from?.id != null ? String(from.id) : chatId
-  return { chatId, fromId, name, text }
+  const updateId = (update as { update_id?: number | string }).update_id
+  const messageId = updateId != null ? `update:${updateId}` : message['message_id'] != null ? `${chatId}:${String(message['message_id'])}` : ''
+  return { chatId, fromId, name, text, messageId }
 }
 
-export function emailInbound(body: unknown, querySecret?: string): { from: string; to: string; text: string; secret: string } | null {
+export function emailInbound(body: unknown, querySecret?: string): { from: string; to: string; text: string; secret: string; messageId: string } | null {
   if (typeof body !== 'object' || body === null) return null
   const row = body as Record<string, unknown>
   const from = String(row['from'] ?? row['sender'] ?? '').trim()
@@ -77,7 +79,8 @@ export function emailInbound(body: unknown, querySecret?: string): { from: strin
   const text = String(row['text'] ?? row['plain'] ?? row['body'] ?? '').trim()
   const secret = String(row['secret'] ?? querySecret ?? '').trim()
   if (!from || !text || !secret) return null
-  return { from, to, text, secret }
+  const messageId = String(row['messageId'] ?? row['message_id'] ?? row['Message-Id'] ?? '').trim()
+  return { from, to, text, secret, messageId }
 }
 
 export function twilioFromForm(body: unknown): Record<string, string> {
