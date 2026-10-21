@@ -14,7 +14,7 @@ import { handoverSummary, type HandoverContract, type StudioCatalog } from '@ybo
 import type { FlowGraph, ToolCallResult } from '@ybot/runtime'
 import { turnSafety, type TurnSafety } from './guardrails.js'
 import { handoverRulesFor, type HandoverRules } from './handover.js'
-import { botCatalog, botLlm, runJourney, type JourneyLlm, type JourneyStore, type SavedSession, type VersionRow } from './flow-runner.js'
+import { botCatalog, botLlm, botToolName, botToolWaitSeconds, runJourney, type JourneyLlm, type JourneyStore, type SavedSession, type VersionRow } from './flow-runner.js'
 import { withLlmScope, type LlmSource } from './llm-ledger.js'
 import { answerFromKnowledge, runTurnWith, type AnswerRequest, type AnswerResult, type TurnPorts, type TurnResult } from './turn-pipeline.js'
 import { planNameTurn, type VisitorName } from './visitor-name.js'
@@ -92,6 +92,9 @@ export interface TestChatDeps {
   runTool: (tenantId: string, botId: string, toolId: string, args: Record<string, unknown>) => Promise<ToolCallResult & { name: string }>
   /** The bot's active guardrails and privacy settings, the same ones live chats use. */
   safety: (botId: string) => Promise<TurnSafety>
+  /** Bot settings: hand over when a tool is slower than this, as live chats do. */
+  toolWaitSeconds?: (botId: string) => Promise<number | null>
+  toolName?: (botId: string, toolId: string) => Promise<string | null>
 }
 
 async function runTestTool(tenantId: string, botId: string, toolId: string, args: Record<string, unknown>): Promise<ToolCallResult & { name: string }> {
@@ -110,6 +113,8 @@ const liveDeps: TestChatDeps = {
   now: () => new Date(),
   runTool: runTestTool,
   safety: turnSafety,
+  toolWaitSeconds: botToolWaitSeconds,
+  toolName: botToolName,
 }
 
 const calls = new WeakMap<TestChatDeps, TestToolCall[]>()
@@ -226,6 +231,8 @@ export function testJourneyStore(input: TestTurnInput, state: TestChatState, dep
     async createTicket(ticket) {
       state.ticket = ticket
     },
+    ...(deps.toolWaitSeconds ? { toolWaitSeconds: () => deps.toolWaitSeconds!(input.botId) } : {}),
+    ...(deps.toolName ? { toolName: (toolId: string) => deps.toolName!(input.botId, toolId) } : {}),
   }
 }
 

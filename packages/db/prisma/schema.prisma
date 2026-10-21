@@ -182,6 +182,10 @@ model BotConfig {
   temperature  Float    @default(0.3)
   maxTokens    Int      @default(2048)
   systemPrompt String   @default("You are a helpful assistant.")
+  /// short | medium | long (see @ybot/shared bot-settings.ts).
+  responseLength          String @default("medium")
+  /// Hand the chat to a person when a tool has not answered after this many seconds. Null: wait for the tool.
+  toolWaitEscalateSeconds Int?
   inboxConfig  Json     @default("{}")
   /// Personal data render modes per reader and custom patterns (see @ybot/shared privacy.ts).
   privacy      Json     @default("{}")

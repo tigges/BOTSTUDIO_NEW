@@ -11,6 +11,7 @@ import { botsRoutes } from './routes/bots.js'
 import { tenantsRoutes } from './routes/tenants.js'
 import { flowsRoutes } from './routes/flows.js'
 import { knowledgeRoutes } from './routes/knowledge.js'
+import { botSettingsRoutes } from './routes/bot-settings.js'
 import { conversationsRoutes, ticketsRoutes, contactsRoutes } from './routes/inbox.js'
 import { campaignsRoutes, templatesRoutes } from './routes/engage.js'
 import { channelsRoutes, webhooksRoutes, teamRoutes, analyticsRoutes, auditRoutes } from './routes/config.js'
@@ -119,6 +120,7 @@ await app.register(meRoutes, { prefix: '/api/v1/me' })
 await app.register(botsRoutes, { prefix: '/api/v1/bots' })
 await app.register(flowsRoutes, { prefix: '/api/v1/bots' })
 await app.register(knowledgeRoutes, { prefix: '/api/v1/bots' })
+await app.register(botSettingsRoutes, { prefix: '/api/v1/bots' })
 await app.register(campaignsRoutes, { prefix: '/api/v1/bots' })
 await app.register(templatesRoutes, { prefix: '/api/v1/bots' })
 await app.register(channelsRoutes, { prefix: '/api/v1/bots' })

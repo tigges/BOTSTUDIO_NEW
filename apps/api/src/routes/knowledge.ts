@@ -2,13 +2,14 @@ import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { z } from 'zod'
-import { DEFAULT_MODELS, currentModelId } from '@ybot/llm'
+import { DEFAULT_MODELS } from '@ybot/llm'
 import { enqueueKnowledgeSync } from '../queues.js'
 import { extractTextFromBuffer } from '../lib/extract-text.js'
 import { rereadWebsitePages } from '../lib/reread-website.js'
 import { enterLlmScope } from '../lib/llm-ledger.js'
 import { readPublicSite } from '../lib/public-site.js'
 import { BUSINESS_SOURCE_KIND } from '../lib/install-blueprint.js'
+import { FAQ_SOURCE_KIND, syncFaqKnowledge } from '../lib/faq-knowledge.js'
 import { documentQuality, textStats } from '@ybot/shared'
 import { SEARCH_MODES, documentChunks, listDocuments, runSearchTest } from '../lib/knowledge-search-test.js'
 
@@ -92,20 +93,25 @@ export async function knowledgeRoutes(app: FastifyInstance) {
     const { botId } = request.params as { botId: string }
     const body = z.object({ question: z.string().min(1), answer: z.string().min(1), tags: z.array(z.string()).default([]) }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
-    return reply.status(201).send({ data: await prisma.faq.create({ data: { ...body.data, tenantId, botId } }) })
+    const faq = await prisma.faq.create({ data: { ...body.data, tenantId, botId } })
+    await syncFaqKnowledge(tenantId, botId)
+    return reply.status(201).send({ data: faq })
   })
 
   app.patch('/:botId/faqs/:id', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { botId, id } = request.params as { botId: string; id: string }
     const body = z.object({ question: z.string().optional(), answer: z.string().optional(), tags: z.array(z.string()).optional() }).parse(request.body)
-    return { data: await prisma.faq.updateMany({ where: { id, botId, tenantId }, data: body }) }
+    const updated = await prisma.faq.updateMany({ where: { id, botId, tenantId }, data: body })
+    if (updated.count) await syncFaqKnowledge(tenantId, botId)
+    return { data: updated }
   })
 
   app.delete('/:botId/faqs/:id', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { botId, id } = request.params as { botId: string; id: string }
-    await prisma.faq.deleteMany({ where: { id, botId, tenantId } })
+    const removed = await prisma.faq.deleteMany({ where: { id, botId, tenantId } })
+    if (removed.count) await syncFaqKnowledge(tenantId, botId)
     return reply.status(204).send()
   })
 
@@ -219,6 +225,9 @@ export async function knowledgeRoutes(app: FastifyInstance) {
     if (src?.kind === BUSINESS_SOURCE_KIND) {
       return reply.status(409).send({ error: { code: 'MANAGED_SOURCE', message: 'Business details keep this source up to date. To change or remove what it says, edit the fields in Business details.' } })
     }
+    if (src?.kind === FAQ_SOURCE_KIND) {
+      return reply.status(409).send({ error: { code: 'MANAGED_SOURCE', message: 'The FAQ list keeps this source up to date. To remove a question, delete it in Knowledge > FAQs.' } })
+    }
     await prisma.knowledgeSource.deleteMany({ where: { id, botId, tenantId } })
     return reply.status(204).send()
   })
@@ -229,6 +238,10 @@ export async function knowledgeRoutes(app: FastifyInstance) {
     const { botId, id } = request.params as { botId: string; id: string }
     const src = await prisma.knowledgeSource.findFirst({ where: { id, botId, tenantId } })
     if (!src) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
+    if (src.kind === FAQ_SOURCE_KIND) {
+      await syncFaqKnowledge(tenantId, botId)
+      return { data: { queued: true, sourceId: id } }
+    }
     await enqueueKnowledgeSync({ tenantId, sourceId: id, botId, kind: src.kind as 'website' | 'file', config: src.config as Record<string, unknown> })
     await prisma.knowledgeSource.update({ where: { id }, data: { lastSyncAt: new Date() } })
     const url = typeof (src.config as { url?: unknown }).url === 'string' ? (src.config as { url: string }).url : ''
@@ -250,88 +263,6 @@ export async function knowledgeRoutes(app: FastifyInstance) {
       }
     }
     return { data: { queued: true, sourceId: id } }
-  })
-
-  // ── LLM Training Config ───────────────────────────────────────────────────
-  app.get('/:botId/training', async (request, reply) => {
-    const { tenantId } = request.user as JWT
-    const { botId } = request.params as { botId: string }
-    const bot = await prisma.bot.findFirst({ where: { id: botId, tenantId } })
-    if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
-    const cfg = await prisma.botConfig.findUnique({ where: { botId } })
-    return {
-      data: {
-        model: currentModelId(cfg?.model ?? DEFAULT_MODELS.anthropic),
-        temperature: cfg?.temperature ?? 0.3,
-        maxTokens: cfg?.maxTokens ?? 2048,
-        systemPrompt: cfg?.systemPrompt ?? `You are a helpful support assistant for ${bot.name}. Be concise, friendly, and professional.`,
-      },
-    }
-  })
-
-  app.put('/:botId/training', async (request, reply) => {
-    const { tenantId } = request.user as JWT
-    const { botId } = request.params as { botId: string }
-    const body = z.object({
-      model: z.string(),
-      temperature: z.number().min(0).max(2),
-      maxTokens: z.number().optional(),
-      systemPrompt: z.string().optional(),
-    }).safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
-    const { model, temperature, maxTokens, systemPrompt } = body.data
-    const cfg = await prisma.botConfig.upsert({
-      where: { botId },
-      create: { tenantId, botId, model, temperature, maxTokens: maxTokens ?? 2048, systemPrompt: systemPrompt ?? 'You are a helpful assistant.' },
-      update: { model, temperature, ...(maxTokens !== undefined ? { maxTokens } : {}), ...(systemPrompt !== undefined ? { systemPrompt } : {}) },
-    })
-
-    // Count knowledge sources to give the training run a meaningful "examples" count
-    const [intentCount, faqCount, sourceCount] = await Promise.all([
-      prisma.intent.count({ where: { botId, tenantId } }),
-      prisma.faq.count({ where: { botId, tenantId } }),
-      prisma.knowledgeSource.count({ where: { botId, tenantId } }),
-    ])
-    const totalExamples = intentCount + faqCount + sourceCount
-
-    await prisma.activity.create({
-      data: {
-        tenantId,
-        userId: (request.user as JWT).sub,
-        action: 'training.run',
-        resource: 'bot',
-        resourceId: botId,
-        metadata: {
-          model,
-          examples: totalExamples,
-          intents: intentCount,
-          faqs: faqCount,
-          sources: sourceCount,
-          status: 'success',
-          durationMs: Math.floor(800 + Math.random() * 1200),
-        },
-      },
-    })
-
-    return { data: cfg }
-  })
-
-  // GET /:botId/training-runs — recent training run history (from Activity log)
-  app.get('/:botId/training-runs', async (request) => {
-    const { tenantId } = request.user as JWT
-    const { botId } = request.params as { botId: string }
-    const runs = await prisma.activity.findMany({
-      where: { tenantId, action: 'training.run', resource: 'bot', resourceId: botId },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    })
-    return {
-      data: runs.map((r) => ({
-        id: r.id,
-        createdAt: r.createdAt.toISOString(),
-        ...(r.metadata as object),
-      })),
-    }
   })
 
   // GET/PATCH /:botId/inbox-config — inbox operational settings

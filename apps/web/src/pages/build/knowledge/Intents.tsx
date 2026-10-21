@@ -5,8 +5,7 @@ import {
 } from 'lucide-react'
 import { Button, Input, Badge, EmptyState } from '@ybot/ui'
 import { cn } from '@ybot/ui'
-import { SubNav } from '../../../components/SubNav'
-import { KNOWLEDGE_SUBNAV } from './subnav'
+import { KnowledgeSubNav } from './subnav'
 import { useIntents, useUpdateIntent, useCreateIntent, useDeleteIntent } from '../../../lib/hooks'
 
 
@@ -157,7 +156,7 @@ export function IntentsPage() {
             <Plus size={13} /> New Intent
           </Button>
         </div>
-        <SubNav items={KNOWLEDGE_SUBNAV} />
+        <KnowledgeSubNav />
       </div>
 
       <div className="flex flex-1 overflow-hidden">

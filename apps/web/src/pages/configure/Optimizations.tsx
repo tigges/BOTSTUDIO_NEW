@@ -1,7 +1,6 @@
 /**
  * Configure > Optimizations
  *
- * Learn from chats drafts a shorter chart from sample or rated chats.
  * Prompt suggestions are supervised system-prompt proposals.
  */
 
@@ -16,7 +15,7 @@ import { useOptimizations, useApplyOptimization, useDismissOptimization } from '
 import { useAppStore } from '../../store/app'
 import { cn } from '@ybot/ui'
 import { bots as botsApi, type LearnedSiteTemplate, type TemplateOptimization } from '../../lib/api'
-import { LearnFromChats } from '../build/LearnFromChats'
+import { Link } from '@tanstack/react-router'
 import { JourneyPreview } from '../../components/JourneyPreview'
 import { START_CLUSTERS, type ClusterId } from '@ybot/shared'
 
@@ -194,7 +193,7 @@ export function OptimizationsPage() {
           <div>
             <h1 className="text-base font-semibold text-[var(--text-primary)]">Configure</h1>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
-              Learn from chats, read public sites into starter templates, then review prompt suggestions. Changes stay supervised.
+              Read public sites into starter templates, then review prompt suggestions. Changes stay supervised.
             </p>
           </div>
           <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => refetch()}>
@@ -209,9 +208,10 @@ export function OptimizationsPage() {
           <TemplatesFromSites />
         </div>
 
-        <div className="mb-6">
-          <LearnFromChats />
-        </div>
+        <p className="mb-6 text-sm text-[var(--text-secondary)]" data-testid="learn-moved">
+          Learn from chats now sits on the Journey, next to the map it changes.{' '}
+          <Link to="/build/journey" search={{ lens: 'learn' }} className="font-medium text-[var(--accent)] hover:underline">Open Learn from chats</Link>
+        </p>
 
         <p className="mb-3 text-sm font-medium text-[var(--text-primary)]">Prompt suggestions</p>
         <div className="flex items-center gap-4 mb-6 flex-wrap">

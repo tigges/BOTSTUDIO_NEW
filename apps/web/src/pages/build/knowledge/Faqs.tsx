@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
-import { HelpCircle, Plus, Search, Trash2, ChevronRight, Save, CheckCircle } from 'lucide-react'
+import { HelpCircle, Plus, Search, Save, CheckCircle, Trash2 } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import { Button, Input, Badge, EmptyState, Skeleton } from '@ybot/ui'
 import { cn } from '@ybot/ui'
-import { SubNav } from '../../../components/SubNav'
-import { KNOWLEDGE_SUBNAV } from './subnav'
+import { KnowledgeSubNav } from './subnav'
 import { useFaqs, useCreateFaq, useDeleteFaq, useUpdateFaq } from '../../../lib/hooks'
 
 
@@ -14,16 +14,8 @@ interface Faq {
   tags: string[]
 }
 
-const MOCK_FAQS: Faq[] = [
-  { id: '1', question: 'What are your business hours?', answer: 'We are open Monday to Friday, 9 AM to 6 PM EST. You can also contact us 24/7 via our chatbot.', tags: ['hours', 'contact'] },
-  { id: '2', question: 'How do I track my order?', answer: 'You can track your order by visiting the Orders section in your account or by using the tracking link sent to your email.', tags: ['orders', 'tracking'] },
-  { id: '3', question: 'What is your return policy?', answer: 'We offer a 30-day return policy for all items in their original condition. Please visit the Returns page or contact support.', tags: ['returns', 'policy'] },
-  { id: '4', question: 'How long does shipping take?', answer: 'Standard shipping takes 3–5 business days. Express shipping takes 1–2 business days. International orders may take 7–14 days.', tags: ['shipping', 'delivery'] },
-  { id: '5', question: 'Do you offer international shipping?', answer: 'Yes, we ship to over 50 countries. International shipping rates and times vary by destination.', tags: ['shipping', 'international'] },
-]
-
 export function FaqsPage() {
-  const { data: faqs = [], isLoading } = useFaqs()
+  const { data: faqs = [], isLoading, isError, error, refetch } = useFaqs()
   const createFaq = useCreateFaq()
   const deleteFaq = useDeleteFaq()
   const updateFaq = useUpdateFaq()
@@ -60,12 +52,18 @@ export function FaqsPage() {
     <div className="flex flex-col h-full">
       <div className="border-b border-[var(--border)] bg-[var(--bg-surface)]">
         <div className="flex items-center justify-between px-6 pt-4 pb-0">
-          <h1 className="text-base font-semibold text-[var(--text-primary)]">Knowledge</h1>
-          <Button size="sm" onClick={addFaq}>
+          <div>
+            <h1 className="text-base font-semibold text-[var(--text-primary)]">
+              <Link to="/build/knowledge/sources" className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">Knowledge</Link>
+              <span className="mx-1.5 text-[var(--text-muted)]">/</span>FAQs
+            </h1>
+            <p className="mt-0.5 text-xs text-[var(--text-muted)]">Each saved question and answer is a document in the FAQs source, so answers cite it like any other source.</p>
+          </div>
+          <Button size="sm" onClick={addFaq} disabled={createFaq.isPending}>
             <Plus size={13} /> New FAQ
           </Button>
         </div>
-        <SubNav items={KNOWLEDGE_SUBNAV} />
+        <KnowledgeSubNav />
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -75,6 +73,19 @@ export function FaqsPage() {
             <Input placeholder="Search FAQs…" leftIcon={<Search size={13} />} value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
           <div className="flex-1 overflow-y-auto divide-y divide-[var(--border)]">
+            {isLoading && Array.from({ length: 4 }).map((_, index) => <div key={index} className="px-4 py-3"><Skeleton className="h-8 w-full rounded" /></div>)}
+            {isError && (
+              <div className="px-4 py-6 text-xs text-[var(--text-secondary)]">
+                {error instanceof Error ? error.message : 'Could not load the FAQs.'}
+                <Button className="mt-2" size="sm" variant="secondary" onClick={() => { void refetch() }}>Try again</Button>
+              </div>
+            )}
+            {!isLoading && !isError && faqs.length > 0 && filtered.length === 0 && (
+              <div className="px-4 py-6 text-xs text-[var(--text-muted)]">
+                No FAQ mentions &ldquo;{query}&rdquo;.{' '}
+                <button type="button" className="font-medium text-[var(--accent)]" onClick={() => setQuery('')}>Clear search</button>
+              </div>
+            )}
             {filtered.map((faq) => (
               <button
                 key={faq.id}
@@ -103,6 +114,7 @@ export function FaqsPage() {
           <div className="flex-1 overflow-auto p-6 max-w-2xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">FAQ Editor</h2>
+              <div className="flex items-center gap-1">
               <Button size="sm" onClick={() => {
                 if (!selectedId) return
                 updateFaq.mutate({ id: selectedId, question: selected.question, answer: selected.answer, tags: selected.tags }, {
@@ -111,6 +123,18 @@ export function FaqsPage() {
               }}>
                 {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
               </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={deleteFaq.isPending}
+                onClick={() => {
+                  if (!selectedId || !window.confirm(`Delete "${selected.question}"? The bot stops citing it.`)) return
+                  deleteFaq.mutate(selectedId, { onSuccess: () => setSelectedId(faqs.find((faq) => faq.id !== selectedId)?.id ?? null) })
+                }}
+              >
+                <Trash2 size={13} /> Delete
+              </Button>
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -146,7 +170,16 @@ export function FaqsPage() {
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center">
-            <EmptyState icon={<HelpCircle size={20} />} title="Select a FAQ" />
+            {!isLoading && !isError && faqs.length === 0 ? (
+              <EmptyState
+                icon={<HelpCircle size={20} />}
+                title="No FAQs yet"
+                description="Write the questions guests ask most, with the answer you want them to get."
+                action={<Button size="sm" onClick={addFaq}><Plus size={13} /> New FAQ</Button>}
+              />
+            ) : (
+              <EmptyState icon={<HelpCircle size={20} />} title="Select an FAQ" />
+            )}
           </div>
         )}
       </div>

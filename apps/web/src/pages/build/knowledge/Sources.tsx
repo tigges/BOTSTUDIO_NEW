@@ -2,11 +2,10 @@ import React, { useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   BookOpen, Plus, Globe, FileText, Link2, RefreshCw,
-  CheckCircle, AlertCircle, Clock, Trash2, Loader2, Upload, Building2,
+  CheckCircle, AlertCircle, Clock, Trash2, Loader2, Upload, Building2, HelpCircle,
 } from 'lucide-react'
 import { Button, Badge, EmptyState, Card } from '@ybot/ui'
-import { SubNav } from '../../../components/SubNav'
-import { KNOWLEDGE_SUBNAV } from './subnav'
+import { KnowledgeSubNav } from './subnav'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
   Input,
@@ -15,6 +14,23 @@ import { cn } from '@ybot/ui'
 import { useSources, useCreateSource, useUploadSource, useSyncSource, useDeleteSource, useBusiness } from '../../../lib/hooks'
 
 const BUSINESS_KIND = 'business'
+const FAQ_KIND = 'faq'
+
+/** Sources the console rebuilds from another editor; they cannot be synced or deleted here. */
+const MANAGED: Record<string, { badge: string; note: string; to: '/build/business' | '/build/knowledge/faqs'; edit: string }> = {
+  [BUSINESS_KIND]: {
+    badge: 'Managed by Business details',
+    note: 'One document per filled field, rebuilt every time Business details are saved. When another source disagrees, answers use these.',
+    to: '/build/business',
+    edit: 'Edit in Business details',
+  },
+  [FAQ_KIND]: {
+    badge: 'Managed by FAQs',
+    note: 'One document per question and answer, rebuilt every time an FAQ is saved. Answers cite them like any other source.',
+    to: '/build/knowledge/faqs',
+    edit: 'Edit FAQs',
+  },
+}
 
 
 const KIND_ICON: Record<string, React.ElementType> = {
@@ -22,6 +38,7 @@ const KIND_ICON: Record<string, React.ElementType> = {
   url: Link2,
   file: FileText,
   [BUSINESS_KIND]: Building2,
+  [FAQ_KIND]: HelpCircle,
 }
 
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error'> = {
@@ -51,7 +68,7 @@ export function SourcesPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [newUrl, setNewUrl] = useState('')
   const [newName, setNewName] = useState('')
-  const [newKind, setNewKind] = useState<'website' | 'url' | 'file'>('url')
+  const [newKind, setNewKind] = useState<'website' | 'url' | 'file' | 'faq'>('url')
   const [addError, setAddError] = useState('')
   const [dragging, setDragging] = useState(false)
   const [uploadFile, setUploadFile] = useState<File | null>(null)
@@ -106,7 +123,7 @@ export function SourcesPage() {
             <Plus size={13} /> Add Source
           </Button>
         </div>
-        <SubNav items={KNOWLEDGE_SUBNAV} />
+        <KnowledgeSubNav />
       </div>
 
       <div className="flex-1 overflow-auto p-6">
@@ -140,7 +157,7 @@ export function SourcesPage() {
           <EmptyState
             icon={<BookOpen size={28} />}
             title="No knowledge sources yet"
-            description="Add a website, URL, or upload a document to train your bot."
+            description="Add a website or URL, upload a document, or write FAQs. The bot answers from them and cites them."
             action={<Button size="sm" onClick={() => setShowAdd(true)}><Plus size={13} /> Add Source</Button>}
           />
         )}
@@ -149,7 +166,7 @@ export function SourcesPage() {
             const KindIcon = (KIND_ICON[src.kind] ?? Globe) as React.ElementType
             const status = src.lastSyncAt ? 'indexed' : 'processing'
             const StatusIcon = (STATUS_ICON[status] ?? Clock) as React.ElementType
-            const managed = src.kind === BUSINESS_KIND
+            const managed = MANAGED[src.kind]
             const conflicts = managed ? 0 : (conflictsBySource.get(src.name) ?? 0)
             return (
               <div
@@ -163,18 +180,14 @@ export function SourcesPage() {
                   <div className="flex items-center gap-2">
                     <p className="font-medium text-[var(--text-primary)] text-sm truncate">{src.name}</p>
                     <Badge variant={STATUS_VARIANT[status] ?? 'muted'} dot>{status}</Badge>
-                    {managed && <Badge variant="muted">Managed by Business details</Badge>}
+                    {managed && <Badge variant="muted">{managed.badge}</Badge>}
                     {conflicts > 0 && (
                       <Link to="/build/business" className="text-xs font-medium text-amber-700 hover:underline">
                         {conflicts} {conflicts === 1 ? 'passage disagrees' : 'passages disagree'} with Business details
                       </Link>
                     )}
                   </div>
-                  {managed && (
-                    <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                      One document per filled field, rebuilt every time Business details are saved. When another source disagrees, answers use these.
-                    </p>
-                  )}
+                  {managed && <p className="mt-0.5 text-xs text-[var(--text-muted)]">{managed.note}</p>}
                   <div className="flex items-center gap-3 mt-0.5">
                     {(src.config as { url?: string })?.url && (
                       <span className="text-xs text-[var(--text-muted)] truncate max-w-[200px]">
@@ -197,8 +210,8 @@ export function SourcesPage() {
                   </div>
                 </div>
                 {managed ? (
-                  <Link to="/build/business" className="shrink-0 text-xs font-medium text-[var(--accent)] hover:underline">
-                    Edit in Business details
+                  <Link to={managed.to} className="shrink-0 text-xs font-medium text-[var(--accent)] hover:underline">
+                    {managed.edit}
                   </Link>
                 ) : (
                   <div className="flex items-center gap-1 shrink-0">
@@ -233,7 +246,7 @@ export function SourcesPage() {
               <div>
                 <label className="text-xs font-medium text-[var(--text-secondary)]">Source type</label>
                 <div className="mt-1 flex gap-2">
-                  {(['url', 'website', 'file'] as const).map((k) => {
+                  {(['url', 'website', 'file', 'faq'] as const).map((k) => {
                     const Icon = KIND_ICON[k] ?? Globe
                     return (
                       <button
@@ -247,18 +260,24 @@ export function SourcesPage() {
                         )}
                       >
                         <Icon size={18} />
-                        {k.charAt(0).toUpperCase() + k.slice(1)}
+                        {k === 'faq' ? 'FAQs' : k.charAt(0).toUpperCase() + k.slice(1)}
                       </button>
                     )
                   })}
                 </div>
               </div>
 
-              {newKind !== 'file' && (
+              {newKind === 'faq' && (
+                <p className="text-sm text-[var(--text-secondary)]" data-testid="faq-source-note">
+                  Write questions and answers in the FAQ editor. Each one becomes a document in the FAQs source, so Search & Test finds it and answers cite it.
+                </p>
+              )}
+
+              {(newKind === 'url' || newKind === 'website') && (
                 <Input label="Name" placeholder="Product Documentation" value={newName} onChange={(e) => setNewName(e.target.value)} />
               )}
 
-              {newKind !== 'file' && (
+              {(newKind === 'url' || newKind === 'website') && (
                 <Input label="URL" placeholder="https://docs.example.com" value={newUrl} onChange={(e) => setNewUrl(e.target.value)} />
               )}
 
@@ -321,13 +340,19 @@ export function SourcesPage() {
           </DialogBody>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button
-              onClick={addSource}
-              disabled={(newKind === 'file' ? !uploadFile : !newName.trim()) || isPending}
-            >
-              {isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
-              {newKind === 'file' ? 'Upload & Index' : 'Add Source'}
-            </Button>
+            {newKind === 'faq' ? (
+              <Link to="/build/knowledge/faqs" onClick={() => setShowAdd(false)}>
+                <Button>Open the FAQ editor</Button>
+              </Link>
+            ) : (
+              <Button
+                onClick={addSource}
+                disabled={(newKind === 'file' ? !uploadFile : !newName.trim()) || isPending}
+              >
+                {isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+                {newKind === 'file' ? 'Upload & Index' : 'Add Source'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

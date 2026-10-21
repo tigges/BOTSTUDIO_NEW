@@ -6,7 +6,7 @@
 
 export interface DocumentStats {
   status: string
-  /** The source kind: website, url and file are read by extraction; business and text are typed in. */
+  /** The source kind: website, url and file are read by extraction; business, faq and text are typed in. */
   sourceKind: string
   /** Characters of text across the document and its passages. */
   chars: number
@@ -57,7 +57,8 @@ export function documentQuality(stats: DocumentStats): DocumentQuality {
   const issues: string[] = []
   let score = 100
   const extracted = EXTRACTED_KINDS.has(stats.sourceKind)
-  const resync = stats.sourceKind === 'business' ? 'Save Business details again to index them.' : 'Sync the source to split it.'
+  const resave = stats.sourceKind === 'business' ? 'Save Business details again' : stats.sourceKind === 'faq' ? 'Save any FAQ' : 'Sync the source'
+  const resync = stats.sourceKind === 'business' || stats.sourceKind === 'faq' ? `${resave} to index them.` : 'Sync the source to split it.'
   if (extracted && stats.chars < 200) {
     score -= 45
     issues.push(`Very little text came out (${stats.chars} characters). Scanned PDFs and pages built by scripts often read like this; upload a text version.`)
@@ -76,7 +77,7 @@ export function documentQuality(stats: DocumentStats): DocumentQuality {
   } else if (stats.embeddedChunks < stats.chunks) {
     score -= 15
     const missing = stats.chunks - stats.embeddedChunks
-    issues.push(`${missing} of ${stats.chunks} passages have no embedding, so semantic search skips them. ${stats.sourceKind === 'business' ? 'Save Business details again' : 'Sync the source'} once an embedding model is connected.`)
+    issues.push(`${missing} of ${stats.chunks} passages have no embedding, so semantic search skips them. ${resave} once an embedding model is connected.`)
   }
   score = Math.max(0, score)
   return { score, level: score >= 80 ? 'good' : score >= 50 ? 'fair' : 'poor', issues }
