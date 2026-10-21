@@ -13,6 +13,8 @@ export interface ChannelRef {
   environmentId?: string
   isActive: boolean
   config?: unknown
+  /** Secret fields the API kept back because they are saved. */
+  secretsSet?: string[]
 }
 
 export function pickChannel<T extends ChannelRef>(
@@ -27,10 +29,12 @@ export function pickChannel<T extends ChannelRef>(
   return channels.find((channel) => channel.kind === kind)
 }
 
-export function channelStatus(kind: string, channel?: { isActive: boolean; config?: unknown } | null): ChannelStatus {
+export function channelStatus(kind: string, channel?: { isActive: boolean; config?: unknown; secretsSet?: string[] } | null): ChannelStatus {
   if (kind === 'web') return 'active'
   if (!channel) return 'idle'
-  if (isOptionalChannelKind(kind) && !parseChannelConfig(kind, channel.config ?? {})) return 'idle'
+  const config = typeof channel.config === 'object' && channel.config !== null ? channel.config as Record<string, unknown> : {}
+  const saved = Object.fromEntries((channel.secretsSet ?? []).map((key) => [key, 'saved']))
+  if (isOptionalChannelKind(kind) && !parseChannelConfig(kind, { ...config, ...saved })) return 'idle'
   return channel.isActive ? 'active' : 'inactive'
 }
 

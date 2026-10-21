@@ -179,7 +179,7 @@ export function ChannelConnectionDialog({
           <TabsList>
             {CONNECTION_TABS.map((item) => <TabsTrigger key={item.id} value={item.id}>{item.label}</TabsTrigger>)}
           </TabsList>
-          <DialogBody className="max-h-[60vh] overflow-y-auto">
+          <DialogBody className="max-h-[60vh] overflow-y-auto pt-5">
             <TabsContent value="overview" className="space-y-4">
               <div>
                 <label className={label} htmlFor="channel-name">Name</label>
