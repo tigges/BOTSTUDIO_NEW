@@ -12,7 +12,7 @@ const screens = [
   '/build/knowledge/sources',
   '/build/knowledge/training',
   '/inbox/chats',
-  '/inbox/tickets',
+  '/inbox/tasks',
   '/inbox/contacts',
   '/inbox/settings',
   '/engage/campaigns',

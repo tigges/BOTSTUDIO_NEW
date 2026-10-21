@@ -5,6 +5,8 @@ import { knowledgeTabs, navItemActive } from './build-nav.ts'
 test('Journey stays lit on the flow list and on any flow', () => {
   assert.equal(navItemActive('journey', '/build/journey', '/build/journey'), true)
   assert.equal(navItemActive('journey', '/build/journey', '/build/flows'), true)
+  assert.equal(navItemActive('inbox', '/inbox', '/inbox/tasks'), true)
+  assert.equal(navItemActive('inbox', '/inbox', '/inboxes'), false)
   assert.equal(navItemActive('journey', '/build/journey', '/build/flows/abc'), true)
   assert.equal(navItemActive('journey', '/build/journey', '/build/workflows'), false)
 })

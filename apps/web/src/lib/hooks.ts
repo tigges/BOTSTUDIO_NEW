@@ -3,7 +3,7 @@
  * Demo mode uses the sample catalog. A live session shows the API error
  * instead of that catalog, so a salon bot never looks like the shop sample.
  */
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import React from 'react'
 import type { BotSettings, BusinessProfile, GuardrailRule, ReturnOutcome } from '@ybot/shared'
 import * as api from './api'
@@ -361,6 +361,19 @@ export function useConversations(params?: Record<string, string>) {
       demo.DEMO_CONVERSATIONS,
     ),
     refetchInterval: isDemoMode() ? false : 10_000,
+  })
+}
+
+/** The Inbox list with its search and test-run filter, plus how many test-run chats the filter hides. */
+export function useInboxChats(params: Record<string, string>) {
+  return useQuery<{ chats: api.Conversation[]; testRunChats: number }>({
+    queryKey: ['conversations', 'inbox', params],
+    queryFn: withDemoFallback(
+      () => api.conversations.list(params).then((r) => ({ chats: r.data, testRunChats: r.meta?.testRunChats ?? 0 })),
+      { chats: demo.DEMO_CONVERSATIONS, testRunChats: 0 },
+    ),
+    refetchInterval: isDemoMode() ? false : 10_000,
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -1302,6 +1315,22 @@ export function useCannedReplies() {
   return useQuery({
     queryKey: ['canned-replies'],
     queryFn: () => api.cannedReplies.list().then((r) => r.data),
+  })
+}
+
+export function useCreateCannedReply() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { shortcut: string; title: string; text: string }) => api.cannedReplies.create(body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['canned-replies'] }),
+  })
+}
+
+export function useDeleteCannedReply() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.cannedReplies.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['canned-replies'] }),
   })
 }
 

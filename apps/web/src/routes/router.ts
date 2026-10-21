@@ -32,7 +32,7 @@ import { DocumentsPage } from '../pages/build/knowledge/Documents'
 import { SearchTestPage } from '../pages/build/knowledge/SearchTest'
 import { BotSettingsPage } from '../pages/build/BotSettings'
 import { ChatsPage } from '../pages/inbox/Chats'
-import { TicketsPage } from '../pages/inbox/Tickets'
+import { TasksPage } from '../pages/inbox/Tasks'
 import { ContactsPage } from '../pages/inbox/Contacts'
 import { InboxSettingsPage } from '../pages/inbox/Settings'
 import { CampaignsPage } from '../pages/engage/Campaigns'
@@ -168,7 +168,8 @@ const botSettingsRoute = createRoute({ getParentRoute: () => appRoute, path: '/b
 
 // ── Inbox ─────────────────────────────────────────────────────────────────────
 const chatsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/chats', component: ChatsPage })
-const ticketsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/tickets', component: TicketsPage })
+const tasksRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/tasks', component: TasksPage })
+const ticketsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/tickets', beforeLoad: () => { throw redirect({ to: '/inbox/tasks' }) }, component: () => null })
 const contactsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/contacts', component: ContactsPage })
 const inboxSettingsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/settings', component: InboxSettingsPage })
 const inboxRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox', beforeLoad: () => { throw redirect({ to: '/inbox/chats' }) }, component: () => null })
@@ -230,6 +231,7 @@ const routeTree = rootRoute.addChildren([
     knowledgeRedirectRoute,
     inboxRoute,
     chatsRoute,
+    tasksRoute,
     ticketsRoute,
     contactsRoute,
     inboxSettingsRoute,
