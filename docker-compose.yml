@@ -29,6 +29,8 @@ x-api-env: &api-env
   # install; run apps/api/dist/scripts/apply-demos.js once instead.
   DEMO_SEED_ON_BOOT: ${DEMO_SEED_ON_BOOT:-false}
   FRONTEND_URL:   ${FRONTEND_URL:-http://localhost}
+  # System Status lists containers through the read-only proxy below.
+  DOCKER_PROXY_URL: http://docker-proxy:2375
   # LLM (provide at least one). Tried in order: Gemini, Claude, OpenAI, Groq, then Ollama.
   # LLM_PROVIDER (gemini | claude | ollama | openai | groq) moves one to the front.
   LLM_PROVIDER:      ${LLM_PROVIDER:-}
@@ -104,6 +106,21 @@ services:
       retries: 3
     networks: [botstudio-net]
 
+  # Read-only Docker API for System Status. Only GET /containers/* is
+  # allowed (no exec, start, stop or images), so the API never holds the
+  # Docker socket. Not published outside botstudio-net.
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: botstudio-docker-proxy
+    restart: *restart
+    logging: *logging
+    environment:
+      CONTAINERS: 1
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [botstudio-net]
+
   # ── Application ───────────────────────────────────────────────────────────
 
   api:
@@ -129,8 +146,6 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks: [botstudio-net]
 
   # Same image as the API, started with the worker entry point: BullMQ

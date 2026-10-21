@@ -2,11 +2,11 @@ import type { FastifyInstance } from 'fastify'
 import { prisma } from '@ybot/db'
 import { requireRole } from '../middleware/auth.js'
 import * as os from 'node:os'
-import * as http from 'node:http'
 import { DEFAULT_MODELS, currentModelId, llmChain } from '@ybot/llm'
 import { isKnownDefault, productionSecretProblems } from '../lib/production-secrets.js'
 import { backgroundProblems, liveWorkers, processRole } from '../background.js'
 import { queueHealth } from '../queues.js'
+import { dockerRequest } from '../lib/docker.js'
 
 function llmOrder(): string {
   const links = llmChain()
@@ -14,22 +14,6 @@ function llmOrder(): string {
   return links.map((link) => `${link.label} (${link.model})`).join(' → ')
 }
 
-
-function dockerRequest(path: string): Promise<unknown> {
-  return new Promise((resolve) => {
-    const req = http.request(
-      { socketPath: '/var/run/docker.sock', path, method: 'GET' },
-      (res) => {
-        let body = ''
-        res.on('data', (chunk: Buffer) => { body += chunk.toString() })
-        res.on('end', () => { try { resolve(JSON.parse(body)) } catch { resolve(null) } })
-      },
-    )
-    req.on('error', () => resolve(null))
-    req.setTimeout(3000, () => { req.destroy(); resolve(null) })
-    req.end()
-  })
-}
 
 async function pingDb() {
   const t0 = Date.now()

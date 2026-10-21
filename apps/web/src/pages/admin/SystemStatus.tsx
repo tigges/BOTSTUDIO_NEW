@@ -340,8 +340,8 @@ export function SystemStatusPage() {
               {data?.containers.length === 0 ? (
                 <div className="p-8 text-center">
                   <Box size={20} className="text-[var(--text-muted)] mx-auto mb-2" />
-                  <p className="text-sm text-[var(--text-muted)]">Docker socket not mounted</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">Add the Docker socket volume to see containers</p>
+                  <p className="text-sm text-[var(--text-muted)]">Containers unavailable</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">Start the docker-proxy service from the compose file to see containers</p>
                 </div>
               ) : (
                 <div className="divide-y divide-[var(--border)]">
