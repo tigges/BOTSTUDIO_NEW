@@ -1,5 +1,5 @@
 import type {
-  AuthProfileKind, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, KnowledgeConflict, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
+  AuthProfileKind, BotSettings, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, KnowledgeConflict, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader, PrivacySettings,
   DocumentQuality, ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns,
 } from '@ybot/shared'
 import { messageForStatus } from './api-error'
@@ -256,6 +256,14 @@ export interface SearchTestReport {
   }>
 }
 
+/** The three execution settings, and which model providers this BotStudio has a key for. */
+export interface BotSettingsView { settings: BotSettings; connected: Record<string, boolean> }
+
+export const botSettings = {
+  get: (botId: string) => apiFetch<{ data: BotSettingsView }>(`/bots/${botId}/settings`),
+  update: (botId: string, settings: BotSettings) => apiFetch<{ data: BotSettingsView }>(`/bots/${botId}/settings`, { method: 'PUT', body: JSON.stringify(settings) }),
+}
+
 export const knowledge = {
   documents: (botId: string) => apiFetch<{ data: KnowledgeDocument[] }>(`/bots/${botId}/knowledge/documents`),
   chunks: (botId: string, documentId: string) => apiFetch<{ data: DocumentChunks }>(`/bots/${botId}/knowledge/documents/${documentId}/chunks`),
@@ -301,11 +309,6 @@ export const knowledge = {
     },
     sync: (botId: string, id: string) => apiFetch<{ data: { queued: boolean } }>(`/bots/${botId}/sources/${id}/sync`, { method: 'POST' }),
     delete: (botId: string, id: string) => apiFetch<void>(`/bots/${botId}/sources/${id}`, { method: 'DELETE' }),
-  },
-  training: {
-    get: (botId: string) => apiFetch<{ data: LlmConfig }>(`/bots/${botId}/training`),
-    update: (botId: string, config: Partial<LlmConfig>) => apiFetch<{ data: LlmConfig }>(`/bots/${botId}/training`, { method: 'PUT', body: JSON.stringify(config) }),
-    runs: (botId: string) => apiFetch<{ data: TrainingRun[] }>(`/bots/${botId}/training-runs`),
   },
   inboxConfig: {
     get: (botId: string) => apiFetch<{ data: Record<string, unknown> }>(`/bots/${botId}/inbox-config`),
@@ -948,7 +951,6 @@ export interface Intent { id: string; name: string; description?: string; uttera
 export interface Entity { id: string; name: string; kind: string; values: object[] }
 export interface Faq { id: string; question: string; answer: string; tags: string[] }
 export interface KnowledgeSource { id: string; name: string; kind: string; config: Record<string, unknown>; lastSyncAt?: string; documents: Array<{ id: string; status: string }> }
-export interface LlmConfig { model: string; temperature: number; maxTokens: number; systemPrompt: string }
 export interface Conversation { id: string; status: string; assignedTo?: string; contact?: Contact; channel?: { id: string; name: string; kind: string }; messages: Message[]; labels: Array<{ label: Label }>; updatedAt: string; sla?: string | null; outcome?: string | null; llm?: ConversationLlmCost | null; handover?: Partial<HandoverContract> | null; /** Set on chats a scheduled test run opened. */ testRunId?: string | null }
 /** Model calls made for one chat. costUsd is null when a model had no known price. */
 export interface ConversationLlmCost { costUsd: number | null; calls: number }
@@ -998,7 +1000,6 @@ export interface ChannelStat { channelId: string; name: string; total: number }
 export interface CsatTrendPoint { date: string; score: number; positive: number; negative: number }
 export interface ResolutionBreakdownItem { name: string; value: number }
 export interface ResponseTimeHourPoint { hour: string; time: number }
-export interface TrainingRun { id: string; createdAt: string; model: string; examples: number; intents: number; faqs: number; sources: number; status: string; durationMs: number }
 export interface AuditEvent { id: string; action: string; resource?: string; resourceId?: string; metadata: Record<string, unknown>; createdAt: string; user?: { displayName: string; email: string } }
 
 export interface DockerContainer { id: string; name: string; image: string; state: string; status: string; created?: number }

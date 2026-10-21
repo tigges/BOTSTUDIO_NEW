@@ -12,6 +12,7 @@ import {
   type StarterPackId,
 } from '@ybot/shared'
 import { upsertStudioCatalog } from './studio-catalog.js'
+import { syncFaqKnowledge } from './faq-knowledge.js'
 
 export interface CorporateInstallResult {
   flowsAdded: string[]
@@ -172,6 +173,7 @@ async function installPlannedPack(
     })
     faqsAdded += 1
   }
+  if (faqsAdded) await syncFaqKnowledge(tenantId, botId)
 
   return { flowsAdded, publishedNames, draftNames, intentsAdded, faqsAdded }
 }
@@ -211,6 +213,7 @@ export async function removeStarterPack(tenantId: string, botId: string, pack: S
     faqIds.length > 0 ? prisma.faq.deleteMany({ where: { tenantId, botId, id: { in: faqIds } } }) : Promise.resolve({ count: 0 }),
     intentIds.length > 0 ? prisma.intent.deleteMany({ where: { tenantId, botId, id: { in: intentIds } } }) : Promise.resolve({ count: 0 }),
   ])
+  if (removedFaqs.count) await syncFaqKnowledge(tenantId, botId)
   return {
     flowsRemoved: selected.flows.map((flow) => flow.name),
     intentsRemoved: removedIntents.count,

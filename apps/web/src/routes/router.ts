@@ -30,7 +30,7 @@ import { FaqsPage } from '../pages/build/knowledge/Faqs'
 import { SourcesPage } from '../pages/build/knowledge/Sources'
 import { DocumentsPage } from '../pages/build/knowledge/Documents'
 import { SearchTestPage } from '../pages/build/knowledge/SearchTest'
-import { TrainingPage } from '../pages/build/knowledge/Training'
+import { BotSettingsPage } from '../pages/build/BotSettings'
 import { ChatsPage } from '../pages/inbox/Chats'
 import { TicketsPage } from '../pages/inbox/Tickets'
 import { ContactsPage } from '../pages/inbox/Contacts'
@@ -127,7 +127,7 @@ const overviewRoute = createRoute({
 // ── Build ─────────────────────────────────────────────────────────────────────
 /** Journey filters live in the URL so a shared link opens the same counts. */
 interface JourneySearch {
-  lens?: 'traffic' | 'health'
+  lens?: 'traffic' | 'health' | 'learn'
   env?: 'production' | 'sandbox'
   tests?: 'hide'
 }
@@ -135,7 +135,7 @@ const journeyRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/build/journey',
   validateSearch: (search: Record<string, unknown>): JourneySearch => ({
-    ...(search.lens === 'traffic' || search.lens === 'health' ? { lens: search.lens } : {}),
+    ...(search.lens === 'traffic' || search.lens === 'health' || search.lens === 'learn' ? { lens: search.lens } : {}),
     ...(search.env === 'sandbox' || search.env === 'production' ? { env: search.env } : {}),
     ...(search.tests === 'hide' ? { tests: 'hide' as const } : {}),
   }),
@@ -163,7 +163,8 @@ const faqsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/kn
 const sourcesRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/sources', component: SourcesPage })
 const documentsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/documents', validateSearch: (search: Record<string, unknown>): { doc?: string } => (typeof search['doc'] === 'string' && search['doc'] ? { doc: search['doc'] } : {}), component: DocumentsPage })
 const searchTestRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/search', component: SearchTestPage })
-const trainingRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/training', component: TrainingPage })
+const trainingRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/knowledge/training', beforeLoad: () => { throw redirect({ to: '/build/settings' }) }, component: () => null })
+const botSettingsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/settings', component: BotSettingsPage })
 
 // ── Inbox ─────────────────────────────────────────────────────────────────────
 const chatsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/chats', component: ChatsPage })
@@ -223,6 +224,7 @@ const routeTree = rootRoute.addChildren([
     faqsRoute,
     sourcesRoute,
     trainingRoute,
+    botSettingsRoute,
     documentsRoute,
     searchTestRoute,
     knowledgeRedirectRoute,

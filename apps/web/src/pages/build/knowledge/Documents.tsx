@@ -3,8 +3,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { FileText, RefreshCw, X, AlertTriangle, CheckCircle2, Search } from 'lucide-react'
 import { Badge, Button, Card, EmptyState, Skeleton } from '@ybot/ui'
 import type { QualityLevel } from '@ybot/shared'
-import { SubNav } from '../../../components/SubNav'
-import { KNOWLEDGE_SUBNAV } from './subnav'
+import { KnowledgeSubNav } from './subnav'
 import { useDocumentChunks, useKnowledgeDocuments } from '../../../lib/hooks'
 import type { KnowledgeDocument } from '../../../lib/api'
 import { filterDocuments, levelCounts, type DocumentFilter } from '../../../lib/knowledge-view'
@@ -100,7 +99,7 @@ export function DocumentsPage() {
           <h1 className="text-base font-semibold text-[var(--text-primary)]">Knowledge</h1>
           <Link to="/build/knowledge/search" className="flex items-center gap-1 text-sm font-medium text-[var(--accent)]"><Search size={13} /> Search & Test</Link>
         </div>
-        <SubNav items={KNOWLEDGE_SUBNAV} />
+        <KnowledgeSubNav />
       </div>
 
       <div className="flex min-h-0 flex-1">

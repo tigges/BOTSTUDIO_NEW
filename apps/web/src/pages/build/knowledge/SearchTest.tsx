@@ -2,8 +2,7 @@ import React from 'react'
 import { Link } from '@tanstack/react-router'
 import { Search, Loader2, AlertTriangle, ChevronDown, ChevronRight, Building2 } from 'lucide-react'
 import { Badge, Button, Card } from '@ybot/ui'
-import { SubNav } from '../../../components/SubNav'
-import { KNOWLEDGE_SUBNAV } from './subnav'
+import { KnowledgeSubNav } from './subnav'
 import { useSearchTest } from '../../../lib/hooks'
 import type { EngineState, SearchMode, SearchTestReport } from '../../../lib/api'
 import { clampTopK, highlightParts } from '../../../lib/knowledge-view'
@@ -95,7 +94,7 @@ export function SearchTestPage() {
         <div className="flex items-center justify-between px-6 pt-4 pb-0">
           <h1 className="text-base font-semibold text-[var(--text-primary)]">Knowledge</h1>
         </div>
-        <SubNav items={KNOWLEDGE_SUBNAV} />
+        <KnowledgeSubNav />
       </div>
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-4xl space-y-4">

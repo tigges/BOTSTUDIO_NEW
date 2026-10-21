@@ -27,7 +27,7 @@ type AuditAction =
   | 'settings.updated' | 'api_key.created' | 'api_key.revoked'
   | 'knowledge.synced' | 'contact.deleted'
   | 'automation.alert' | 'automation.label_added'
-  | 'training.run'
+  | 'bot.settings_changed'
 
 type AuditSeverity = 'info' | 'warning' | 'success' | 'error'
 
@@ -74,7 +74,7 @@ const ACTION_CFG: Record<AuditAction, ActionConfig> = {
   'contact.deleted':      { icon: <Trash2 size={12} />,       label: 'Contact deleted',        category: 'Inbox' },
   'automation.alert':     { icon: <Bell size={12} />,         label: 'Automation alert',       category: 'Automation' },
   'automation.label_added': { icon: <Tag size={12} />,        label: 'Label added',            category: 'Automation' },
-  'training.run':         { icon: <RefreshCw size={12} />,    label: 'Training run',           category: 'Build' },
+  'bot.settings_changed': { icon: <Settings size={12} />,     label: 'Bot settings changed',   category: 'Bot' },
 }
 
 const SEVERITY_VARIANT: Record<AuditSeverity, 'info' | 'success' | 'warning' | 'error'> = {
