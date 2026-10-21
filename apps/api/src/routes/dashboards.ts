@@ -11,6 +11,7 @@ import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { z } from 'zod'
+import { ANALYTICS_METRICS } from '@ybot/shared'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -39,6 +40,7 @@ export async function dashboardsRoutes(app: FastifyInstance) {
       pinned:  z.boolean().default(false),
       tags:    z.array(z.string()).default([]),
       author:  z.string().optional(),
+      widgets: z.array(z.object({ title: z.string().min(1), metric: z.enum(ANALYTICS_METRICS) })).max(12).default([]),
     }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
     const dashboard = await prisma.dashboard.create({
@@ -47,7 +49,9 @@ export async function dashboardsRoutes(app: FastifyInstance) {
         layout: body.data.layout as never,
         tenantId,
         botId,
+        widgets: { create: body.data.widgets.map((w) => ({ tenantId, kind: 'metric', title: w.title, config: { metric: w.metric } })) },
       },
+      include: { widgets: true },
     })
     return reply.status(201).send({ data: dashboard })
   })
