@@ -1,8 +1,8 @@
 /**
  * Who closes a chat.
  *
- * The bot resolves every chat unless the bot has opening hours for live agents.
- * Without opening hours nobody watches the queue, so a handover stays with the bot.
+ * The bot resolves every chat unless live support is on and the team is in.
+ * Otherwise nobody watches the queue, so a handover stays with the bot.
  * A chat the bot finishes, or one where the guest goes quiet after the bot's reply,
  * is resolved by the bot. Chats a person holds are never closed here.
  *
@@ -11,7 +11,7 @@
  */
 
 import { prisma } from '@botstudio/db'
-import { parseInboxPolicy } from './sla.js'
+import { liveSupportNow, parseInboxPolicy, type LiveSupportNow } from './sla.js'
 
 export const QUIET_MINUTES = 30
 
@@ -22,19 +22,27 @@ export const NO_TEAM_LINE = 'The team is not on chat, so I will keep helping her
 
 const HANDOVER_PROMISE = /\b(?:passing|handing|hand) (?:this|the|you|your) (?:chat|conversation)\b|\bsomeone will continue here\b|\bwill pick up (?:the|this) chat\b|\bconnecting you (?:to|with)\b/i
 
-/** True once someone saved opening hours for live agents on this bot. */
-export function hasLiveAgentHours(inboxConfig: unknown): boolean {
-  return parseInboxPolicy(inboxConfig).workingHours.enabled
+/** True when live support is switched on and, if it follows opening hours, the team is in now. */
+export function hasLiveAgents(inboxConfig: unknown, now = new Date()): boolean {
+  return liveSupportNow(parseInboxPolicy(inboxConfig), now).available
+}
+
+/** What the bot says when a chat would go to a person and nobody can take it. */
+export function noTeamLine(live: Pick<LiveSupportNow, 'state' | 'hours'>): string {
+  if (live.state === 'closed' && live.hours) {
+    return `The team is on chat ${live.hours}, so I will keep helping here for now. What do you need help with?`
+  }
+  return NO_TEAM_LINE
 }
 
 /** Drops "I am passing this chat to the team" sentences and closes with the no-team line. */
-export function keepWithBot(lines: string[]): string[] {
+export function keepWithBot(lines: string[], closing = NO_TEAM_LINE): string[] {
   const kept = lines.flatMap((line) => {
     const sentences = line.match(/[^.!?]+[.!?]*\s*/g) ?? [line]
     const left = sentences.filter((sentence) => !HANDOVER_PROMISE.test(sentence)).join('').trim()
     return left ? [left] : []
   })
-  return [...kept, NO_TEAM_LINE]
+  return [...kept, closing]
 }
 
 /**

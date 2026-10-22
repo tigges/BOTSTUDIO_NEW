@@ -141,7 +141,7 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
     const said = lines.filter((line) => line.trim())
     if (!rules.liveAgents) {
       await ports.noTeam(input.conversationId)
-      return reply(keepWithBot(said).join('\n\n'), { ended: false, path: source === 'journey' ? 'journey' : 'none' }, false)
+      return reply(keepWithBot(said, rules.noTeamLine).join('\n\n'), { ended: false, path: source === 'journey' ? 'journey' : 'none' }, false)
     }
     await ports.handOver(input, request, source)
     return reply(said.length ? said.join('\n\n') : HANDOVER_LINE, { ended: false, path: 'handover' }, false)

@@ -349,7 +349,31 @@ export function useSaveInboxConfig() {
   const qc = useQueryClient(); const bid = botId()
   return useMutation({
     mutationFn: (config: Record<string, unknown>) => api.knowledge.inboxConfig.update(bid, config),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['inbox-config', bid] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inbox-config', bid] })
+      qc.invalidateQueries({ queryKey: ['live-support', bid] })
+    },
+  })
+}
+
+export function useLiveSupport() {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['live-support', bid],
+    queryFn: () => api.liveSupport.get(bid).then((r) => r.data),
+    enabled: !!bid && bid !== 'demo' && !isDemoMode(),
+    refetchInterval: 60_000,
+  })
+}
+
+export function useSaveLiveSupport() {
+  const qc = useQueryClient(); const bid = botId()
+  return useMutation({
+    mutationFn: (change: api.LiveSupportChange) => api.liveSupport.update(bid, change).then((r) => r.data),
+    onSuccess: (data) => {
+      qc.setQueryData(['live-support', bid], data)
+      qc.invalidateQueries({ queryKey: ['inbox-config', bid] })
+    },
   })
 }
 

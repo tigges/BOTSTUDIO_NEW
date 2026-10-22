@@ -12,6 +12,7 @@ import { BUSINESS_SOURCE_KIND } from '../lib/install-blueprint.js'
 import { FAQ_SOURCE_KIND, syncFaqKnowledge } from '../lib/faq-knowledge.js'
 import { documentQuality, textStats } from '@botstudio/shared'
 import { SEARCH_MODES, documentChunks, listDocuments, runSearchTest } from '../lib/knowledge-search-test.js'
+import { keepLiveSupportSwitch } from '../lib/live-support.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -271,23 +272,30 @@ export async function knowledgeRoutes(app: FastifyInstance) {
   })
 
   // GET/PATCH /:botId/inbox-config — inbox operational settings
-  app.get('/:botId/inbox-config', async (request) => {
+  app.get('/:botId/inbox-config', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { botId } = request.params as { botId: string }
+    const bot = await prisma.bot.findFirst({ where: { id: botId, tenantId }, select: { id: true } })
+    if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
     const cfg = await prisma.botConfig.findUnique({ where: { botId } })
     return { data: (cfg?.inboxConfig as object) ?? {} }
   })
 
   app.patch('/:botId/inbox-config', async (request, reply) => {
-    const { tenantId } = request.user as JWT
+    const { tenantId, sub } = request.user as JWT
     const { botId } = request.params as { botId: string }
     const body = z.record(z.any()).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION' } })
+    const bot = await prisma.bot.findFirst({ where: { id: botId, tenantId }, select: { id: true } })
+    if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
+    const before = await prisma.botConfig.findUnique({ where: { botId }, select: { inboxConfig: true } })
+    const inboxConfig = keepLiveSupportSwitch(before?.inboxConfig, body.data)
     const cfg = await prisma.botConfig.upsert({
       where: { botId },
-      create: { tenantId, botId, model: DEFAULT_MODELS.anthropic, temperature: 0.3, maxTokens: 2048, systemPrompt: 'You are a helpful assistant.', inboxConfig: body.data },
-      update: { inboxConfig: body.data },
+      create: { tenantId, botId, model: DEFAULT_MODELS.anthropic, temperature: 0.3, maxTokens: 2048, systemPrompt: 'You are a helpful assistant.', inboxConfig },
+      update: { inboxConfig },
     })
+    await prisma.activity.create({ data: { tenantId, userId: sub, action: 'inbox_settings.updated', resource: 'bot', resourceId: botId } }).catch(() => {})
     return { data: cfg.inboxConfig }
   })
 }

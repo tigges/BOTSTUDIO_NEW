@@ -2,7 +2,8 @@
  * SLA clocks and working-hours away replies.
  *
  * Targets live in BotConfig.inboxConfig:
- *   { sla: { first_response, resolution }, workingHours: { start, end, timezone, awayMessage }, alwaysHuman: string[] }
+ *   { sla: { first_response, resolution }, workingHours: { start, end, timezone, days, awayMessage },
+ *     liveSupport: { enabled }, alwaysHuman: string[] }
  *
  * First response is met by the first outbound reply (bot, agent, or the away message).
  * Resolution is met when the conversation is resolved or closed before resolutionDueAt.
@@ -17,18 +18,29 @@ import { triggerRules } from './automation-engine.js'
 export const DEFAULT_AWAY_MESSAGE =
   "Thanks for your message. We're currently outside our working hours and will reply when the team is back."
 
+export const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6] as const
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
 export interface WorkingHours {
   /** False until someone limits the queue. The bot answers either way. */
   enabled: boolean
   start: string
   end: string
   timezone: string
+  /** Open days, 0 = Sunday. */
+  days: number[]
   awayMessage: string
 }
 
 export interface InboxPolicy {
   sla: { firstResponseHours: number; resolutionHours: number }
   workingHours: WorkingHours
+  /**
+   * The one switch for handing chats to people. Off means the bot keeps every chat.
+   * On with working hours means people take chats only inside those hours.
+   * Saved settings without the switch keep their old meaning: on once hours were saved.
+   */
+  liveSupport: { enabled: boolean }
   /** Words and phrases that always send the chat to a person, ahead of any journey. */
   alwaysHuman: string[]
 }
@@ -40,9 +52,21 @@ export const DEFAULT_POLICY: InboxPolicy = {
     start: '09:00',
     end: '18:00',
     timezone: 'Europe/London',
+    days: [...ALL_DAYS],
     awayMessage: DEFAULT_AWAY_MESSAGE,
   },
+  liveSupport: { enabled: false },
   alwaysHuman: [],
+}
+
+export type LiveSupportState = 'off' | 'closed' | 'open'
+
+export interface LiveSupportNow {
+  /** True when a chat handed over now reaches a person in the Inbox. */
+  available: boolean
+  state: LiveSupportState
+  /** "Mon-Fri 09:00-18:00 (Europe/London)" when hours limit live support. */
+  hours: string | null
 }
 
 export interface SlaSnapshot {
@@ -72,6 +96,7 @@ export function parseInboxPolicy(raw: unknown): InboxPolicy {
   const start = clock(hours['start'])
   const end = clock(hours['end'])
   const enabled = hours['enabled'] === false ? false : start != null && end != null
+  const live = cfg['liveSupport'] && typeof cfg['liveSupport'] === 'object' ? cfg['liveSupport'] as Record<string, unknown> : null
   return {
     sla: {
       firstResponseHours: positiveHours(sla['first_response'], DEFAULT_POLICY.sla.firstResponseHours),
@@ -82,8 +107,10 @@ export function parseInboxPolicy(raw: unknown): InboxPolicy {
       start: start ?? DEFAULT_POLICY.workingHours.start,
       end: end ?? DEFAULT_POLICY.workingHours.end,
       timezone: typeof hours['timezone'] === 'string' && hours['timezone'] ? hours['timezone'] : DEFAULT_POLICY.workingHours.timezone,
+      days: parseDays(hours['days']),
       awayMessage: away,
     },
+    liveSupport: { enabled: live && typeof live['enabled'] === 'boolean' ? live['enabled'] : enabled },
     alwaysHuman: handoverList(cfg['alwaysHuman']).slice(0, 100),
   }
 }
@@ -92,10 +119,50 @@ export function isWithinWorkingHours(hours: WorkingHours, now: Date): boolean {
   if (!hours.enabled) return true
   const start = clockMinutes(hours.start)
   const end = clockMinutes(hours.end)
-  if (start == null || end == null || start === end) return true
-  const nowMinutes = zonedMinutes(now, hours.timezone)
-  if (start < end) return nowMinutes >= start && nowMinutes < end
-  return nowMinutes >= start || nowMinutes < end
+  const days: readonly number[] = hours.days?.length ? hours.days : ALL_DAYS
+  const { minutes, weekday } = zonedClock(now, hours.timezone)
+  if (start == null || end == null || start === end) return days.includes(weekday)
+  if (start < end) return days.includes(weekday) && minutes >= start && minutes < end
+  // An overnight window belongs to the day it opened on.
+  if (minutes >= start) return days.includes(weekday)
+  if (minutes < end) return days.includes((weekday + 6) % 7)
+  return false
+}
+
+/** Whether a chat handed over right now reaches a person. */
+export function liveSupportNow(policy: InboxPolicy, now: Date): LiveSupportNow {
+  if (!policy.liveSupport.enabled) return { available: false, state: 'off', hours: null }
+  if (!policy.workingHours.enabled) return { available: true, state: 'open', hours: null }
+  const hours = hoursText(policy.workingHours)
+  return isWithinWorkingHours(policy.workingHours, now)
+    ? { available: true, state: 'open', hours }
+    : { available: false, state: 'closed', hours }
+}
+
+/** "Mon-Fri 09:00-18:00 (Europe/London)". */
+export function hoursText(hours: WorkingHours): string {
+  return `${daysText(hours.days)} ${hours.start}-${hours.end} (${hours.timezone})`
+}
+
+function daysText(days: number[]): string {
+  const sorted = [...new Set(days)].filter((d) => d >= 0 && d <= 6).sort((a, b) => a - b)
+  if (sorted.length === 0 || sorted.length === 7) return 'Every day'
+  // Runs read Monday first, so Sunday sorts last.
+  const order = sorted.map((d) => (d + 6) % 7).sort((a, b) => a - b)
+  const runs: Array<[number, number]> = []
+  for (const d of order) {
+    const last = runs[runs.length - 1]
+    if (last && d === last[1] + 1) last[1] = d
+    else runs.push([d, d])
+  }
+  const name = (d: number) => DAY_NAMES[(d + 1) % 7]
+  return runs.map(([a, b]) => a === b ? name(a) : b === a + 1 ? `${name(a)}, ${name(b)}` : `${name(a)}-${name(b)}`).join(', ')
+}
+
+function parseDays(value: unknown): number[] {
+  if (!Array.isArray(value)) return [...ALL_DAYS]
+  const days = [...new Set(value.map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b)
+  return days.length ? days : [...ALL_DAYS]
 }
 
 export function slaLabel(input: {
@@ -245,19 +312,21 @@ function clockMinutes(value: string): number | null {
   return hour * 60 + minute
 }
 
-function zonedMinutes(now: Date, timeZone: string): number {
+function zonedClock(now: Date, timeZone: string): { minutes: number; weekday: number } {
   try {
     const parts = new Intl.DateTimeFormat('en-GB', {
       timeZone,
+      weekday: 'short',
       hour: '2-digit',
       minute: '2-digit',
       hourCycle: 'h23',
     }).formatToParts(now)
     const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0')
     const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0')
-    return ((hour === 24 ? 0 : hour) * 60) + minute
+    const weekday = DAY_NAMES.indexOf(parts.find((p) => p.type === 'weekday')?.value ?? '')
+    return { minutes: ((hour === 24 ? 0 : hour) * 60) + minute, weekday: weekday >= 0 ? weekday : now.getUTCDay() }
   } catch {
-    return now.getUTCHours() * 60 + now.getUTCMinutes()
+    return { minutes: now.getUTCHours() * 60 + now.getUTCMinutes(), weekday: now.getUTCDay() }
   }
 }
 

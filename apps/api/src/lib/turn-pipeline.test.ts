@@ -21,6 +21,7 @@ function fake(overrides: {
   nameQuestion?: boolean
   held?: boolean
   liveAgents?: boolean
+  noTeamLine?: string
   alwaysHuman?: string[]
   rules?: GuardrailRule[]
   privacy?: PrivacySettings
@@ -33,7 +34,7 @@ function fake(overrides: {
     async safety() { return { rules: overrides.rules ?? [], privacy: overrides.privacy ?? DEFAULT_PRIVACY } },
     async saveInbound(input) { log.push(`in:${input.text}${input.guardrails?.length ? ` [${input.guardrails.map((hit) => hit.action).join(',')}]` : ''}`) },
     async held() { return overrides.held ?? false },
-    async handoverRules() { return { liveAgents: overrides.liveAgents ?? true, alwaysHuman: overrides.alwaysHuman ?? [] } },
+    async handoverRules() { return { liveAgents: overrides.liveAgents ?? true, alwaysHuman: overrides.alwaysHuman ?? [], noTeamLine: overrides.noTeamLine } },
     async handOver(_input, request, source) {
       log.push(`handover:${source}`)
       handovers.push({ request, source })
@@ -186,7 +187,7 @@ test('a journey handover passes the step contract on and keeps the journey line'
   assert.equal(result.path, 'handover')
 })
 
-test('without opening hours for people the bot keeps the chat and says so', async () => {
+test('with live support off the bot keeps the chat and says so', async () => {
   const request = handoverFromConfig({ team: 'support' })
   for (const f of [
     fake({ liveAgents: false, journey: { handled: true, messages: ['I am passing this chat to the team. Someone will continue here.'], handover: request } }),
@@ -198,6 +199,14 @@ test('without opening hours for people the bot keeps the chat and says so', asyn
     assert.equal(result.text, NO_TEAM_LINE)
     assert.equal(withPerson(result), false)
   }
+})
+
+test('outside opening hours the bot says when the team is on chat', async () => {
+  const closed = 'The team is on chat Mon-Fri 09:00-18:00 (Europe/London), so I will keep helping here for now. What do you need help with?'
+  const f = fake({ liveAgents: false, noTeamLine: closed, alwaysHuman: ['refund'] })
+  const result = await runTurnWith(f.ports, input({ text: 'I want a refund' }))
+  assert.equal(f.handovers.length, 0)
+  assert.equal(result.text, closed)
 })
 
 const rule = (partial: Partial<GuardrailRule>): GuardrailRule => newGuardrailRule({ id: partial.name ?? 'r', name: 'Rule', ...partial })

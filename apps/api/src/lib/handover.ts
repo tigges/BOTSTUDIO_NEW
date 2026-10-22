@@ -3,7 +3,7 @@
  *
  * The chat itself is the task: the contract is saved on the conversation and the
  * Inbox shows it in the chat header. While a person holds a chat the bot stays quiet.
- * Opening hours decide whether anyone is there to take it (see chat-outcome.ts).
+ * The live-support switch and its opening hours decide whether anyone is there to take it (see sla.ts).
  */
 
 import { prisma } from '@botstudio/db'
@@ -16,10 +16,10 @@ import {
 } from '@botstudio/shared'
 import { dispatchWebhookEvent } from '../queues.js'
 import { triggerRules } from './automation-engine.js'
-import { hasLiveAgentHours } from './chat-outcome.js'
+import { noTeamLine } from './chat-outcome.js'
 import { sendChannelReply } from './channel-outbound.js'
 import { loadPrivacy, renderDeepFor, renderFor } from './privacy.js'
-import { parseInboxPolicy } from './sla.js'
+import { liveSupportNow, parseInboxPolicy } from './sla.js'
 
 export const HANDOVER_LINE = 'I am passing this chat to the team. Someone will continue here.'
 
@@ -29,14 +29,19 @@ const PUSH_CHANNELS = new Set(['whatsapp', 'telegram', 'sms', 'email'])
 export interface HandoverRules {
   liveAgents: boolean
   alwaysHuman: string[]
+  /** What the bot says instead of handing over when nobody can take the chat. */
+  noTeamLine?: string
 }
 
-export async function handoverRulesFor(botId: string): Promise<HandoverRules> {
+export async function handoverRulesFor(botId: string, now = new Date()): Promise<HandoverRules> {
   const cfg = await prisma.botConfig.findUnique({ where: { botId }, select: { inboxConfig: true } }).catch(() => null)
-  return {
-    liveAgents: hasLiveAgentHours(cfg?.inboxConfig),
-    alwaysHuman: parseInboxPolicy(cfg?.inboxConfig).alwaysHuman,
-  }
+  return handoverRulesFrom(cfg?.inboxConfig, now)
+}
+
+export function handoverRulesFrom(inboxConfig: unknown, now = new Date()): HandoverRules {
+  const policy = parseInboxPolicy(inboxConfig)
+  const live = liveSupportNow(policy, now)
+  return { liveAgents: live.available, alwaysHuman: policy.alwaysHuman, noTeamLine: noTeamLine(live) }
 }
 
 /** A person holds an open chat once it is escalated or someone is assigned. A closed chat is nobody's. */

@@ -1,12 +1,27 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { CHAT_OUTCOMES, NO_TEAM_LINE, QUIET_CHATS_SQL, hasLiveAgentHours, keepWithBot, outcomeAfterStatus } from './chat-outcome.js'
+import { CHAT_OUTCOMES, NO_TEAM_LINE, QUIET_CHATS_SQL, hasLiveAgents, keepWithBot, noTeamLine, outcomeAfterStatus } from './chat-outcome.js'
 
-test('only saved opening hours put live agents on the chat', () => {
-  assert.equal(hasLiveAgentHours({}), false)
-  assert.equal(hasLiveAgentHours(null), false)
-  assert.equal(hasLiveAgentHours({ workingHours: { start: '09:00', end: '18:00', timezone: 'Europe/London' } }), true)
-  assert.equal(hasLiveAgentHours({ workingHours: { start: '09:00', end: '18:00', enabled: false } }), false)
+const tuesdayNoon = new Date('2026-09-22T11:00:00Z')
+const tuesdayNight = new Date('2026-09-22T21:00:00Z')
+
+test('live agents are on the chat only when live support is on and the team is in', () => {
+  assert.equal(hasLiveAgents({}, tuesdayNoon), false)
+  assert.equal(hasLiveAgents(null, tuesdayNoon), false)
+  const hours = { start: '09:00', end: '18:00', timezone: 'Europe/London' }
+  assert.equal(hasLiveAgents({ workingHours: hours }, tuesdayNoon), true)
+  assert.equal(hasLiveAgents({ workingHours: hours }, tuesdayNight), false)
+  assert.equal(hasLiveAgents({ workingHours: { ...hours, enabled: false } }, tuesdayNoon), false)
+  assert.equal(hasLiveAgents({ workingHours: hours, liveSupport: { enabled: false } }, tuesdayNoon), false)
+  assert.equal(hasLiveAgents({ workingHours: { ...hours, enabled: false }, liveSupport: { enabled: true } }, tuesdayNight), true)
+})
+
+test('outside the hours the bot says when the team is back', () => {
+  assert.equal(noTeamLine({ state: 'off', hours: null }), NO_TEAM_LINE)
+  const closed = noTeamLine({ state: 'closed', hours: 'Mon-Fri 09:00-18:00 (Europe/London)' })
+  assert.match(closed, /^The team is on chat Mon-Fri 09:00-18:00 \(Europe\/London\)/)
+  assert.equal((closed.match(/\?/g) ?? []).length, 1)
+  assert.deepEqual(keepWithBot(['I am passing this chat to the team.'], closed), [closed])
 })
 
 test('without opening hours the bot keeps the chat instead of promising a person', () => {

@@ -321,6 +321,24 @@ export const knowledge = {
   },
 }
 
+// ── Live support ──────────────────────────────────────────────────────────────
+export interface LiveSupport {
+  enabled: boolean
+  followHours: boolean
+  state: 'off' | 'closed' | 'open'
+  available: boolean
+  hours: string | null
+  schedule: { start: string; end: string; timezone: string; days: number[] }
+}
+
+export type LiveSupportChange = Partial<Pick<LiveSupport, 'enabled' | 'followHours'> & LiveSupport['schedule']>
+
+export const liveSupport = {
+  get: (botId: string) => apiFetch<{ data: LiveSupport }>(`/bots/${botId}/live-support`),
+  update: (botId: string, change: LiveSupportChange) =>
+    apiFetch<{ data: LiveSupport }>(`/bots/${botId}/live-support`, { method: 'PATCH', body: JSON.stringify(change) }),
+}
+
 // ── Conversations ─────────────────────────────────────────────────────────────
 export const conversations = {
   list: (params?: Record<string, string>) => apiFetch<{ data: Conversation[]; meta?: { testRunChats: number } }>(`/conversations?${new URLSearchParams(params ?? {})}`),
