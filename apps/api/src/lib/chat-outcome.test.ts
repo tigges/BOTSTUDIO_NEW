@@ -33,6 +33,20 @@ test('without opening hours the bot keeps the chat instead of promising a person
   assert.equal((NO_TEAM_LINE.match(/\?/g) ?? []).length, 1)
 })
 
+test('a promise that someone will reply is dropped too, in the wordings bots are written with', () => {
+  for (const line of [
+    "I'm passing this chat to our reception team. Someone will reply here.",
+    'Thanks. Someone will be with you shortly.',
+    'Our team will get back to you in this chat.',
+    "A colleague'll reply soon.",
+  ]) {
+    const kept = keepWithBot([line])
+    assert.equal(kept.at(-1), NO_TEAM_LINE, line)
+    assert.doesNotMatch(kept.join(' '), /someone|team will|colleague/i, line)
+  }
+  assert.deepEqual(keepWithBot(['The team will love your smile.']), ['The team will love your smile.', NO_TEAM_LINE])
+})
+
 test('the quiet-chat sweep only closes open chats nobody holds, and labels how each ended', () => {
   assert.match(QUIET_CHATS_SQL, /c\.status = 'active'/)
   assert.match(QUIET_CHATS_SQL, /c\."assignedTo" IS NULL/)

@@ -20,7 +20,7 @@ export type ChatOutcome = typeof CHAT_OUTCOMES[number]
 
 export const NO_TEAM_LINE = 'The team is not on chat, so I will keep helping here. What do you need help with?'
 
-const HANDOVER_PROMISE = /\b(?:passing|handing|hand) (?:this|the|you|your) (?:chat|conversation)\b|\bsomeone will continue here\b|\bwill pick up (?:the|this) chat\b|\bconnecting you (?:to|with)\b/i
+const HANDOVER_PROMISE = /\b(?:passing|handing|hand) (?:this|the|you|your) (?:chat|conversation)\b|\b(?:someone|somebody|a person|a colleague|the team|our team|a team member|reception|our receptionist)(?: will| is going to|'ll) (?:continue|reply|respond|answer|be with you|get back to you|join)\b|\bwill pick up (?:the|this) chat\b|\bconnecting you (?:to|with)\b/i
 
 /** True when live support is switched on and, if it follows opening hours, the team is in now. */
 export function hasLiveAgents(inboxConfig: unknown, now = new Date()): boolean {
