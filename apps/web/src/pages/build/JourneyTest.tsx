@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Loader2, RotateCcw, Send, ThumbsDown, ThumbsUp, X } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { ExternalLink, Loader2, RotateCcw, Send, ThumbsDown, ThumbsUp, X } from 'lucide-react'
 import { Avatar, Button, cn } from '@botstudio/ui'
 import type { FlowGraph } from '@botstudio/runtime'
 import type { StudioCatalog } from '@botstudio/shared'
 import { preview, type TestChatState } from '../../lib/api'
-import { joinNotes, testChatNote, testToolNote } from '../../lib/test-chat-format'
+import { joinNotes, teamReturnNote, testChatNote, testToolNote } from '../../lib/test-chat-format'
+import { useTeamReplies } from '../../lib/use-team-replies'
 import { ChatText } from '../../components/ChatText'
 
 export interface JourneyTestChapter {
@@ -24,10 +26,12 @@ interface ChatLine extends JourneyTestLine {
   id: string
   /** What happened beyond the bot's words (a handover, an outcome). Not part of the chat. */
   note?: boolean
+  /** Said by a person in the Inbox after a handover. */
+  team?: boolean
 }
 
 function chatLines(lines: ChatLine[]): JourneyTestLine[] {
-  return lines.filter((line) => !line.note).map((line) => ({ role: line.role, content: line.content, chapter: line.chapter }))
+  return lines.filter((line) => !line.note && !line.team).map((line) => ({ role: line.role, content: line.content, chapter: line.chapter }))
 }
 
 /**
@@ -70,6 +74,7 @@ export function JourneyTest({
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [currentChapter, setCurrentChapter] = useState(startChapter)
+  const [inboxChatId, setInboxChatId] = useState<string | null>(null)
   const stateRef = useRef<TestChatState | undefined>(undefined)
   const chaptersRef = useRef(chapters)
   const catalogRef = useRef(catalog)
@@ -100,8 +105,20 @@ export function JourneyTest({
     })
     const turn = result.data
     stateRef.current = turn.state
+    setInboxChatId(turn.state.inboxChatId ?? null)
     const note = joinNotes(testToolNote(turn.tools), testChatNote(state, turn.state, turn.path))
     return { ...turn, note: note ? [{ id: `n_${Date.now()}`, role: 'assistant' as const, content: note, note: true }] : [] }
+  }
+
+  useTeamReplies(botId, inboxChatId, {
+    onReply: (reply) => setMessages((prev) => [...prev, { id: `t_${reply.id}`, role: 'assistant', content: reply.text, team: true }]),
+    onReturn: (status) => setMessages((prev) => [...prev, { id: `r_${Date.now()}`, role: 'assistant', content: teamReturnNote(status), note: true }]),
+  })
+
+  function forget() {
+    stateRef.current = undefined
+    busyRef.current = false
+    setInboxChatId(null)
   }
 
   function botLine(path: string, text: string): string {
@@ -139,8 +156,7 @@ export function JourneyTest({
 
   useEffect(() => {
     let cancel = false
-    stateRef.current = undefined
-    busyRef.current = false
+    forget()
     setMessages([])
     setInput('')
     setChapter(startChapter)
@@ -173,8 +189,7 @@ export function JourneyTest({
     replaySeen.current = replayKey
     const lines = replayLines ?? []
     void (async () => {
-      stateRef.current = undefined
-      busyRef.current = false
+      forget()
       setMessages([])
       setChapter(startChapter)
       await turn('', true)
@@ -191,8 +206,7 @@ export function JourneyTest({
   }
 
   function reset() {
-    stateRef.current = undefined
-    busyRef.current = false
+    forget()
     setInput('')
     setMessages([])
     setChapter(startChapter)
@@ -282,7 +296,7 @@ export function JourneyTest({
           </p>
         ) : (
           <div key={line.id} className={cn('flex gap-2', line.role === 'user' ? 'justify-end' : 'justify-start')}>
-            {line.role === 'assistant' && <Avatar name={botName} src={avatarUrl} size="xs" className="mt-1 shrink-0" />}
+            {line.role === 'assistant' && <Avatar name={line.team ? 'Team' : botName} src={line.team ? null : avatarUrl} size="xs" className="mt-1 shrink-0" />}
             <div
               className={cn(
                 'max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed',
@@ -290,7 +304,9 @@ export function JourneyTest({
                   ? 'rounded-tr-sm bg-[var(--accent)] text-white'
                   : 'rounded-tl-sm border border-[var(--border)] bg-[var(--bg-overlay)] text-[var(--text-primary)]',
               )}
+              data-testid={line.team ? 'journey-test-team-line' : undefined}
             >
+              {line.team && <span className="mb-0.5 block text-[10px] font-medium text-[var(--text-muted)]">Team</span>}
               {line.content ? <ChatText text={line.content} /> : (loading && (
                 <span className="flex items-center gap-1.5 text-[var(--text-muted)]">
                   <Loader2 size={12} className="animate-spin" />
@@ -302,6 +318,14 @@ export function JourneyTest({
         ))}
         <div ref={endRef} />
       </div>
+      {inboxChatId && (
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-[var(--border)] px-4 py-2 text-[11px] text-[var(--text-muted)]" data-testid="journey-test-inbox">
+          <span>In the Inbox as a Sandbox chat</span>
+          <Link to="/inbox/chats" search={{ chat: inboxChatId }} target="_blank" className="inline-flex items-center gap-1 font-medium text-[var(--accent)]">
+            Open chat <ExternalLink size={11} />
+          </Link>
+        </div>
+      )}
       <div className="shrink-0 border-t border-[var(--border)] px-3 py-3">
         <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-base)] px-3 py-2 focus-within:border-[var(--accent)]">
           <input
@@ -324,7 +348,7 @@ export function JourneyTest({
           </Button>
         </div>
         <p className="mt-1.5 text-center text-[10px] text-[var(--text-muted)]">
-          {onVote ? `Thumbs rate ${currentChapter}. Runs like a live chat; nothing reaches the Inbox.` : 'Runs like a live chat from the welcome; nothing reaches the Inbox.'}
+          {onVote ? `Thumbs rate ${currentChapter}. Runs like a live chat; only a handover reaches the Inbox.` : 'Runs like a live chat from the welcome; only a handover reaches the Inbox.'}
         </p>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useSearch } from '@tanstack/react-router'
 import type { ReturnOutcome } from '@botstudio/shared'
 import {
   useAssignConversation, useCannedReplies, useConversation, useCreateConversation, useHandBackConversation,
@@ -34,6 +35,7 @@ export function ChatsPage() {
   const selectedBotId = useAppStore((s) => s.selectedBotId)
   const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((e) => e.kind === s.selectedEnv)?.id)
 
+  const linkedChat = (useSearch({ strict: false }) as { chat?: string }).chat
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
   const [sendError, setSendError] = useState<string | undefined>()
@@ -56,8 +58,9 @@ export function ChatsPage() {
   useEffect(() => {
     const pending = claimChat()
     if (pending) { setSelectedId(pending); return }
+    if (linkedChat && !selectedId) { setSelectedId(linkedChat); return }
     if (!selectedId && shown.length) setSelectedId(shown[0]!.id)
-  }, [shown, selectedId])
+  }, [shown, selectedId, linkedChat])
 
   useEffect(() => { setSendError(undefined); setHandBackError(undefined) }, [selectedId])
 

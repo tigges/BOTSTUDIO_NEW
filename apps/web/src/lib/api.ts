@@ -617,6 +617,9 @@ export const preview = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  /** The team's replies in the Sandbox chat a test handover opened, newer than `after`. */
+  inboxChat: (botId: string, conversationId: string, after?: string) =>
+    apiFetch<{ data: TestInboxChat }>(`/bots/${botId}/preview/inbox-chat/${conversationId}${after ? `?after=${encodeURIComponent(after)}` : ''}`),
   /** Returns the raw fetch Response so the caller can consume the SSE stream. */
   chatStream: (botId: string, body: {
     message: string
@@ -643,7 +646,15 @@ export interface TestChatState {
   status: 'active' | 'resolved' | 'escalated'
   outcome: string | null
   handover: Partial<HandoverContract> | null
+  /** The Sandbox chat in the Inbox once the test was handed to the team. */
+  inboxChatId?: string | null
   [key: string]: unknown
+}
+
+export interface TestInboxChat {
+  held: boolean
+  status: string
+  replies: Array<{ id: string; text: string; at: string }>
 }
 
 export type TestChatPath = 'journey' | 'name' | 'answer' | 'none' | 'held' | 'handover'
