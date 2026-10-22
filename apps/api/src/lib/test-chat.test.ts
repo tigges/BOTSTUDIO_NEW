@@ -658,7 +658,7 @@ test('a website bot greets, then asks what they need, without asking a name it n
     testTurn({ chapters, startChapter: pack.welcomeName, message, environmentLabel: 'Sandbox', state })
 
   const open = await turn('')
-  assert.equal(open.text, "Hi, I'm James at hubspot.")
+  assert.equal(open.text, "Hi, I'm James from hubspot.")
   const hi = await turn('hi', open.state)
   assert.equal(hi.text.includes("What's your name"), false)
   assert.match(hi.text, /^What do you need help with\?/)
@@ -881,7 +881,7 @@ test('a second question is left for the next turn', () => {
   assert.equal((kept.match(/\?/g) ?? []).length, 1)
   assert.match(kept, /What day works best for you\?/)
   assert.equal(kept.includes('stylist'), false)
-  assert.equal(keepFirstQuestion("Hi, I'm Bella at Bella Hair Studio."), "Hi, I'm Bella at Bella Hair Studio.")
+  assert.equal(keepFirstQuestion("Hi, I'm Bella from Bella Hair Studio."), "Hi, I'm Bella from Bella Hair Studio.")
   assert.equal(keepFirstQuestion('Have you been to us before?'), 'Have you been to us before?')
 })
 

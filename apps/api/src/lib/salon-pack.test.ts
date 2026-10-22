@@ -134,7 +134,7 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   const welcome = pack.flows.find((flow) => flow.name === SALON_WELCOME_NAME)!
   const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch, catalog: pack.catalog } as unknown as ExecutionServices)
   const graph = welcome.graph as unknown as FlowGraph
-  const greeting = "Hi, I'm Bella at Bella Hair Studio. What's your name?"
+  const greeting = "Hi, I'm Bella from Bella Hair Studio. What's your name?"
   const greetings = (welcome.graph as { nodes: Array<{ data?: { config?: Record<string, unknown> } }> }).nodes.filter((node) => {
     const text = `${node.data?.config?.['text'] ?? ''} ${node.data?.config?.['question'] ?? ''}`
     return text.includes("Hi, I'm Bella")
@@ -206,7 +206,7 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   const voiced = hairStudioPack('Rose Studio', 'Yuzu')
   assert.equal(
     welcomeGreeting(voiced.flows.find((flow) => flow.name === SALON_WELCOME_NAME)?.graph),
-    "Hi, I'm Yuzu at Rose Studio. What's your name?",
+    "Hi, I'm Yuzu from Rose Studio. What's your name?",
   )
 
   const pricesFlow = pack.flows.find((flow) => flow.name === 'Services and prices')!

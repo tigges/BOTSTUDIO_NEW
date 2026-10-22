@@ -44,7 +44,7 @@ test('the welcome greets, then asks one different question, and its router has a
   const nodes = welcome.graph.nodes as Array<{ id: string; data: { kind: string; config: Record<string, unknown> } }>
   const greeting = String(nodes.find((node) => node.id === 'hello')!.data.config['text'])
   const question = String(nodes.find((node) => node.id === 'ask')!.data.config['question'])
-  assert.equal(greeting, "Hi, I'm Nova at Harbour Dental.")
+  assert.equal(greeting, "Hi, I'm Nova from Harbour Dental.")
   assert.notEqual(greeting.toLowerCase(), question.toLowerCase())
   assert.equal((question.match(/\?/g) ?? []).length, 1)
   const edges = welcome.graph.edges as Array<{ source: string; sourceHandle?: string }>

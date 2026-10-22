@@ -52,6 +52,7 @@ import {
   readTopics,
   type VocabularyTerm,
 } from './extract.js'
+import { OPENING_QUESTION, introLine } from '../greeting-welcome.js'
 
 export const DENTAL_BLUEPRINT_ID = 'dental-practice'
 
@@ -436,19 +437,18 @@ function nextStep(prefix: string, x: number, y: number, question: string, doors:
 
 function welcomeChapter(profile: BusinessProfile, persona: string): StarterFlow {
   const name = profile.businessName || 'the practice'
-  const greeting = `Hi, I'm ${persona} at ${name}.`
-  const question = 'What can I help with: a booking, a dental problem, prices, or something else?'
+  const greeting = introLine(persona, name)
+  const question = OPENING_QUESTION
   const doors = [door('emergency'), door('prices'), door('book'), door('new-patients'), door('plans'), door('treatments'), door('hours'), door('change'), door('talk')]
   const routes = routesFor(doors)
   const jumps = doorJumps(doors, 'route', 1180, 0)
-  return chapter(C.welcome, `Greets the guest for ${name}, asks one question, and opens the chapter that fits. Two misses go to a person.`, [
+  return chapter(C.welcome, `Greets the guest for ${name}, asks what they need, and opens the chapter that fits. A miss gets the topics; it never goes to a person by itself.`, [
     n('start', 0, 120, 'trigger_start', 'Start'),
     n('keep', 220, 120, 'set_variable', 'Keep the request', { variable: 'topic', value: '{{_last_user_message}}' }),
     n('hello', 440, 120, 'send_message', 'Greeting', { text: greeting }),
     n('ask', 660, 120, 'ask_question', 'First question', { question, variable: 'request' }),
     n('route', 900, 120, 'route_topic', 'Route', { routes }),
-    n('again', 900, 520, 'ask_question', 'Ask again', { question: "Sorry, I didn't catch that. Is it a booking, tooth pain, prices, or something else?", variable: 'request' }),
-    n('route2', 1180, 900, 'route_topic', 'Route the second try', { routes }),
+    n('again', 900, 520, 'ask_question', 'Offer the topics', { question: 'I can help you with a booking, tooth pain, or prices. What would you like?', variable: 'request' }),
     ...jumps.nodes,
   ], [
     e('start', 'keep'),
@@ -456,10 +456,8 @@ function welcomeChapter(profile: BusinessProfile, persona: string): StarterFlow 
     e('hello', 'ask'),
     e('ask', 'route'),
     e('route', 'again', 'other'),
-    e('again', 'route2'),
+    e('again', 'route'),
     ...jumps.edges,
-    ...doors.map((item) => e('route2', `go-${item.handle}`, item.handle)),
-    e('route2', 'go-talk', 'other'),
   ], ['welcome', 'routing'])
 }
 
@@ -703,7 +701,7 @@ export function dentalEvals(profile: BusinessProfile): EvalScenario[] {
   const aligners = representativePrice(fees, vocabularyFor('Clear aligners'))
   const saturday = hours?.find((row) => row.day === 'sat')
   const scenarios: Array<EvalScenario | null> = [
-    { id: 'greets', name: 'Greets with the practice name and one question', turns: ['hello'], checks: [{ kind: 'says', text: name }, { kind: 'says', text: 'What can I help with' }] },
+    { id: 'greets', name: 'Greets with the practice name and one question', turns: ['hello'], checks: [{ kind: 'says', text: name }, { kind: 'says', text: OPENING_QUESTION }, { kind: 'says', text: 'I can help you with' }] },
     ...CONVERSATION_BASICS,
     { id: 'swollen-jaw', name: 'Swollen jaw goes straight to a person', turns: ['My jaw is swelling and it hurts to swallow'], checks: [{ kind: 'ends', ending: 'handed_over' }] },
     { id: 'knocked-out', name: 'Knocked-out tooth goes straight to a person', turns: ["My son's tooth got knocked out at football"], checks: [{ kind: 'ends', ending: 'handed_over' }] },

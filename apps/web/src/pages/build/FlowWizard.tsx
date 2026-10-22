@@ -60,7 +60,7 @@ export function FlowWizard({ open, existingNames, pending, error, onClose, onCre
 
   useEffect(() => {
     if (!open || greetingEdited || company === 'your company') return
-    setGreeting(`Hi, I'm the assistant at ${company}.`)
+    setGreeting(`Hi, I'm the assistant from ${company}.`)
   }, [open, company, greetingEdited])
 
   function reset() {
@@ -68,7 +68,7 @@ export function FlowWizard({ open, existingNames, pending, error, onClose, onCre
     setChoice('guided')
     setName('')
     setDescription('')
-    setGreeting(company === 'your company' ? "Hi, I'm the assistant." : `Hi, I'm the assistant at ${company}.`)
+    setGreeting(company === 'your company' ? "Hi, I'm the assistant." : `Hi, I'm the assistant from ${company}.`)
     setGreetingEdited(false)
     setQuestion("What's your name?")
     setHandoff(false)

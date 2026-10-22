@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { DENTAL_BLUEPRINT, DENTAL_CHAPTERS } from '@botstudio/shared'
 import { REFERENCE_CHATS, playReferenceChat, referenceJourney } from './dental-reference-chats.js'
+import { isFirstDentalWelcome } from './dental-reference.js'
 
 const journey = referenceJourney(DENTAL_BLUEPRINT.sample())
 const ids = { tenantId: 't', botId: 'harbour-dental-ref' }
@@ -28,4 +29,22 @@ test('the reference chats visit every chapter, so Journey Traffic has a count on
   }
   const missing = Object.values(DENTAL_CHAPTERS).filter((name) => !seen.has(name))
   assert.deepEqual(missing, [])
+})
+
+test('only the untouched first welcome is replaced on the reference bot', () => {
+  const first = {
+    nodes: [
+      { id: 'ask', data: { kind: 'ask_question', config: { question: 'What can I help with: a booking, a dental problem, prices, or something else?' } } },
+      { id: 'again', data: { kind: 'ask_question', config: { question: "Sorry, I didn't catch that. Is it a booking, tooth pain, prices, or something else?" } } },
+    ],
+    edges: [],
+  }
+  assert.equal(isFirstDentalWelcome(first), true)
+  const edited = { ...first, nodes: [first.nodes[0]] }
+  assert.equal(isFirstDentalWelcome(edited), false)
+  const current = DENTAL_BLUEPRINT.bundle(DENTAL_BLUEPRINT.sample()).flows.find((flow) => flow.name === DENTAL_CHAPTERS.welcome)!.graph
+  assert.equal(isFirstDentalWelcome(current), false)
+  assert.match(JSON.stringify(current), /Hi, I'm Nova from Harbour Dental\./)
+  assert.match(JSON.stringify(current), /What can I help you with today\?/)
+  assert.doesNotMatch(JSON.stringify(current), /didn't catch/)
 })

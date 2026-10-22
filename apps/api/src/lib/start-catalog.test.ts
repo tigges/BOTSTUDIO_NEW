@@ -146,14 +146,14 @@ test('the CRM pack speaks as Maya at the bot name, not a salon', async () => {
   assert.ok(pack)
   const blob = JSON.stringify(pack.flows)
   assert.equal(/Bella Hair Studio|\bBella\b/.test(blob), false)
-  assert.match(blob, /Maya at test/)
+  assert.match(blob, /Maya from test/)
   const welcome = pack.flows.find((flow) => flow.name === pack.welcomeName)!
   const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
   const graph = welcome.graph as unknown as FlowGraph
   const sales = await machine.run(session('sales pipeline'), graph, 'sales pipeline')
   assert.equal(sales.jumpToFlow, 'Sales')
   const hello = await machine.run(session('hi', 'there'), graph, 'hi')
-  assert.match(hello.newMessages.map((message) => message.content.text).join('\n'), /Maya at test/)
+  assert.match(hello.newMessages.map((message) => message.content.text).join('\n'), /Maya from test/)
   const names = pack.flows.map((flow) => flow.name)
   for (const flow of pack.flows) {
     const issues = inspectFlowGraph(flow.graph as Parameters<typeof inspectFlowGraph>[0], { flowNames: names })
@@ -191,14 +191,14 @@ test('crm and inbox packs keep a visual map of doors', () => {
   assert.ok(crm.doors.some((door) => door.title === 'Billing'))
   assert.ok(crm.doors.some((door) => /Free/.test(door.blurb) && /Starter/.test(door.blurb)))
   assert.ok(crm.doors.length >= 12)
-  assert.match(crm.greeting, /Maya at Northwind/)
+  assert.match(crm.greeting, /Maya from Northwind/)
   const inbox = startPreview({ start: 'inbox-assistant', companyName: 'Northwind' })
   assert.ok(inbox.doors.some((door) => /inbox/i.test(door.title)))
   assert.ok(inbox.doors.some((door) => /security/i.test(door.title)))
   assert.ok(inbox.doors.some((door) => door.title === 'Labels'))
   assert.ok(inbox.doors.some((door) => door.title === 'Filters'))
   assert.ok(inbox.doors.length >= 12)
-  assert.match(inbox.greeting, /Jules at Northwind/)
+  assert.match(inbox.greeting, /Jules from Northwind/)
   const software = startPreview({ start: 'product-support', companyName: 'Northwind' })
   assert.ok(software.doors.some((door) => door.title === 'Accounts'))
   assert.ok(software.doors.some((door) => door.title === 'Pricing'))
@@ -266,7 +266,7 @@ test('jobs from a model skip 404 names and still offer a person', () => {
   assert.ok(plans)
   assert.match(plans!.answer, /£26 a month/)
   assert.ok(spec.topics.some((topic) => topic.flowName === 'Talk to a person'))
-  assert.match(spec.greeting, /Voda at Vodafone/)
+  assert.match(spec.greeting, /Voda from Vodafone/)
 })
 
 test('model topic blurbs end on a sentence or an ellipsis, never a cut word and a full stop', () => {

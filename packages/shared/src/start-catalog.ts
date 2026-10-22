@@ -4,7 +4,7 @@
  * as a start path until we bring them back.
  */
 
-import { assistantGreeting } from './greeting-welcome.js'
+import { assistantGreeting, introLine } from './greeting-welcome.js'
 import { corporateServicesPack } from './corporate-pack.js'
 import { hairStudioPack, SALON_WELCOME_NAME } from './salon-pack.js'
 import {
@@ -532,7 +532,7 @@ function inboxTopics(company: string): SiteTopic[] {
 
 function packGreeting(start: BotStart, company: string, personaName?: string | null): string {
   const voice = voiceFor(start, personaName)
-  return voice ? `Hi, I'm ${voice} at ${company}.` : assistantGreeting(company)
+  return introLine(voice, company)
 }
 
 export function bakedPack(
@@ -605,7 +605,7 @@ export function startPreview(input: {
   }
   if (input.start === 'website') {
     return {
-      greeting: input.scanGreeting ?? (voice ? `Hi, I'm ${voice} at ${company}. What's your name?` : assistantGreeting(company)),
+      greeting: input.scanGreeting ?? (voice ? `${introLine(voice, company)} What's your name?` : assistantGreeting(company)),
       doors: input.scanDoors ?? [],
     }
   }
@@ -619,7 +619,7 @@ export function startPreview(input: {
     const pack = hairStudioPack(company, voice || undefined)
     const welcome = pack.flows.find((flow) => flow.name === SALON_WELCOME_NAME)
     return {
-      greeting: `Hi, I'm ${voice || 'Bella'} at ${company}. What's your name?`,
+      greeting: `${introLine(voice || 'Bella', company)} What's your name?`,
       doors: pack.intents.map((intent) => ({
         title: intent.name,
         flowName: intent.name,

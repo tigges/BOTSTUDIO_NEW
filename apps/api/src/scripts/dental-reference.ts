@@ -12,6 +12,7 @@
 import { prisma } from '@botstudio/db'
 import {
   DENTAL_BLUEPRINT,
+  DENTAL_CHAPTERS,
   HTTP_TOOL_DEFAULTS,
   personaAvatar,
   type BusinessProfile,
@@ -46,6 +47,7 @@ export async function ensureDentalReference(now = new Date()) {
   const profile: BusinessProfile = DENTAL_BLUEPRINT.sample()
   const journey = referenceJourney(profile)
   const created = await ensureBot(tenantId, profile)
+  const welcome = await ensureCurrentWelcome(tenantId, profile)
   const memory = await ensureMemory(tenantId)
   const evalRuns = await ensureEvalRuns(tenantId, journey, owner.id)
   const release = await ensureRelease(tenantId, journey, owner.id)
@@ -53,7 +55,36 @@ export async function ensureDentalReference(now = new Date()) {
   const tools = await ensureTools(tenantId, workflows.recallId, owner.id, now)
   const knowledge = await ensureKnowledge(tenantId)
   const chats = await ensureChats(tenantId, owner.id, journey, now)
-  return { status: 'ok', botId: DENTAL_REF_BOT_ID, created, memory, evalRuns, release, workflows: workflows.added, tools, knowledge, chats }
+  return { status: 'ok', botId: DENTAL_REF_BOT_ID, created, welcome, memory, evalRuns, release, workflows: workflows.added, tools, knowledge, chats }
+}
+
+/**
+ * The welcome as first installed asked a list question and handed over after two misses.
+ * While the saved welcome is still that untouched original, a new working-copy version
+ * replaces it with the blueprint's current welcome. Releases are left as they are.
+ */
+async function ensureCurrentWelcome(tenantId: string, profile: BusinessProfile): Promise<boolean> {
+  const flow = await prisma.flow.findFirst({ where: { botId: DENTAL_REF_BOT_ID, name: DENTAL_CHAPTERS.welcome }, select: { id: true } })
+  if (!flow) return false
+  const newest = await prisma.flowVersion.findFirst({ where: { flowId: flow.id }, orderBy: { version: 'desc' }, select: { version: true, graph: true } })
+  if (!newest || !isFirstDentalWelcome(newest.graph)) return false
+  const fresh = DENTAL_BLUEPRINT.bundle({ ...profile, personaName: DENTAL_BLUEPRINT.persona }).flows.find((item) => item.name === DENTAL_CHAPTERS.welcome)
+  if (!fresh) return false
+  await prisma.flowVersion.create({
+    data: { tenantId, flowId: flow.id, version: newest.version + 1, status: 'draft', graph: fresh.graph as object, variables: [] },
+  })
+  return true
+}
+
+const FIRST_WELCOME_LINES = [
+  'What can I help with: a booking, a dental problem, prices, or something else?',
+  "Sorry, I didn't catch that. Is it a booking, tooth pain, prices, or something else?",
+]
+
+/** Both original lines still there, so nobody has edited the welcome since it was installed. */
+export function isFirstDentalWelcome(graph: unknown): boolean {
+  const text = JSON.stringify(graph ?? {})
+  return FIRST_WELCOME_LINES.every((line) => text.includes(JSON.stringify(line).slice(1, -1)))
 }
 
 /** Returning patients are recognised by name; only set while nobody has configured memory for the bot. */

@@ -124,7 +124,7 @@ test('yuzu.hair stays on the authored salon walk, even if a model invents jobs',
     }),
   })
   assert.equal(draft.clusterId, 'hair')
-  assert.equal(draft.greeting, "Hi, I'm Bella at Yuzu. What's your name?")
+  assert.equal(draft.greeting, "Hi, I'm Bella from Yuzu. What's your name?")
   assert.deepEqual(draft.doors.map((door) => door.title), ['Where we are', 'Hours', 'Services', 'Book'])
   assert.equal(draft.doors.some((door) => /^plans?/i.test(door.flowName)), false)
   assert.match(draft.doors[0]!.answer, /5 Dickens Yard/)

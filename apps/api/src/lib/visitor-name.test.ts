@@ -35,12 +35,12 @@ test('an unknown visitor is not asked for a name the bot does not use', () => {
   assert.equal(again.metadata, undefined)
 
   const waiting = finishBotLines(
-    ["Hi, I'm Bella at Bella Hair Studio."],
+    ["Hi, I'm Bella from Bella Hair Studio."],
     { id: 'c', displayName: 'hi' },
     'there',
     { waiting: true },
   )
-  assert.deepEqual(waiting.lines, ["Hi, I'm Bella at Bella Hair Studio."])
+  assert.deepEqual(waiting.lines, ["Hi, I'm Bella from Bella Hair Studio."])
   assert.equal(waiting.metadata, undefined)
 })
 

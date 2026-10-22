@@ -5,6 +5,7 @@
  */
 
 import { NAME_QUESTION, usableContactName } from './contact-speech.js'
+import { introLine } from './greeting-welcome.js'
 
 export const LEARNING_TAG = 'learning'
 export const LEARNING_KEEPS = 'greeting first, one question after hi, a new chat starts with no remembered name.'
@@ -13,7 +14,7 @@ export const MIN_REPEAT = 3
 
 export const BELLA_SAMPLE = [
   'Visitor: Can I book a colour?',
-  "Bella: Hi, I'm Bella at Bella Hair Studio.",
+  "Bella: Hi, I'm Bella from Bella Hair Studio.",
   'Bella: I can book that.',
   "Bella: What's your name?",
   'Visitor: Sophie',
@@ -350,8 +351,7 @@ function greetingFrom(botLines: string[], company: string): string {
     if (UNSAFE.test(match[0]) || /@/.test(match[0])) continue
     return match[0]
   }
-  const companyName = company.trim() || 'the team'
-  return `Hi, I'm the assistant at ${companyName}.`
+  return introLine(null, company)
 }
 
 function shortenedLines(botLines: string[], names: string[], phrase: string): { ack: string; question: string | null } {

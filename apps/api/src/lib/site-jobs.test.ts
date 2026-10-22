@@ -141,7 +141,7 @@ test('a fenced JSON payload still becomes a plans chapter that can answer', asyn
 {"jobs":[{"name":"Plans","phrases":["plans","sim only"],"answer":"Unlimited data and EU roaming just £26 a month on a SIM only plan."}]}
 \`\`\``,
   })
-  assert.equal(draft.greeting, "Hi, I'm Voda at Vodafone.")
+  assert.equal(draft.greeting, "Hi, I'm Voda from Vodafone.")
   assert.match(draft.note, /assistant drafted the map/i)
   const plans = draft.doors.find((door) => /^plans?/i.test(door.flowName) || /^plans?/i.test(door.title))
   assert.ok(plans)
@@ -400,7 +400,7 @@ test('a hair studio keeps the authored salon walk even when a model replies', as
     }),
   })
   assert.equal(draft.clusterId, 'hair')
-  assert.equal(draft.greeting, "Hi, I'm Bella at Yuzu. What's your name?")
+  assert.equal(draft.greeting, "Hi, I'm Bella from Yuzu. What's your name?")
   assert.deepEqual(draft.doors.map((door) => door.title), ['Where we are', 'Hours', 'Services', 'Book'])
   assert.equal(draft.doors.some((door) => door.flowName === 'Invented'), false)
   assert.equal(/£\s*\d/.test(draft.doors[2]!.answer), false)

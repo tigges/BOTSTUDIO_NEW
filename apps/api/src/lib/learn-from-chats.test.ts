@@ -78,7 +78,7 @@ test('the Bella sample skips the menu and keeps the greeting rules', async () =>
   assert.ok(suggestion)
   assert.equal(suggestion.phrase, 'book a colour')
   assert.equal(suggestion.fromLabel, 'From 1 sample chat.')
-  assert.match(suggestion.preview[1]?.text ?? '', /Hi, I'm Bella at Bella Hair Studio/)
+  assert.match(suggestion.preview[1]?.text ?? '', /Hi, I'm Bella from Bella Hair Studio/)
   assert.match(suggestion.preview[1]?.text ?? '', /I can book that/)
   assert.match(suggestion.preview[1]?.text ?? '', /What's your name\?/)
   assert.equal((suggestion.preview[1]?.text.match(/\?/g) ?? []).length, 1)
@@ -107,7 +107,7 @@ test('the Bella sample skips the menu and keeps the greeting rules', async () =>
 test('a sample drops a payment link, a deposit, and the visitor name', () => {
   const text = [
     'Visitor: Can I book a colour?',
-    "Bella: Hi, I'm Bella at Bella Hair Studio.",
+    "Bella: Hi, I'm Bella from Bella Hair Studio.",
     'Bella: I can book that. Pay the £20 deposit at https://pay.example/deposit.',
     'Visitor: Sophie Turner',
     'Visitor: sophie@example.com',

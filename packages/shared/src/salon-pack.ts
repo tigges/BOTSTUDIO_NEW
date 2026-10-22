@@ -9,6 +9,7 @@
 import { bookAppointmentFlow } from './booking-walk.js'
 import type { CatalogFact, StudioCatalog } from './catalog.js'
 import type { StarterFlow } from './flow-templates.js'
+import { introLine } from './greeting-welcome.js'
 
 export const HAIR_STUDIO_PACK_ID = 'hair-studio'
 export const SALON_WELCOME_NAME = 'Salon welcome'
@@ -506,7 +507,7 @@ function phrasesForWelcome(topic: Topic, parked: Topic[]): string[] {
 function welcomeFlow(companyName: string, topics: Topic[], personaName?: string): StarterFlow {
   const company = companyLabel(companyName)
   const persona = personaName?.trim() || 'Bella'
-  const greeting = `Hi, I'm ${persona} at ${company}. What's your name?`
+  const greeting = `${introLine(persona, company)} What's your name?`
   const doors = WELCOME_DOORS.flatMap((name) => {
     const topic = topics.find((item) => item.flowName === name)
     return topic ? [topic] : []

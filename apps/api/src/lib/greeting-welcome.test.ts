@@ -43,21 +43,21 @@ test('a hi after the greeting asks the first question, never the name', async ()
 
   const hello = await machine.run(session('hi'), graph, 'hi')
   assert.equal(hello.session.status, 'waiting_input')
-  assert.equal(hello.newMessages.map((message) => message.content.text).join('\n'), "Hi, I'm the assistant at BotStudio.")
+  assert.equal(hello.newMessages.map((message) => message.content.text).join('\n'), "Hi, I'm the assistant from BotStudio.")
   const follow = await reply(machine, hello, graph, 'hi')
   assert.equal(follow.newMessages.map((message) => message.content.text).join('\n'), 'What would you like to know?')
   const plan = await reply(machine, follow, graph, 'pricing')
   assert.match(plan.newMessages.map((message) => message.content.text).join('\n'), /free plan/)
 
   const price = await machine.run(session('What is the pricing?'), graph, 'What is the pricing?')
-  assert.match(price.newMessages.map((message) => message.content.text).join('\n'), /Hi, I'm the assistant at BotStudio/)
+  assert.match(price.newMessages.map((message) => message.content.text).join('\n'), /Hi, I'm the assistant from BotStudio/)
   assert.match(price.newMessages.map((message) => message.content.text).join('\n'), /free plan/)
   assert.equal(price.session.status, 'completed')
 
   const shop = starterFlows('Acme Corp').find((flow) => flow.name === 'Welcome & Routing')!
   const shopGraph = shop.graph as unknown as FlowGraph
   const shopHello = await machine.run(session('hello'), shopGraph, 'hello')
-  assert.equal(shopHello.newMessages.map((message) => message.content.text).join('\n'), "Hi, I'm the assistant at Acme Corp.")
+  assert.equal(shopHello.newMessages.map((message) => message.content.text).join('\n'), "Hi, I'm the assistant from Acme Corp.")
   const shopNext = await reply(machine, shopHello, shopGraph, 'hi')
   assert.equal(shopNext.newMessages.map((message) => message.content.text).join('\n'), 'What do you need help with?')
 })

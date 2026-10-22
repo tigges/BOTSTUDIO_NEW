@@ -14,6 +14,7 @@ import { catalogLookupFlow, doorsForNextOffer, SALON_WELCOME_NAME } from './salo
 import type { StarterFlow } from './flow-templates.js'
 import { draftClusteredTemplate, isOpaqueStem, isStoryLeafPath, packFromLearned, suggestCluster, type ClusterId, type LearnedTemplateSpec } from './site-template.js'
 import { identityFor } from './start-catalog.js'
+import { introLine } from './greeting-welcome.js'
 
 export interface ScannedLink {
   href: string
@@ -251,7 +252,7 @@ function lookupDoor(name: string, id: string, intro: string, next: string): Star
 }
 
 function welcomeFlow(company: string, persona: string, doors: ScanDoor[]): StarterFlow {
-  const greeting = `Hi, I'm ${persona} at ${company}. What's your name?`
+  const greeting = `${introLine(persona, company)} What's your name?`
   const routes = doors.map((door) => ({
     handle: handleFor(door.flowName),
     phrases: door.phrases.length > 0 ? door.phrases : [door.flowName.toLowerCase()],
@@ -1356,7 +1357,7 @@ export function draftWebsiteChat(input: {
     careers,
   })
 
-  const greeting = `Hi, I'm ${persona} at ${company}. What's your name?`
+  const greeting = `${introLine(persona, company)} What's your name?`
   const flows = [
     welcomeFlow(company, persona, doors),
     ...doors.map((door) => {

@@ -8,7 +8,7 @@
  * say something new. The wizard is how a company reshapes a flow later.
  */
 
-import { assistantGreeting, greetingWelcomeGraph } from './greeting-welcome.js'
+import { greetingWelcomeGraph, introLine } from './greeting-welcome.js'
 import { returnRequestFlow, starterFlows, supportUseCaseFlows, SUPPORT_USE_CASES, type StarterFlow } from './flow-templates.js'
 import { hairStudioPack } from './salon-pack.js'
 
@@ -218,7 +218,7 @@ function welcomeFlow(companyName: string, topics: Topic[], personaName?: string)
     tags: ['welcome', 'routing', 'corporate'],
     publish: true,
     graph: greetingWelcomeGraph({
-      greeting: voice ? `Hi, I'm ${voice} at ${company}.` : assistantGreeting(company),
+      greeting: introLine(voice, company),
       followUp: 'What do you need help with?',
       routes,
       menu: 'I can help with opening hours, shipping, a return, order tracking, payments, a password, plans, or a person on the team. Tell me which one you need.',
