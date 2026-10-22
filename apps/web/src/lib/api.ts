@@ -659,6 +659,7 @@ export function buildWsUrl(token: string): string {
 
 export const system = {
   version: () => apiFetch<{ data: AppBuildInfo }>('/system/version'),
+  access: () => apiFetch<{ data: { platformAdmin: boolean } }>('/system/access'),
   status: () => apiFetch<{ data: SystemStatus }>('/system/status'),
   config: () => apiFetch<{ data: SystemConfig }>('/system/config'),
 }

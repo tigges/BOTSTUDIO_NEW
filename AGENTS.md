@@ -42,6 +42,7 @@ BotStudio is a hybrid agent workforce platform: AI agents and human agents work 
 - Credential and secret scrubbing in logs is always on and cannot be disabled.
 - One active guardrail policy per project. New rules default to Warn, not Block.
 - RBAC is enforced at the API; the UI only hides. Every mutation writes an audit row with before/after.
+- A workspace ADMIN is a customer's admin (anyone can register one). Host health, server config and anything that spans workspaces need `requirePlatformAdmin` (`PLATFORM_ADMIN_EMAILS`), not `requireRole('ADMIN')`.
 
 ## Analytics
 - Outcome is a six-state enum (contained_resolved, contained_partial, contained_unresolved, escalated, abandoned, plus contained as a roll-up) shown as three buckets. Escalation rate is not the inverse of containment; never compute one from the other.

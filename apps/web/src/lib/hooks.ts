@@ -862,20 +862,35 @@ export function useBuildInfo(): AppBuildInfo {
   return query.data ?? buildInfo
 }
 
-export function useSystemStatus(options?: { refetchInterval?: number }) {
+/** True for the people who run this installation; false for a customer's admin. */
+export function usePlatformAdmin(): boolean {
+  const role = useAppStore((s) => s.user?.role)
+  const query = useQuery({
+    queryKey: ['platform-access', role],
+    queryFn: withDemoFallback(() => api.system.access().then((r) => r.data.platformAdmin), true),
+    enabled: role === 'ADMIN',
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+  return role === 'ADMIN' && query.data === true
+}
+
+export function useSystemStatus(options?: { refetchInterval?: number; enabled?: boolean }) {
   return useQuery({
     queryKey: ['system-status'],
     queryFn: withDemoFallback(() => api.system.status().then((r) => r.data), demo.DEMO_SYSTEM_STATUS),
     staleTime: 0,
     refetchInterval: options?.refetchInterval,
+    enabled: options?.enabled ?? true,
   })
 }
 
-export function useSystemConfig() {
+export function useSystemConfig(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['system-config'],
     queryFn: withDemoFallback(() => api.system.config().then((r) => r.data), demo.DEMO_SYSTEM_CONFIG),
     staleTime: 60_000,
+    enabled: options?.enabled ?? true,
   })
 }
 

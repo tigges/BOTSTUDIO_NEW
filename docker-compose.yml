@@ -25,6 +25,9 @@ x-api-env: &api-env
   # Seals Auth Profile secrets. Changing it means re-entering every secret.
   SECRETS_KEY:    ${SECRETS_KEY:-}
   TOOLS_ALLOW_PRIVATE_NETWORK: ${TOOLS_ALLOW_PRIVATE_NETWORK:-false}
+  # Who may open System Status and server settings (comma-separated logins).
+  # Empty means charles@acme.com. Workspace admins are customers, not operators.
+  PLATFORM_ADMIN_EMAILS: ${PLATFORM_ADMIN_EMAILS:-}
   # Re-apply the demo companies on every API start. Off for a customer
   # install; run apps/api/dist/scripts/apply-demos.js once instead.
   DEMO_SEED_ON_BOOT: ${DEMO_SEED_ON_BOOT:-false}

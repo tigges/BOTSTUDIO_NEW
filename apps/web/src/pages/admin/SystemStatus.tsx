@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { Badge, Button } from '@botstudio/ui'
 import { cn } from '@botstudio/ui'
-import { useSystemStatus } from '../../lib/hooks'
+import { usePlatformAdmin, useSystemStatus } from '../../lib/hooks'
 import type { DockerContainer, RagSourceEntry } from '../../lib/api'
 import { shortVersion, fullVersion, buildInfo } from '../../lib/version'
 
@@ -121,6 +121,22 @@ function RagSourceRow({ s }: { s: RagSourceEntry }) {
 // ── main component ────────────────────────────────────────────────────────────
 
 export function SystemStatusPage() {
+  return usePlatformAdmin() ? <SystemStatusView /> : <OperatorsOnly />
+}
+
+function OperatorsOnly() {
+  return (
+    <div className="p-8 max-w-lg">
+      <h1 className="text-base font-semibold text-[var(--text-primary)]">System Status</h1>
+      <p className="mt-2 text-sm text-[var(--text-secondary)]">
+        Server health is only shown to the people who run this BotStudio installation.
+        Your workspace settings are under Settings.
+      </p>
+    </div>
+  )
+}
+
+function SystemStatusView() {
   const [autoRefresh, setAutoRefresh] = useState(false)
   const { data, isLoading, isFetching, refetch, dataUpdatedAt } = useSystemStatus({
     refetchInterval: autoRefresh ? 15_000 : undefined,

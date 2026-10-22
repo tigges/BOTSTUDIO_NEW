@@ -32,6 +32,8 @@ export interface NavSection {
   /** Path prefix that keeps the item highlighted, when it differs from `path`. */
   match?: string
   badge?: string
+  /** Host health and server config: only for the people who run the installation. */
+  platformOnly?: boolean
   subItems?: Array<{
     id: string
     label: string
@@ -178,9 +180,16 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'System Status',
         icon: Server,
         path: '/admin/system-status',
+        platformOnly: true,
       },
     ],
   },
 ]
 
 export const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items)
+
+export function visibleNavGroups(platformAdmin: boolean, groups: NavGroup[] = NAV_GROUPS): NavGroup[] {
+  return groups
+    .map((group) => ({ ...group, items: group.items.filter((item) => platformAdmin || !item.platformOnly) }))
+    .filter((group) => group.items.length > 0)
+}

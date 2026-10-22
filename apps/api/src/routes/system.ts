@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { prisma } from '@botstudio/db'
-import { requireRole } from '../middleware/auth.js'
+import { operatorWorkspaceAdminFromToken, platformAdminFromToken, requirePlatformAdmin } from '../lib/platform-admin.js'
 import * as os from 'node:os'
 import { DEFAULT_MODELS, currentModelId, llmChain } from '@botstudio/llm'
 import { isKnownDefault, productionSecretProblems } from '../lib/production-secrets.js'
@@ -49,8 +49,8 @@ async function seedAuthorized(app: FastifyInstance, authorization: string | unde
   const token = authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : ''
   if (token && token !== secret) {
     try {
-      const payload = await app.jwt.verify<{ role?: string }>(token)
-      if (payload.role === 'ADMIN') return true
+      const payload = await app.jwt.verify<{ sub?: string; tenantId?: string; role?: string }>(token)
+      if (await operatorWorkspaceAdminFromToken(payload)) return true
     } catch {
       // Not a valid admin session. Fall through.
     }
@@ -76,7 +76,7 @@ export async function systemRoutes(app: FastifyInstance) {
 
   async function runEnsure(authorization: string | undefined, reply: { status: (code: number) => { send: (body: unknown) => unknown } }) {
     if (!(await seedAuthorized(app, authorization))) {
-      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Admin login or SEED_DEMO_SECRET is required' } })
+      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'An admin of the operator workspace or SEED_DEMO_SECRET is required' } })
     }
     const { ensureDemos } = await import('../scripts/ensure-demos.js')
     return { data: await ensureDemos() }
@@ -107,7 +107,7 @@ export async function systemRoutes(app: FastifyInstance) {
   // Inbox traffic only. Does not create or edit journeys, flows, or workflows.
   app.post('/demo-traffic', async (request, reply) => {
     if (!(await seedAuthorized(app, request.headers.authorization))) {
-      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Admin login or SEED_DEMO_SECRET is required' } })
+      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'An admin of the operator workspace or SEED_DEMO_SECRET is required' } })
     }
     try {
       const { addDemoTraffic } = await import('../lib/demo-traffic.js')
@@ -121,9 +121,11 @@ export async function systemRoutes(app: FastifyInstance) {
 
   await app.register(async function adminSystemRoutes(scope) {
     scope.addHook('preHandler', app.authenticate)
-    scope.addHook('preHandler', requireRole('ADMIN'))
-    scope.get('/status', statusHandler)
-    scope.get('/config', configHandler)
+    scope.get('/access', async (request) => ({
+      data: { platformAdmin: await platformAdminFromToken(request.user as { sub?: string; role?: string }) },
+    }))
+    scope.get('/status', { preHandler: requirePlatformAdmin }, statusHandler)
+    scope.get('/config', { preHandler: requirePlatformAdmin }, configHandler)
   })
 }
 
