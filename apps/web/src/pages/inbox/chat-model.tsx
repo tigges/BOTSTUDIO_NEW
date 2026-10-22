@@ -51,10 +51,17 @@ export function formatRelative(iso?: string) {
   return `${Math.floor(h / 24)}d`
 }
 
+/** A chat a Journey Test handed over has no contact; its subject says it is a test. */
+export function chatName(c: Pick<api.Conversation, 'contact' | 'subject'>): string {
+  if (c.contact?.displayName) return c.contact.displayName
+  if (c.subject?.startsWith('Journey Test')) return 'Journey Test'
+  return 'Unknown'
+}
+
 export function toConvo(c: api.Conversation, members: Array<{ id: string; displayName: string }>): Convo {
   return {
     id: c.id,
-    name: c.contact?.displayName ?? 'Unknown',
+    name: chatName(c),
     message: chatText(c.messages?.[c.messages.length - 1]?.content?.text, c.contact?.displayName),
     time: formatRelative(c.updatedAt),
     status: (c.status as ConvoStatus) ?? 'active',

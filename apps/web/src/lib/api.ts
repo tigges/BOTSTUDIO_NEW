@@ -990,7 +990,7 @@ export interface Intent { id: string; name: string; description?: string; uttera
 export interface Entity { id: string; name: string; kind: string; values: object[] }
 export interface Faq { id: string; question: string; answer: string; tags: string[] }
 export interface KnowledgeSource { id: string; name: string; kind: string; config: Record<string, unknown>; lastSyncAt?: string; documents: Array<{ id: string; status: string }> }
-export interface Conversation { id: string; status: string; assignedTo?: string; contact?: Contact; channel?: { id: string; name: string; kind: string }; messages: Message[]; labels: Array<{ label: Label }>; updatedAt: string; sla?: string | null; outcome?: string | null; llm?: ConversationLlmCost | null; handover?: Partial<HandoverContract> | null; /** Set on chats a scheduled test run opened. */ testRunId?: string | null }
+export interface Conversation { id: string; status: string; subject?: string | null; assignedTo?: string; contact?: Contact; channel?: { id: string; name: string; kind: string }; messages: Message[]; labels: Array<{ label: Label }>; updatedAt: string; sla?: string | null; outcome?: string | null; llm?: ConversationLlmCost | null; handover?: Partial<HandoverContract> | null; /** Set on chats a scheduled test run opened. */ testRunId?: string | null }
 /** Model calls made for one chat. costUsd is null when a model had no known price. */
 export interface ConversationLlmCost { costUsd: number | null; calls: number }
 export interface ToolNote { id: string; name: string; runId?: string; ok: boolean; args?: Record<string, unknown>; output?: unknown; error?: string | null }
