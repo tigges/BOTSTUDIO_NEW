@@ -3,8 +3,8 @@ import { test } from 'node:test'
 import {
   connectorIssues, connectorProfileSettings, connectorSettings, connectorTools, factsToRemember, fillJsonTemplate,
   fillToolTemplate, httpConfig, journeyVariables, memoryIssues, parseMemorySettings, recallFacts, toolIssues,
-} from '@ybot/shared'
-import type { FlowGraph } from '@ybot/runtime'
+} from '@botstudio/shared'
+import type { FlowGraph } from '@botstudio/runtime'
 import { openSecret } from './secrets.js'
 import { applyAuthProfile } from './auth-profiles.js'
 import { memoryWrites } from './contact-memory.js'

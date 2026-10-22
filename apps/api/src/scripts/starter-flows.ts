@@ -5,4 +5,4 @@ export {
   supportUseCaseFlows,
   type GuidedFlowInput,
   type StarterFlow,
-} from '@ybot/shared'
+} from '@botstudio/shared'

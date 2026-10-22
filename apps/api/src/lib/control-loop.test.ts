@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { FlowGraph } from '@ybot/runtime'
+import type { FlowGraph } from '@botstudio/runtime'
 import {
   DEFAULT_PRIVACY,
   evalIssues,
@@ -11,7 +11,7 @@ import {
   withChapter,
   type EvalScenario,
   type ReleaseChapter,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { runTestTurn, type TestChatDeps } from './test-chat.js'
 import { playScenario, runGate, runSuite, type EvalDeps } from './evals.js'
 import { chapterRow, hasSteps, snapshotEntry, type JourneySnapshot } from './releases.js'

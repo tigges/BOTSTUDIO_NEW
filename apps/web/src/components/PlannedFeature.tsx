@@ -1,5 +1,5 @@
 import React from 'react'
-import { Badge } from '@ybot/ui'
+import { Badge } from '@botstudio/ui'
 
 export const PLANNED_TEXT = 'This will become a real feature.'
 

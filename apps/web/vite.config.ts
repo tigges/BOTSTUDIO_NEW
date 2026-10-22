@@ -9,10 +9,10 @@ const rootPkg = JSON.parse(readFileSync(resolve(__dirname, '../../package.json')
 const appVersion = process.env['VITE_APP_VERSION'] ?? rootPkg.version
 const buildNumber = process.env['VITE_BUILD_NUMBER'] ?? 'local'
 const gitSha     = process.env['VITE_GIT_SHA']     ?? 'dev'
-const buildDate  = process.env['VITE_BUILD_DATE']  ?? new Date().toISOString()
+const buildDate  = process.env['VITE_BUILD_DATE']  ?? ''
 
 export default defineConfig({
-  // GitHub Pages serves from /YAI/; Docker/self-hosted serves from /.
+  // GitHub Pages serves from /<repository name>/; Docker/self-hosted serves from /.
   // Override with VITE_BASE_PATH env var at build time.
   base: process.env.VITE_BASE_PATH ?? '/',
   plugins: [
@@ -46,7 +46,7 @@ export default defineConfig({
           'vendor-query':   ['@tanstack/react-query'],
           'vendor-charts':  ['recharts'],
           'vendor-flow':    ['@xyflow/react'],
-          'vendor-ui':      ['@ybot/ui'],
+          'vendor-ui':      ['@botstudio/ui'],
         },
       },
     },

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { normalizedBotName } from '../lib/bot-name.js'
 import { deleteBotRecords } from '../lib/delete-bot.js'
 import {
@@ -20,7 +20,7 @@ import {
   type ClusterId,
   type LearnedTemplateSpec,
   type StarterPackId,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { installCorporatePack, installHairStudioPack, installSitePack, removeStarterPack } from '../lib/install-corporate-pack.js'
 import { installDraftWelcome, installStarterFlows } from '../lib/install-starter-flows.js'
 import { installWebsiteScan } from '../lib/install-website-scan.js'

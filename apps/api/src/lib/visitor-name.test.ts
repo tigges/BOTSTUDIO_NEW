@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { fillNameTokens } from '@ybot/shared'
+import { fillNameTokens } from '@botstudio/shared'
 import { finishBotLines, nameThanksEndsTurn, planNameTurn, presentChatText } from './visitor-name.js'
 
 test('a stored welcome with no name reads as there', () => {

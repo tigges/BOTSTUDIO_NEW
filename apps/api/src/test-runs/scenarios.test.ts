@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { DENTAL_BLUEPRINT } from '@ybot/shared'
+import { DENTAL_BLUEPRINT } from '@botstudio/shared'
 import { referenceJourney } from '../scripts/dental-reference-chats.js'
 import { runTestTurn } from '../lib/test-chat.js'
 import { dentalScenarios, pick, pickVisitor, planFor, seeded } from './scenarios.js'

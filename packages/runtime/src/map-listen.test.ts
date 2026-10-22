@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { draftWebsiteChat, hairStudioPack, pageFromHtml } from '@ybot/shared'
+import { draftWebsiteChat, hairStudioPack, pageFromHtml } from '@botstudio/shared'
 import type { FlowGraph } from './engine.js'
 import { acceptedHoursOffer, hearChapter, isSmallTalk, isTopicSwitch, listenForChapter, offerOnMap, sameQuestion, shapeTurn, wantsOffer } from './map-listen.js'
 

@@ -1,5 +1,5 @@
-import { prisma } from '@ybot/db'
-import { toolParametersSchema, type ToolParameter } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { toolParametersSchema, type ToolParameter } from '@botstudio/shared'
 import { loadPrivacy, renderDeepFor } from './privacy.js'
 import { defaultToolDeps, runTool, type ToolDeps, type ToolResult, type ToolRunContext } from './tool-runner.js'
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Bot, Eye, EyeOff } from 'lucide-react'
-import { Button, Input, Card } from '@ybot/ui'
+import { Button, Input, Card } from '@botstudio/ui'
 import { auth } from '../lib/api'
 
 export function ResetPasswordPage() {

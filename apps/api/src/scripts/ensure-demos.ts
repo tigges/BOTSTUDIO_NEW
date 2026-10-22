@@ -23,8 +23,8 @@
  */
 
 import bcrypt from 'bcryptjs'
-import { prisma } from '@ybot/db'
-import { hairStudioPack } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { hairStudioPack } from '@botstudio/shared'
 import { environmentsToRefresh, isShopWelcomeGraph, retryOnUnique } from '../lib/bella-salon-sync.js'
 import { publishedSource } from '../lib/copy-graphs.js'
 import { installStarterFlows } from '../lib/install-starter-flows.js'

@@ -2,10 +2,10 @@ import React, { useState, useCallback } from 'react'
 import {
   Server, Database, Radio, HardDrive, Cpu, MemoryStick,
   RefreshCw, CheckCircle2, XCircle, Clock, Box,
-  BookOpen, FileText, Layers, Activity, ChevronRight, Tag,
+  BookOpen, FileText, Layers, Activity, ChevronRight, Tag, AlertTriangle,
 } from 'lucide-react'
-import { Badge, Button } from '@ybot/ui'
-import { cn } from '@ybot/ui'
+import { Badge, Button } from '@botstudio/ui'
+import { cn } from '@botstudio/ui'
 import { useSystemStatus } from '../../lib/hooks'
 import type { DockerContainer, RagSourceEntry } from '../../lib/api'
 import { shortVersion, fullVersion, buildInfo } from '../../lib/version'
@@ -132,6 +132,8 @@ export function SystemStatusPage() {
     ? new Date(dataUpdatedAt).toLocaleTimeString()
     : '—'
 
+  const release = data?.version ?? buildInfo
+  const attention = [...(data?.background?.problems ?? []), ...(data?.secretProblems ?? [])]
   const runningCount = data?.containers.filter((c) => c.state === 'running').length ?? 0
   const totalCount = data?.containers.length ?? 0
 
@@ -185,6 +187,18 @@ export function SystemStatusPage() {
       ) : (
         <div className="flex-1 overflow-auto p-6 space-y-6">
 
+          {attention.length > 0 && (
+            <div role="alert" className="rounded-[var(--radius-lg)] border border-[var(--warning)] bg-[var(--warning-muted)] p-4 space-y-2">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-primary)]">
+                <AlertTriangle size={13} className="text-[var(--warning)]" />
+                Needs attention
+              </p>
+              <ul className="space-y-1 text-xs text-[var(--text-secondary)] list-disc list-inside">
+                {attention.map((item) => <li key={item.key}>{item.message}</li>)}
+              </ul>
+            </div>
+          )}
+
           {/* Summary pills */}
           <div className="flex flex-wrap gap-3">
             <div className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-md)] bg-[var(--bg-surface)] border border-[var(--border)]">
@@ -221,6 +235,17 @@ export function SystemStatusPage() {
                   )}
                   {data?.services.redis && (
                     <ServiceCard label="Redis / Valkey" icon={Radio} ok={data.services.redis.ok} latencyMs={data.services.redis.latencyMs} />
+                  )}
+                  {data?.background && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-2 text-[var(--text-secondary)]">
+                        <StatusDot ok={data.background.workers.length > 0} />
+                        Background workers
+                      </span>
+                      <span className="font-mono text-[var(--text-primary)]" title={data.background.workers.map((w) => w.id).join(', ')}>
+                        {data.background.workers.length} running
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>
@@ -278,47 +303,24 @@ export function SystemStatusPage() {
                 <div className="p-4 space-y-3 text-xs">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="text-[var(--text-muted)] mb-1">UI Version</p>
-                      <p className="font-medium text-[var(--text-primary)] font-mono">{buildInfo.version}</p>
+                      <p className="text-[var(--text-muted)] mb-1">Version</p>
+                      <p className="font-medium text-[var(--text-primary)] font-mono">{release.version}</p>
                     </div>
                     <div>
                       <p className="text-[var(--text-muted)] mb-1">Build #</p>
-                      <p className="font-medium text-[var(--text-primary)] font-mono">{buildInfo.buildNumber}</p>
+                      <p className="font-medium text-[var(--text-primary)] font-mono">{release.buildNumber}</p>
                     </div>
                     <div>
                       <p className="text-[var(--text-muted)] mb-1">Git SHA</p>
-                      <p className="font-medium text-[var(--text-primary)] font-mono">{buildInfo.gitSha.slice(0, 7)}</p>
+                      <p className="font-medium text-[var(--text-primary)] font-mono">{release.gitSha.slice(0, 7)}</p>
                     </div>
                     <div>
                       <p className="text-[var(--text-muted)] mb-1">Built</p>
-                      <p className="font-medium text-[var(--text-primary)]">{fmtAge(buildInfo.buildDate)}</p>
+                      <p className="font-medium text-[var(--text-primary)]">{fmtAge(release.buildDate)}</p>
                     </div>
                   </div>
-                  {data?.version && (
-                    <div className="pt-2 border-t border-[var(--border)]">
-                      <p className="text-[var(--text-muted)] mb-2">API Version</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-[var(--text-muted)] mb-0.5 text-[10px]">Version</p>
-                          <p className="font-mono text-[var(--text-primary)]">{data.version.version}</p>
-                        </div>
-                        <div>
-                          <p className="text-[var(--text-muted)] mb-0.5 text-[10px]">Build #</p>
-                          <p className="font-mono text-[var(--text-primary)]">{data.version.buildNumber}</p>
-                        </div>
-                        <div>
-                          <p className="text-[var(--text-muted)] mb-0.5 text-[10px]">Git SHA</p>
-                          <p className="font-mono text-[var(--text-primary)]">{data.version.gitSha.slice(0, 7)}</p>
-                        </div>
-                        <div>
-                          <p className="text-[var(--text-muted)] mb-0.5 text-[10px]">Built</p>
-                          <p className="text-[var(--text-primary)]">{fmtAge(data.version.buildDate)}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="pt-2 border-t border-[var(--border)] text-[10px] text-[var(--text-muted)] font-mono" title={fullVersion()}>
-                    {shortVersion()}
+                  <div className="pt-2 border-t border-[var(--border)] text-[10px] text-[var(--text-muted)] font-mono" title={fullVersion(release)}>
+                    {shortVersion(release)}
                   </div>
                 </div>
               </div>
@@ -338,8 +340,8 @@ export function SystemStatusPage() {
               {data?.containers.length === 0 ? (
                 <div className="p-8 text-center">
                   <Box size={20} className="text-[var(--text-muted)] mx-auto mb-2" />
-                  <p className="text-sm text-[var(--text-muted)]">Docker socket not mounted</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">Add the Docker socket volume to see containers</p>
+                  <p className="text-sm text-[var(--text-muted)]">Containers unavailable</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">Start the docker-proxy service from the compose file to see containers</p>
                 </div>
               ) : (
                 <div className="divide-y divide-[var(--border)]">

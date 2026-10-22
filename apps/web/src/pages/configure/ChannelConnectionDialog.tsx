@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { CheckCircle2, Circle, Code2, Copy, FlaskConical, Loader2, ShieldCheck, XCircle } from 'lucide-react'
-import { Badge, Button, cn } from '@ybot/ui'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@ybot/ui'
+import { Badge, Button, cn } from '@botstudio/ui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@botstudio/ui'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@botstudio/ui'
 import {
   CHANNEL_FIELDS,
   CHANNEL_STATUS_HELP,
@@ -13,7 +13,7 @@ import {
   channelWebhookPath,
   isLimitChannel,
   isOptionalChannelKind,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { ApiError, type Channel, type ChannelCheck } from '../../lib/api'
 import { useCheckChannel, useUpdateChannel } from '../../lib/hooks'
 import {
@@ -35,8 +35,8 @@ export function embedCode(channelId: string): string {
 
 <!-- Optional customisation -->
 <script>
-  window.YBotTitle = 'Chat with us';
-  window.YBotAccentColor = '#6366f1';
+  window.BotStudioTitle = 'Chat with us';
+  window.BotStudioAccentColor = '#6366f1';
 </script>`
 }
 

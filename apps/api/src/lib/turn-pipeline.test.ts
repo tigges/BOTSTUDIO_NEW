@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { DEFAULT_PRIVACY, handoverFromConfig, newGuardrailRule, type GuardrailRule, type HandoverRequest, type PrivacySettings } from '@ybot/shared'
+import { DEFAULT_PRIVACY, handoverFromConfig, newGuardrailRule, type GuardrailRule, type HandoverRequest, type PrivacySettings } from '@botstudio/shared'
 import { NO_TEAM_LINE } from './chat-outcome.js'
 import type { FlowRunResult } from './flow-runner.js'
 import { HANDOVER_LINE } from './handover.js'

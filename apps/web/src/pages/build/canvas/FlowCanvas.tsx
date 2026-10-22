@@ -22,14 +22,14 @@ import {
   Undo2, Redo2, X,
   AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter, LayoutTemplate,
 } from 'lucide-react'
-import { Button, Badge } from '@ybot/ui'
+import { Button, Badge } from '@botstudio/ui'
 import { nodeTypes } from '../../../components/canvas/FlowNode'
 import { alignHorizontal, alignVertical, tidyLayout } from '../../../components/canvas/layout'
 import { NodePalette } from '../../../components/canvas/NodePalette'
 import { NodeConfigPanel } from '../../../components/canvas/NodeConfigPanel'
 import { ChatWidget } from '../../../components/ChatWidget'
 import type { FlowNodeData } from '../../../components/canvas/FlowNode'
-import { journeyLayout, journeyTrail, versionForEnvironment, type JourneyMark, type NodeKind } from '@ybot/shared'
+import { journeyLayout, journeyTrail, versionForEnvironment, type JourneyMark, type NodeKind } from '@botstudio/shared'
 
 let nodeIdCounter = 1
 function newId() {

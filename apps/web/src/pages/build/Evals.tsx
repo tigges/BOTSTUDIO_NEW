@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, FlaskConical, Loader2, Play, Plus, ShieldCheck, Trash2, XCircle } from 'lucide-react'
-import { Badge, Button, EmptyState, PageHeader, cn } from '@ybot/ui'
+import { Badge, Button, EmptyState, PageHeader, cn } from '@botstudio/ui'
 import {
   EVAL_CHECK_KINDS,
   EVAL_CHECK_LABELS,
@@ -13,7 +13,7 @@ import {
   type EvalCheckKind,
   type EvalScenario,
   type EvalScenarioResult,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import type { EvalRunRow, EvalSuiteRow } from '../../lib/api'
 import { useDeleteEvalSuite, useEvalRuns, useEvalSuites, useRunEvalSuite, useSaveEvalSuite } from '../../lib/hooks'
 

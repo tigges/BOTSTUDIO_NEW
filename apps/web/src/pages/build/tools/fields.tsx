@@ -1,5 +1,5 @@
 import React from 'react'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 
 export const fieldClass =
   'w-full rounded border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--border-focus)] focus:outline-none'

@@ -4,11 +4,11 @@ import {
   UserCog, UserMinus, CheckCircle2, Clock, Circle,
   ChevronDown, Crown, Eye, MessageSquare,
 } from 'lucide-react'
-import { Avatar, Badge, Button, Input } from '@ybot/ui'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel } from '@ybot/ui'
+import { Avatar, Badge, Button, Input } from '@botstudio/ui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@botstudio/ui'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel } from '@botstudio/ui'
 import { SubNav } from '../../components/SubNav'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 import { useTeamMembers, useInviteMember, useUpdateRole, useRemoveMember } from '../../lib/hooks'
 
 const SUBNAV = [

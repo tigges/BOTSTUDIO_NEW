@@ -1,6 +1,6 @@
 /** One card per channel kind. Two website-chat rows (test and live) still count as one card. */
 
-import { isOptionalChannelKind, parseChannelConfig } from '@ybot/shared'
+import { isOptionalChannelKind, parseChannelConfig } from '@botstudio/shared'
 
 export const CHANNEL_KINDS = ['web', 'whatsapp', 'sms', 'telegram', 'phone', 'email'] as const
 

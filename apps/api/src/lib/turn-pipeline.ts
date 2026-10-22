@@ -24,8 +24,8 @@
  * and Test Bot run the same stages with in-memory ports (test-chat.ts).
  */
 
-import { prisma } from '@ybot/db'
-import { createLlmAdapter, createLlmAdapterForModel, type LlmMessage } from '@ybot/llm'
+import { prisma } from '@botstudio/db'
+import { createLlmAdapter, createLlmAdapterForModel, type LlmMessage } from '@botstudio/llm'
 import {
   alwaysHumanMatch,
   answerLength,
@@ -39,7 +39,7 @@ import {
   type GuardrailHit,
   type HandoverContract,
   type HandoverRequest,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { triggerRules } from './automation-engine.js'
 import { keepWithBot, markNoTeam } from './chat-outcome.js'
 import { runFlowIfPublished, type FlowRunResult } from './flow-runner.js'

@@ -1,16 +1,16 @@
 import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { z } from 'zod'
-import { DEFAULT_MODELS } from '@ybot/llm'
-import { enqueueKnowledgeSync } from '../queues.js'
+import { DEFAULT_MODELS } from '@botstudio/llm'
+import { BackgroundJobsUnavailableError, enqueueKnowledgeSync } from '../queues.js'
 import { extractTextFromBuffer } from '../lib/extract-text.js'
 import { rereadWebsitePages } from '../lib/reread-website.js'
 import { enterLlmScope } from '../lib/llm-ledger.js'
 import { readPublicSite } from '../lib/public-site.js'
 import { BUSINESS_SOURCE_KIND } from '../lib/install-blueprint.js'
 import { FAQ_SOURCE_KIND, syncFaqKnowledge } from '../lib/faq-knowledge.js'
-import { documentQuality, textStats } from '@ybot/shared'
+import { documentQuality, textStats } from '@botstudio/shared'
 import { SEARCH_MODES, documentChunks, listDocuments, runSearchTest } from '../lib/knowledge-search-test.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
@@ -242,7 +242,12 @@ export async function knowledgeRoutes(app: FastifyInstance) {
       await syncFaqKnowledge(tenantId, botId)
       return { data: { queued: true, sourceId: id } }
     }
-    await enqueueKnowledgeSync({ tenantId, sourceId: id, botId, kind: src.kind as 'website' | 'file', config: src.config as Record<string, unknown> })
+    try {
+      await enqueueKnowledgeSync({ tenantId, sourceId: id, botId, kind: src.kind as 'website' | 'file', config: src.config as Record<string, unknown> })
+    } catch (err) {
+      if (err instanceof BackgroundJobsUnavailableError) return reply.status(503).send({ error: { code: err.code, message: err.message } })
+      throw err
+    }
     await prisma.knowledgeSource.update({ where: { id }, data: { lastSyncAt: new Date() } })
     const url = typeof (src.config as { url?: unknown }).url === 'string' ? (src.config as { url: string }).url : ''
     if (src.kind === 'website' && url) {

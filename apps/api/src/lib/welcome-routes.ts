@@ -1,4 +1,4 @@
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { DRAFT_RECIPES } from './draft-flows.js'
 
 interface RouteConfig {

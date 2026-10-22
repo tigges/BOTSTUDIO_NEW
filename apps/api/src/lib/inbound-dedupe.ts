@@ -1,8 +1,11 @@
+import { KEY_PREFIX, getValkey, isReady } from './valkey.js'
+
 /**
  * Providers retry webhooks, and a visitor's browser can resend a message. Each
  * inbound message is handled once per channel and provider message id inside
- * the replay window. The API runs as one container, so the window lives in
- * memory; a restart forgets it.
+ * the replay window. The window lives in Valkey, so every API replica and a
+ * restarted API agree on it. While Valkey is unreachable the window falls back
+ * to this process's memory: a rare double answer beats dropping a message.
  */
 
 export const REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000
@@ -34,8 +37,43 @@ export class InboundDedupe {
   }
 }
 
-const inbound = new InboundDedupe()
+/** `SET key 1 PX window NX`: resolves true only for the first caller inside the window. */
+export interface DedupeStore {
+  ready(): boolean
+  setIfAbsent(key: string, windowMs: number): Promise<boolean>
+}
 
-export function firstDelivery(channelId: string, messageId: string | undefined | null): boolean {
+export class SharedDedupe {
+  private local: InboundDedupe
+
+  constructor(private store: () => Promise<DedupeStore | null>, private windowMs = REPLAY_WINDOW_MS) {
+    this.local = new InboundDedupe(windowMs)
+  }
+
+  async first(channelId: string, messageId: string | undefined | null): Promise<boolean> {
+    const id = messageId?.trim()
+    if (!id) return true
+    const store = await this.store().catch(() => null)
+    if (store?.ready()) {
+      try {
+        return await store.setIfAbsent(`${KEY_PREFIX}inbound:${channelId}:${id}`, this.windowMs)
+      } catch { /* fall back to memory */ }
+    }
+    return this.local.first(channelId, id)
+  }
+}
+
+async function valkeyStore(): Promise<DedupeStore | null> {
+  const redis = await getValkey()
+  if (!redis) return null
+  return {
+    ready: () => isReady(redis),
+    setIfAbsent: async (key, windowMs) => (await redis.set(key, '1', 'PX', windowMs, 'NX')) === 'OK',
+  }
+}
+
+const inbound = new SharedDedupe(valkeyStore)
+
+export function firstDelivery(channelId: string, messageId: string | undefined | null): Promise<boolean> {
   return inbound.first(channelId, messageId)
 }

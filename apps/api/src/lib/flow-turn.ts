@@ -1,4 +1,4 @@
-import type { FlowGraph, Session, SessionMachine } from '@ybot/runtime'
+import type { FlowGraph, Session, SessionMachine } from '@botstudio/runtime'
 
 type RunResult = Awaited<ReturnType<SessionMachine['run']>>
 

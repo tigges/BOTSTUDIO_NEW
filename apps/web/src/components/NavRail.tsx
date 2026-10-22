@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { ChevronLeft, ChevronRight, Bot } from 'lucide-react'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 import { NAV_GROUPS } from './nav-config'
 import { navItemActive } from '../lib/build-nav'
 import { shortVersion, fullVersion } from '../lib/version'
+import { useBuildInfo } from '../lib/hooks'
 
 interface NavRailProps {
   collapsed?: boolean
@@ -14,6 +15,7 @@ interface NavRailProps {
 
 export function NavRail({ collapsed = false, onToggleCollapse }: NavRailProps) {
   const { pathname } = useLocation()
+  const build = useBuildInfo()
 
   return (
     <nav
@@ -81,16 +83,16 @@ export function NavRail({ collapsed = false, onToggleCollapse }: NavRailProps) {
       <div className="border-t border-[var(--nav-border)] p-2 flex flex-col gap-1">
         {!collapsed && (
           <div
-            title={fullVersion()}
+            title={fullVersion(build)}
             className="px-2 py-1 text-[10px] text-[var(--text-muted)] font-mono select-none cursor-default"
           >
-            {shortVersion()}
+            {shortVersion(build)}
           </div>
         )}
         <button
           onClick={onToggleCollapse}
           className="flex w-full h-8 items-center justify-center rounded-[var(--radius)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] transition-colors"
-          title={collapsed ? `Expand sidebar (${shortVersion()})` : 'Collapse sidebar'}
+          title={collapsed ? `Expand sidebar (${shortVersion(build)})` : 'Collapse sidebar'}
         >
           {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>

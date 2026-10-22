@@ -3,7 +3,7 @@
  * The reply is returned whole because these channels do not stream.
  */
 
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { withLlmScope } from './llm-ledger.js'
 import { runTurn } from './turn-pipeline.js'
 

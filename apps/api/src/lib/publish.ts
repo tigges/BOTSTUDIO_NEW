@@ -4,8 +4,8 @@
  * check or a gate suite fails.
  */
 
-import { prisma } from '@ybot/db'
-import { inspectFlowGraph, type FlowIssue } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { inspectFlowGraph, type FlowIssue } from '@botstudio/shared'
 import { runGate, type EvalRunSummary } from './evals.js'
 import { createRelease, releaseCandidate, ReleaseError } from './releases.js'
 

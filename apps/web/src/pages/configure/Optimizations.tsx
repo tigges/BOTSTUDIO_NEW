@@ -9,15 +9,15 @@ import {
   Sparkles, CheckCircle2, XCircle, ChevronDown, ChevronUp,
   BookMarked, BarChart3, Loader2, RefreshCcw, Globe,
 } from 'lucide-react'
-import { Button, Badge } from '@ybot/ui'
+import { Button, Badge } from '@botstudio/ui'
 import { SubNav } from '../../components/SubNav'
 import { useOptimizations, useApplyOptimization, useDismissOptimization } from '../../lib/hooks'
 import { useAppStore } from '../../store/app'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 import { bots as botsApi, type LearnedSiteTemplate, type TemplateOptimization } from '../../lib/api'
 import { Link } from '@tanstack/react-router'
 import { JourneyPreview } from '../../components/JourneyPreview'
-import { START_CLUSTERS, type ClusterId } from '@ybot/shared'
+import { START_CLUSTERS, type ClusterId } from '@botstudio/shared'
 
 const SUBNAV = [
   { label: 'Channels',      path: '/configure/channels' },

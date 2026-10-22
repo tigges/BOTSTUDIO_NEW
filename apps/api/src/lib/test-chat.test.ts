@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { DEFAULT_PRIVACY, chatPlain, draftWebsiteChat, hairStudioPack, learnedSpecFromJobs, packFromLearned, pageFromHtml } from '@ybot/shared'
-import { keepFirstQuestion, type FlowGraph } from '@ybot/runtime'
+import { DEFAULT_PRIVACY, chatPlain, draftWebsiteChat, hairStudioPack, learnedSpecFromJobs, packFromLearned, pageFromHtml } from '@botstudio/shared'
+import { keepFirstQuestion, type FlowGraph } from '@botstudio/runtime'
 import { currentLlmScope } from './llm-ledger.js'
 import { runTestTurn, withWorkingCopy, type TestChatDeps, type TestChatState } from './test-chat.js'
 

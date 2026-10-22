@@ -4,9 +4,9 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import { prisma } from '@ybot/db'
-import { DEFAULT_MODELS, currentModelId, resolveLlmEnv } from '@ybot/llm'
-import { MODEL_GROUPS, MODEL_IDS, readBotSettings, responseLength, type BotSettings } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { DEFAULT_MODELS, currentModelId, resolveLlmEnv } from '@botstudio/llm'
+import { MODEL_GROUPS, MODEL_IDS, readBotSettings, responseLength, type BotSettings } from '@botstudio/shared'
 import { requireRole } from '../middleware/auth.js'
 
 type JWT = { sub: string; tenantId: string; role: string }

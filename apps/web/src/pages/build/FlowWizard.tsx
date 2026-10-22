@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { flowCatalog, guidedFlowGraph } from '@ybot/shared'
-import { Button, Input, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
+import { flowCatalog, guidedFlowGraph } from '@botstudio/shared'
+import { Button, Input, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@botstudio/ui'
 import { apiFetch } from '../../lib/api'
 import type { FlowGraph } from '../../lib/api'
 

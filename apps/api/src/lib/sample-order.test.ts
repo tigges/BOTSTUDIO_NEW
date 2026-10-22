@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { SessionMachine, type FlowGraph } from '@ybot/runtime'
-import type { ExecutionServices, Session } from '@ybot/runtime'
-import { inspectFlowGraph, starterFlows, withSampleOrder, SAMPLE_ORDER_REPLY } from '@ybot/shared'
+import { SessionMachine, type FlowGraph } from '@botstudio/runtime'
+import type { ExecutionServices, Session } from '@botstudio/runtime'
+import { inspectFlowGraph, starterFlows, withSampleOrder, SAMPLE_ORDER_REPLY } from '@botstudio/shared'
 
 function session(): Session {
   return {

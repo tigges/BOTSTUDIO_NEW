@@ -5,7 +5,7 @@ import {
   channelConfigReady,
   channelWebhookPath,
   parseChannelConfig,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 
 test('optional channels need every credential field', () => {
   assert.deepEqual(parseChannelConfig('web', {}), {})

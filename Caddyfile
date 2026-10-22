@@ -1,13 +1,23 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Caddyfile — Reverse proxy for YBot stack
+# Caddyfile — Reverse proxy for the BotStudio stack
 #
 # Default: plain HTTP on :80 (Docker maps this to HTTP_PORT on the host,
 # e.g. 7080 or 8080 on Synology NAS).  No TLS — suitable for LAN/NAS use.
 #
 # For a public domain with automatic HTTPS, replace ":80" with your domain
-# (e.g. "ybot.example.com") and remove the "http://" prefix if using Caddy's
+# (e.g. "app.example.com") and remove the "http://" prefix if using Caddy's
 # automatic TLS.  Make sure ports 80 and 443 are forwarded to the NAS.
+#
+# Upstreams are compose service names (api, web, watchtower), which resolve
+# on the compose network whatever the containers are called. lb_try_duration
+# holds a request while its container restarts during a deploy, instead of
+# answering 502: Caddy keeps dialling until the new container listens.
 # ─────────────────────────────────────────────────────────────────────────────
+
+(deploy_retry) {
+    lb_try_duration 45s
+    lb_try_interval 250ms
+}
 
 :80 {
     # WebSocket — use named matcher so Caddy correctly handles the upgrade
@@ -17,31 +27,31 @@
         header Upgrade websocket
     }
     handle @ws {
-        reverse_proxy ybot-api:3001
+        reverse_proxy api:3001 {
+            import deploy_retry
+        }
     }
 
     # CI deploy trigger. Watchtower checks the bearer token; without
     # WATCHTOWER_HTTP_API_UPDATE on the NAS this returns 502.
     handle /deploy/watchtower {
         rewrite * /v1/update
-        reverse_proxy ybot-watchtower:8080
+        reverse_proxy watchtower:8080
     }
 
     # API proxy — all /api/* requests go to the backend
     handle /api/* {
-        reverse_proxy ybot-api:3001
-    }
-
-    # MinIO console (optional)
-    handle /minio/* {
-        uri strip_prefix /minio
-        reverse_proxy ybot-minio:9001
+        reverse_proxy api:3001 {
+            import deploy_retry
+        }
     }
 
     # Web container. nginx serves the landing page when the host is
     # botstudio.uk, and the console for app.botstudio.uk. Pass the Host header.
     handle {
-        reverse_proxy ybot-web:80
+        reverse_proxy web:80 {
+            import deploy_retry
+        }
     }
 
     log {
@@ -52,10 +62,10 @@
 }
 
 # ── Public domain with automatic HTTPS (uncomment and edit) ──────────────────
-# ybot.example.com {
+# app.example.com {
 #     @ws { path /ws; header Connection *Upgrade*; header Upgrade websocket }
-#     handle @ws  { reverse_proxy ybot-api:3001 }
-#     handle /api/* { reverse_proxy ybot-api:3001 }
-#     handle        { reverse_proxy ybot-web:80 }
+#     handle @ws  { reverse_proxy api:3001 { import deploy_retry } }
+#     handle /api/* { reverse_proxy api:3001 { import deploy_retry } }
+#     handle        { reverse_proxy web:80 { import deploy_retry } }
 #     log { output stdout; format console; level INFO }
 # }

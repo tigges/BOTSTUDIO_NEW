@@ -1,4 +1,4 @@
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 
 export function webChannelName(_kind?: string): string {
   return 'Website chat'

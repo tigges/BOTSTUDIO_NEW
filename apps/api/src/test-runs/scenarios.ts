@@ -5,7 +5,7 @@
  * change that breaks one fails CI before it fails a scheduled run.
  */
 
-import type { HandoverPriority, ReturnOutcome } from '@ybot/shared'
+import type { HandoverPriority, ReturnOutcome } from '@botstudio/shared'
 
 export interface Visitor {
   first: string

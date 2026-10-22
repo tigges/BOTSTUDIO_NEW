@@ -1,12 +1,12 @@
 import React, { memo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 import {
   Play, MessageSquare, HelpCircle, GitBranch, Variable,
   Globe, Workflow, Headphones, CheckCircle, Clock, Mail,
   Sparkles, Search, Layout, Layers, Zap, FileText, Wrench,
 } from 'lucide-react'
-import { routerRoutes, stepMode, type JourneyMark, type NodeKind } from '@ybot/shared'
+import { routerRoutes, stepMode, type JourneyMark, type NodeKind } from '@botstudio/shared'
 
 const ICON_MAP: Record<NodeKind, React.ElementType> = {
   start: Play,

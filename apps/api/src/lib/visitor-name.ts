@@ -1,5 +1,5 @@
-import { prisma } from '@ybot/db'
-import { NAME_QUESTION, fillNameTokens, spokenFirstName, usableContactName } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { NAME_QUESTION, fillNameTokens, spokenFirstName, usableContactName } from '@botstudio/shared'
 
 const CHAT_NAME = 'chatName'
 

@@ -10,8 +10,8 @@
  * That window is for people and the queue clock. It does not replace the bot.
  */
 
-import { prisma } from '@ybot/db'
-import { handoverList } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { handoverList } from '@botstudio/shared'
 import { triggerRules } from './automation-engine.js'
 
 export const DEFAULT_AWAY_MESSAGE =

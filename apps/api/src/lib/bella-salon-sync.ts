@@ -1,4 +1,4 @@
-import { graphKeepsLearning } from '@ybot/shared'
+import { graphKeepsLearning } from '@botstudio/shared'
 import { graphAction } from './copy-graphs.js'
 
 /** The retail starter welcome. Bella's public page should not speak it. */

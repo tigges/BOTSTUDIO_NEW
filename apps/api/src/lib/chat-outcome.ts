@@ -10,7 +10,7 @@
  * never inferred from what is left after containment.
  */
 
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { parseInboxPolicy } from './sla.js'
 
 export const QUIET_MINUTES = 30

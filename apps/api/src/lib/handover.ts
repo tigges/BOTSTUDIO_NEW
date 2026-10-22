@@ -6,14 +6,14 @@
  * Opening hours decide whether anyone is there to take it (see chat-outcome.ts).
  */
 
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import {
   handoverSummary,
   type HandoverContract,
   type HandoverRequest,
   type HandoverReturn,
   type ReturnOutcome,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { dispatchWebhookEvent } from '../queues.js'
 import { triggerRules } from './automation-engine.js'
 import { hasLiveAgentHours } from './chat-outcome.js'

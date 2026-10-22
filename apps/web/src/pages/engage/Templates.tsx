@@ -4,14 +4,14 @@ import {
   CheckCircle2, Clock, AlertCircle, Edit2, Copy, Trash2,
   Mail, MessageSquare, Phone, Globe, Eye, Loader2,
 } from 'lucide-react'
-import { Badge, Button, Input } from '@ybot/ui'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
+import { Badge, Button, Input } from '@botstudio/ui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@botstudio/ui'
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuSeparator,
-} from '@ybot/ui'
+} from '@botstudio/ui'
 import { SubNav } from '../../components/SubNav'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 import { useTemplates, useCreateTemplate, useDeleteTemplate } from '../../lib/hooks'
 
 const SUBNAV = [

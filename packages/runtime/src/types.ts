@@ -1,4 +1,4 @@
-import type { HandoverRequest } from '@ybot/shared'
+import type { HandoverRequest } from '@botstudio/shared'
 
 // Session variable scopes
 export type VarScope = 'flow' | 'global' | 'contact'
@@ -52,7 +52,7 @@ export interface NodeResult {
   error?: string
 }
 
-/** The slice of PrismaClient the nodes use. Kept narrow so the runtime builds without @ybot/db. */
+/** The slice of PrismaClient the nodes use. Kept narrow so the runtime builds without @botstudio/db. */
 export interface RuntimeDb {
   $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): PromiseLike<T>
 }
@@ -63,7 +63,7 @@ export interface ExecutionServices {
   db: RuntimeDb
   redis?: import('ioredis').Redis
   httpFetch: typeof fetch
-  catalog?: import('@ybot/shared').StudioCatalog
+  catalog?: import('@botstudio/shared').StudioCatalog
   now?: () => Date
   /** Runs a tool from the bot's Tools list. Absent where tools cannot run. */
   runTool?: (toolId: string, args: Record<string, unknown>) => Promise<ToolCallResult>

@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 
 interface SubNavItem {
   label: string

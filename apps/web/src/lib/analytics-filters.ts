@@ -1,4 +1,4 @@
-import type { AnalyticsFilters, AnalyticsMetric, AnalyticsDimension, AnalyticsGranularity } from '@ybot/shared'
+import type { AnalyticsFilters, AnalyticsMetric, AnalyticsDimension, AnalyticsGranularity } from '@botstudio/shared'
 
 /** Analytics filters live in the URL so a shared link opens the same numbers. */
 export interface AnalyticsSearch {

@@ -15,8 +15,13 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  API_IMAGE: ghcr.io/${{ github.repository_owner }}/yai/ybot-api
-  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/yai/ybot-web
+  API_IMAGE: ghcr.io/${{ github.repository_owner }}/botstudio-api
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/botstudio-web
+  # The host pulls these until its compose file names the images above
+  # (docs/deploy-synology.md, "Switching to the BotStudio names"). Delete
+  # both lines, and the legacy tags below, once that is done.
+  LEGACY_API_IMAGE: ghcr.io/${{ github.repository_owner }}/yai/ybot-api
+  LEGACY_WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/yai/ybot-web
 
 jobs:
   tag:
@@ -50,6 +55,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Image name and build args
         id: meta
@@ -61,6 +68,7 @@ jobs:
         run: |
           if [ "${{ matrix.app }}" = "api" ]; then
             echo "image=${API_IMAGE}" >> "$GITHUB_OUTPUT"
+            echo "legacy=${LEGACY_API_IMAGE}" >> "$GITHUB_OUTPUT"
             {
               echo "args<<EOF"
               echo "APP_VERSION=${VERSION}"
@@ -69,17 +77,20 @@ jobs:
               echo "APP_BUILD_DATE=${DATE}"
               echo "EOF"
             } >> "$GITHUB_OUTPUT"
+            echo "epoch=$(git log -1 --format=%ct)" >> "$GITHUB_OUTPUT"
           else
             echo "image=${WEB_IMAGE}" >> "$GITHUB_OUTPUT"
+            echo "legacy=${LEGACY_WEB_IMAGE}" >> "$GITHUB_OUTPUT"
             {
               echo "args<<EOF"
               echo "VITE_API_URL=/api/v1"
-              echo "VITE_APP_VERSION=${VERSION}"
-              echo "VITE_BUILD_NUMBER=${BUILD}"
-              echo "VITE_GIT_SHA=${SHA}"
-              echo "VITE_BUILD_DATE=${DATE}"
               echo "EOF"
             } >> "$GITHUB_OUTPUT"
+            # The time of the last commit that can change the web image. A push
+            # that leaves these paths alone then produces the same image ID, so
+            # Watchtower leaves the web container running.
+            EPOCH="$(git log -1 --format=%ct -- apps/web packages package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json turbo.json)"
+            echo "epoch=${EPOCH}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Log in to GHCR
@@ -94,13 +105,23 @@ jobs:
 
       - name: Build & push ${{ matrix.app }}
         uses: docker/build-push-action@v6
+        env:
+          SOURCE_DATE_EPOCH: ${{ steps.meta.outputs.epoch }}
         with:
           context: .
           file: apps/${{ matrix.app }}/Dockerfile
-          push: true
+          # rewrite-timestamp clamps file times to SOURCE_DATE_EPOCH, so even a
+          # build without cache gives the same web image for the same inputs.
+          outputs: type=image,push=true,rewrite-timestamp=true
+          provenance: false
           tags: |
             ${{ steps.meta.outputs.image }}:${{ needs.tag.outputs.tag }}
             ${{ steps.meta.outputs.image }}:latest
+            ${{ steps.meta.outputs.legacy }}:${{ needs.tag.outputs.tag }}
+            ${{ steps.meta.outputs.legacy }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.title=botstudio-${{ matrix.app }}
           build-args: ${{ steps.meta.outputs.args }}
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
@@ -150,4 +171,4 @@ jobs:
           SHORT_SHA="${GITHUB_SHA::7}"
           curl -s -o /dev/null -X POST "$HOOK_URL" \
             -H "Content-Type: application/json" \
-            -d "{\"text\":\"📦 *YBot images pushed to GHCR* — tag \`${IMAGE_TAG}\` · build #${{ github.run_number }} · \`${SHORT_SHA}\`\n• API: \`${API_IMAGE}:${IMAGE_TAG}\`\n• Web: \`${WEB_IMAGE}:${IMAGE_TAG}\`\n• <${RUN_URL}|View CI run> — Watchtower will deploy to AVIORI within 5 min\"}"
+            -d "{\"text\":\"📦 *BotStudio images pushed to GHCR* — tag \`${IMAGE_TAG}\` · build #${{ github.run_number }} · \`${SHORT_SHA}\`\n• API: \`${API_IMAGE}:${IMAGE_TAG}\`\n• Web: \`${WEB_IMAGE}:${IMAGE_TAG}\`\n• <${RUN_URL}|View CI run> — Watchtower deploys to AVIORI\"}"

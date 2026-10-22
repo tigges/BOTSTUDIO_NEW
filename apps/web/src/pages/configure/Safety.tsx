@@ -3,7 +3,7 @@ import { AlertCircle, AlertTriangle, Brain, EyeOff, Loader2, Plus, ShieldCheck, 
 import {
   Badge, Button, EmptyState, cn,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody, DialogFooter,
-} from '@ybot/ui'
+} from '@botstudio/ui'
 import {
   BLOCKED_INPUT_LINE,
   BLOCKED_OUTPUT_LINE,
@@ -34,7 +34,7 @@ import {
   type GuardrailRule,
   type PrivacySettings,
   type RenderMode,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import type { GuardrailPolicyRow, SafetyTestResult } from '../../lib/api'
 import { useMemorySettings, usePolicyAction, useSafety, useSafetyTest, useSaveMemorySettings, useSavePolicy, useSavePrivacy } from '../../lib/hooks'
 import { useAppStore } from '../../store/app'

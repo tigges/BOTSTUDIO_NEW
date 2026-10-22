@@ -1,20 +1,15 @@
 import type {
   AuthProfileKind, BlueprintFieldSpec, BusinessProfile, EvalScenario, FieldChange, KnowledgeConflict, ProfileIssue, EvalScenarioResult, GuardrailDecision, GuardrailHit, GuardrailRule, HandoverContract, PrivacyReader,
   PrivacySettings, BotFootprint, BotStage, ChecklistItem, ReleaseDiff, ReturnOutcome, ToolEffect, ToolKind, ToolParameter, ToolReturns, AggregateResult, BotSettings, DocumentQuality,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { messageForStatus } from './api-error'
+import type { AppBuildInfo } from './version'
+import { storedToken } from './storage-keys'
 
 const BASE = import.meta.env.VITE_API_URL ?? '/api/v1'
 
 function getToken(): string | null {
-  try {
-    const raw = localStorage.getItem('ybot-app')
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as { state?: { token?: string } }
-    return parsed?.state?.token ?? null
-  } catch {
-    return null
-  }
+  return storedToken()
 }
 
 export class ApiError extends Error {
@@ -612,7 +607,7 @@ export const preview = {
     flowName?: string
     state?: TestChatState
   }): Promise<Response> => {
-    const token = (() => { try { const r = localStorage.getItem('ybot-app'); if (!r) return null; const p = JSON.parse(r) as { state?: { token?: string } }; return p?.state?.token ?? null } catch { return null } })()
+    const token = storedToken()
     return fetch(`${BASE}/bots/${botId}/preview/chat`, {
       method: 'POST',
       headers: {
@@ -663,6 +658,7 @@ export function buildWsUrl(token: string): string {
 }
 
 export const system = {
+  version: () => apiFetch<{ data: AppBuildInfo }>('/system/version'),
   status: () => apiFetch<{ data: SystemStatus }>('/system/status'),
   config: () => apiFetch<{ data: SystemConfig }>('/system/config'),
 }
@@ -1022,6 +1018,14 @@ export interface ServicePing { ok: boolean; latencyMs: number }
 export interface RagSourceEntry { id: string; name: string; lastSyncAt?: string; _count: { documents: number } }
 export interface SystemStatus {
   services: { database: ServicePing; redis: ServicePing }
+  /** Production only: secrets that are missing or still a published default. */
+  secretProblems?: Array<{ key: string; message: string }>
+  background?: {
+    role: 'all' | 'api' | 'worker'
+    workers: Array<{ id: string; role: string; startedAt: string; seenAt: string }>
+    dropped: number
+    problems: Array<{ key: string; message: string }>
+  }
   containers: DockerContainer[]
   rag: { sources: number; documents: number; chunks: number; sourceList: RagSourceEntry[] }
   system: { platform: string; uptime: number; nodeVersion: string; cpuCount: number; totalMemMb: number; freeMemMb: number; usedMemPct: number }
@@ -1034,7 +1038,6 @@ export interface SystemConfig {
   auth: { JWT_SECRET: ConfigEntry }
   database: { DATABASE_URL: ConfigEntry }
   cache: { REDIS_URL: ConfigEntry }
-  storage: { S3_ENDPOINT: ConfigEntry; S3_BUCKET: ConfigEntry; S3_REGION: ConfigEntry }
   llm: { LLM_PROVIDER?: ConfigEntry; GEMINI_API_KEY: ConfigEntry; ANTHROPIC_API_KEY: ConfigEntry; OLLAMA_BASE_URL: ConfigEntry; OPENAI_API_KEY: ConfigEntry; GROQ_API_KEY: ConfigEntry }
   app: { NODE_ENV: ConfigEntry; FRONTEND_URL: ConfigEntry }
 }

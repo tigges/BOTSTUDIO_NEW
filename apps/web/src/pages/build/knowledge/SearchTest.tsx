@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link } from '@tanstack/react-router'
 import { Search, Loader2, AlertTriangle, ChevronDown, ChevronRight, Building2 } from 'lucide-react'
-import { Badge, Button, Card } from '@ybot/ui'
+import { Badge, Button, Card } from '@botstudio/ui'
 import { KnowledgeSubNav } from './subnav'
 import { useSearchTest } from '../../../lib/hooks'
 import type { EngineState, SearchMode, SearchTestReport } from '../../../lib/api'

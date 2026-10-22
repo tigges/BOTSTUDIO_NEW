@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react'
-import { Badge, Button, Card, CardHeader, CardTitle } from '@ybot/ui'
+import { Badge, Button, Card, CardHeader, CardTitle } from '@botstudio/ui'
 import * as api from '../lib/api'
 import { useTestRuns } from '../lib/hooks'
 

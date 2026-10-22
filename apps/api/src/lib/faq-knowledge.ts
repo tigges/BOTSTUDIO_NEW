@@ -1,4 +1,4 @@
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { enqueueKnowledgeSync } from '../queues.js'
 
 export const FAQ_SOURCE_KIND = 'faq'

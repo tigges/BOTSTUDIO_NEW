@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Wrench, X } from 'lucide-react'
-import { Button } from '@ybot/ui'
-import { TOOL_EFFECT_LABELS, toolChangesData } from '@ybot/shared'
+import { Button } from '@botstudio/ui'
+import { TOOL_EFFECT_LABELS, toolChangesData } from '@botstudio/shared'
 import { useInboxTools, useRunInboxTool } from '../../lib/hooks'
 import type { InboxTool } from '../../lib/api'
 

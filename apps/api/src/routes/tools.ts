@@ -15,12 +15,12 @@
  * GET/POST/PATCH/DELETE /auth-profiles      credentials, sealed at rest, never returned
  */
 import type { FastifyInstance, FastifyReply } from 'fastify'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { z } from 'zod'
 import {
   AUTH_PROFILE_KINDS, TOOL_EFFECTS, TOOL_KINDS, TOOL_PARAM_TYPES,
   defaultToolConfig, parametersFromJsonSchema, toolIssues, type ToolDraft, type ToolParameter,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { requireRole } from '../middleware/auth.js'
 import { findTool, presentTool, runAndRecord } from '../lib/tools-store.js'
 import { applyAuthProfile, publicAuthProfile } from '../lib/auth-profiles.js'

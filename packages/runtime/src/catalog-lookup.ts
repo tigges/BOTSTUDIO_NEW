@@ -1,5 +1,5 @@
-import type { CatalogFact, StudioCatalog } from '@ybot/shared'
-import { factsForKind } from '@ybot/shared'
+import type { CatalogFact, StudioCatalog } from '@botstudio/shared'
+import { factsForKind } from '@botstudio/shared'
 import { listenables, matchTopic, pickTopic } from './topic-route.js'
 
 export function matchCatalog(catalog: StudioCatalog | undefined, text: string, kind?: string): CatalogFact | undefined {

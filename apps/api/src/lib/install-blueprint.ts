@@ -1,9 +1,9 @@
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import {
   businessDocuments,
   type Blueprint,
   type BusinessProfile,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { upsertStudioCatalog } from './studio-catalog.js'
 import { forgetGuardrails } from './guardrails.js'
 import { enqueueKnowledgeSync } from '../queues.js'

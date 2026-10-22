@@ -11,9 +11,9 @@
  * Values reach people through the bot's Human agent render mode.
  */
 import type { FastifyInstance } from 'fastify'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { z } from 'zod'
-import { MEMORY_MAX_DAYS, MEMORY_MAX_KEYS, journeyVariables, memoryIssues, parseMemorySettings } from '@ybot/shared'
+import { MEMORY_MAX_DAYS, MEMORY_MAX_KEYS, journeyVariables, memoryIssues, parseMemorySettings } from '@botstudio/shared'
 import { requireRole } from '../middleware/auth.js'
 import { agentViewsFor } from '../lib/present-chat.js'
 import { savedJourney } from '../lib/flow-runner.js'

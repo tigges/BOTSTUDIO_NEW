@@ -4,11 +4,11 @@ import {
   Clock, Pause, Play, Trash2, Pencil, ChevronDown, Code2,
   Copy, ExternalLink, RefreshCw, Activity, Filter,
 } from 'lucide-react'
-import { Badge, Button, Input } from '@ybot/ui'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@ybot/ui'
+import { Badge, Button, Input } from '@botstudio/ui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@botstudio/ui'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@botstudio/ui'
 import { SubNav } from '../../components/SubNav'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 import { useWebhooks, useCreateWebhook, useDeleteWebhook, useTestWebhook } from '../../lib/hooks'
 import * as api from '../../lib/api'
 import { useQueryClient } from '@tanstack/react-query'
@@ -59,7 +59,7 @@ const MOCK_WEBHOOKS: Webhook[] = [
     status: 'active', successRate: 100, lastTriggered: '45m ago', createdAt: '2 months ago',
   },
   {
-    id: 'WH-003', url: 'https://n8n.acme.io/webhook/ybot-tickets', events: ['ticket.created', 'ticket.updated', 'agent.assigned'],
+    id: 'WH-003', url: 'https://n8n.acme.io/webhook/botstudio-tickets', events: ['ticket.created', 'ticket.updated', 'agent.assigned'],
     status: 'error', successRate: 54, lastTriggered: '3h ago', createdAt: '1 month ago',
   },
   {

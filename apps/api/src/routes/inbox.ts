@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { z } from 'zod'
 import { processInboundMessage } from '../runtime-bridge.js'
 import { enqueueConversationAnalysis } from '../queues.js'
@@ -9,7 +9,7 @@ import { agentViewFor, agentViewsFor, presentConversation, presentMessages } fro
 import { outcomeAfterStatus } from '../lib/chat-outcome.js'
 import { costByConversation } from '../lib/llm-ledger.js'
 import { deliverAgentReply, HELD_WHERE, returnChat, withHeldChats } from '../lib/handover.js'
-import { renderPersonalDataDeep, RETURN_OUTCOMES, toolChangesData } from '@ybot/shared'
+import { renderPersonalDataDeep, RETURN_OUTCOMES, toolChangesData } from '@botstudio/shared'
 import { findTool, presentTool, runAndRecord } from '../lib/tools-store.js'
 import { chatsWithMessagesLike, inboxWhere, readInboxQuery } from '../lib/inbox-list.js'
 

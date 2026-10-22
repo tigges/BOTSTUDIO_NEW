@@ -2,11 +2,11 @@
  * Integration connections keep their credential in an Auth Profile, sealed.
  * HubSpot and Zendesk also install ordinary HTTP tools that use that profile.
  */
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import {
   CONNECTORS, connectorIssues, connectorProfileSettings, connectorSettings, connectorTools, isConnector, toolIssues,
   type AuthProfileKind,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { sealSecret, secretHint } from './secrets.js'
 
 type Db = typeof prisma

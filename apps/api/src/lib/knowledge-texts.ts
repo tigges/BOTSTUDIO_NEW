@@ -1,5 +1,5 @@
-import { prisma } from '@ybot/db'
-import type { KnowledgeText } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import type { KnowledgeText } from '@botstudio/shared'
 import { BUSINESS_SOURCE_KIND } from './install-blueprint.js'
 
 const MAX_DOCUMENTS = 300

@@ -9,7 +9,7 @@ import {
   pageFromHtml,
   recommendationsForVotes,
   type OptimizeChapter,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 
 function asChapters(flows: Array<{ name: string; graph: unknown }>): OptimizeChapter[] {
   return flows as OptimizeChapter[]

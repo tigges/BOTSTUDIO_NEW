@@ -10,9 +10,9 @@
  */
 
 import type { FastifyInstance, FastifyReply } from 'fastify'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { z } from 'zod'
-import { EVAL_ENDINGS, EVAL_LIMITS, evalIssues, parseEvalScenarios, type EvalScenarioResult } from '@ybot/shared'
+import { EVAL_ENDINGS, EVAL_LIMITS, evalIssues, parseEvalScenarios, type EvalScenarioResult } from '@botstudio/shared'
 import { requireRole } from '../middleware/auth.js'
 import { runSuite } from '../lib/evals.js'
 import { hasSteps, workingCopy } from '../lib/releases.js'

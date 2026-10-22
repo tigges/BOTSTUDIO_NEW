@@ -1,4 +1,4 @@
-import { timeBucket, type AggregateRow, type AnalyticsGranularity } from '@ybot/shared'
+import { timeBucket, type AggregateRow, type AnalyticsGranularity } from '@botstudio/shared'
 
 export interface VolumePoint { time: string; total: number; contained: number; escalated: number; abandoned: number; open: number }
 

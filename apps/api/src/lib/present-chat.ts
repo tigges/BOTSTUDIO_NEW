@@ -1,4 +1,4 @@
-import { renderPersonalDataDeep } from '@ybot/shared'
+import { renderPersonalDataDeep } from '@botstudio/shared'
 import { loadPrivacy, renderFor } from './privacy.js'
 import { presentChatText } from './visitor-name.js'
 

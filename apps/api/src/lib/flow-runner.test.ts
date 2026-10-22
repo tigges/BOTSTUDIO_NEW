@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { hairStudioPack } from '@ybot/shared'
-import type { FlowGraph } from '@ybot/runtime'
+import { hairStudioPack } from '@botstudio/shared'
+import type { FlowGraph } from '@botstudio/runtime'
 import { resumeVariables, silentMapReply } from './flow-runner.js'
 
 test('a saved session with no flow scope still keeps the latest reply', () => {

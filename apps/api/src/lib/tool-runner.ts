@@ -2,14 +2,14 @@ import { randomUUID } from 'node:crypto'
 import {
   checkToolArgs, fillJsonTemplate, fillToolTemplate, httpConfig, toolChangesData,
   type ToolParameter,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { applyAuthProfile, type AppliedAuth } from './auth-profiles.js'
 import { assertPublicUrl } from './public-url.js'
 import { runFunctionCode } from './function-sandbox.js'
 import { mcpCallTool, type McpTransport } from './mcp-client.js'
 import { scrubValues } from './secrets.js'
 import { loadPrivacy, renderDeepFor } from './privacy.js'
-import type { PrivacySettings } from '@ybot/shared'
+import type { PrivacySettings } from '@botstudio/shared'
 import type { KnowledgeHit } from './knowledge-search.js'
 
 /** Where a run came from. Test chats and eval runs do not run tools that change data. */

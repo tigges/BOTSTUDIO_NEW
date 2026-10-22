@@ -30,25 +30,25 @@ function shouldRelease(passes: number) {
 }
 
 export function queueChat(id: string) {
-  remember('ybot-open-chat', id, 'chat')
+  remember('botstudio-open-chat', id, 'chat')
 }
 
 export function claimChat() {
-  const id = peek('chat', 'ybot-open-chat')
+  const id = peek('chat', 'botstudio-open-chat')
   if (!id) return null
   chatPasses += 1
-  if (shouldRelease(chatPasses)) finish('chat', 'ybot-open-chat', id)
+  if (shouldRelease(chatPasses)) finish('chat', 'botstudio-open-chat', id)
   return id
 }
 
 export function queueContact(id: string) {
-  remember('ybot-open-contact', id, 'contact')
+  remember('botstudio-open-contact', id, 'contact')
 }
 
 export function claimContact() {
-  const id = peek('contact', 'ybot-open-contact')
+  const id = peek('contact', 'botstudio-open-contact')
   if (!id) return null
   contactPasses += 1
-  if (shouldRelease(contactPasses)) finish('contact', 'ybot-open-contact', id)
+  if (shouldRelease(contactPasses)) finish('contact', 'botstudio-open-contact', id)
   return id
 }

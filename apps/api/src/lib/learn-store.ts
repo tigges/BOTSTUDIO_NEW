@@ -1,4 +1,4 @@
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import {
   LEARNING_KEEPS,
   LEARNING_TAG,
@@ -12,7 +12,7 @@ import {
   type LearnSuggestion,
   type RatedChatInput,
   type WeekCounts,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { messageText } from './draft-flows.js'
 
 export interface LearnCard {

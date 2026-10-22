@@ -5,10 +5,10 @@ import {
   AlertCircle, AlertTriangle, Pencil, Calendar, Loader2,
 } from 'lucide-react'
 import { useNavigate } from '@tanstack/react-router'
-import { Badge, Button, Input } from '@ybot/ui'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody, DialogFooter } from '@ybot/ui'
+import { Badge, Button, Input } from '@botstudio/ui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody, DialogFooter } from '@botstudio/ui'
 import { SubNav } from '../../components/SubNav'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 import { PlannedBadge } from '../../components/PlannedFeature'
 import type { IntegrationConnection } from '../../lib/api'
 import { useIntegrations, useConnectIntegration, useDisconnectIntegration, useInstallConnectorTools } from '../../lib/hooks'

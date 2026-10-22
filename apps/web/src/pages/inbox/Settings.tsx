@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Clock, Save, ToggleLeft, ToggleRight, Loader2, Users, Zap, MessageSquare, Hand } from 'lucide-react'
-import { Button, Card } from '@ybot/ui'
+import { Button, Card } from '@botstudio/ui'
 import { PlannedBadge } from '../../components/PlannedFeature'
 import { useCannedReplies, useCreateCannedReply, useDeleteCannedReply, useInboxConfig, useSaveInboxConfig } from '../../lib/hooks'
 import { useAppStore } from '../../store/app'

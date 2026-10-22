@@ -1,1 +1,1 @@
-export { usableContactName } from '@ybot/shared'
+export { usableContactName } from '@botstudio/shared'

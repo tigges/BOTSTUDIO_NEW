@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { SessionMachine, type FlowGraph } from '@ybot/runtime'
-import type { ExecutionServices, Session } from '@ybot/runtime'
+import { SessionMachine, type FlowGraph } from '@botstudio/runtime'
+import type { ExecutionServices, Session } from '@botstudio/runtime'
 import {
   BAKED_TEMPLATES,
   EMAIL_QUESTION,
@@ -19,7 +19,7 @@ import {
   startPreview,
   suggestCluster,
   templatesInCluster,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 
 function session(text: string, name = 'Ada'): Session {
   return {

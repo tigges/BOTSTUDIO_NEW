@@ -5,7 +5,7 @@ import {
   parseChannelConfig,
   statusHelp,
   type OptionalChannelKind,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 
 export type FetchLike = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<{
   ok: boolean

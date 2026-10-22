@@ -3,7 +3,7 @@
  * Does not create, edit, or publish journeys, flows, or workflows.
  */
 
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { logChapterEntry } from './journey-traffic.js'
 
 export const TRAFFIC_PREFIX = 'traffic-'

@@ -9,7 +9,7 @@
  * deleted, so changes made in the console stay.
  */
 
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import {
   DENTAL_BLUEPRINT,
   HTTP_TOOL_DEFAULTS,
@@ -17,7 +17,7 @@ import {
   type BusinessProfile,
   type HandoverContract,
   type ToolParameter,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { installBlueprint } from '../lib/install-blueprint.js'
 import { ensureWebChannels } from '../lib/web-channels.js'
 import { logChapterEntry } from '../lib/journey-traffic.js'

@@ -5,7 +5,7 @@
  * the model fails, or the site is a hair studio (authored salon walk).
  */
 
-import { LlmAdapter, llmChain, type LlmProvider } from '@ybot/llm'
+import { LlmAdapter, llmChain, type LlmProvider } from '@botstudio/llm'
 import {
   chooseShopHomes,
   chooseSitePages,
@@ -21,7 +21,7 @@ import {
   type ScannedPage,
   type SiteTopic,
   type WebsiteChatDraft,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 
 const IMPORT_TIMEOUT_MS = 45_000
 const FETCH_TIMEOUT_MS = 8_000

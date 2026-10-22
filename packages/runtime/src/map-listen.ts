@@ -1,4 +1,4 @@
-import type { StudioCatalog } from '@ybot/shared'
+import type { StudioCatalog } from '@botstudio/shared'
 import type { FlowGraph, GraphEdge, GraphNode } from './engine.js'
 import { matchTopic, pickTopic, type TopicRoute } from './topic-route.js'
 

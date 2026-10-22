@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { Settings2 } from 'lucide-react'
-import { cn } from '@ybot/ui'
+import { cn } from '@botstudio/ui'
 
 const TABS = [
   { label: 'Chats', path: '/inbox/chats' },

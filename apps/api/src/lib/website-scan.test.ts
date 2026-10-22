@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { SessionMachine, type FlowGraph } from '@ybot/runtime'
-import type { ExecutionServices, Session } from '@ybot/runtime'
+import { SessionMachine, type FlowGraph } from '@botstudio/runtime'
+import type { ExecutionServices, Session } from '@botstudio/runtime'
 import {
   chooseShopHomes,
   chooseSitePages,
@@ -12,7 +12,7 @@ import {
   pageFromHtml,
   welcomeDoors,
   welcomeGreeting,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { isBlockedIp, normalizeScanUrl, PublicSiteError } from './public-site.js'
 
 const YUZU = `<!doctype html>

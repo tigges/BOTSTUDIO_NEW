@@ -1,7 +1,7 @@
 import type { NodeContext, NodeResult } from '../types.js'
 import { pickCatalog } from '../catalog-lookup.js'
 import { pickRoute } from '../topic-route.js'
-import { aiStepContract, handoverFromConfig, parseAiTurn, routerRoutes, stepMode, toolWaitHandoverConfig, type AiStepContract } from '@ybot/shared'
+import { aiStepContract, handoverFromConfig, parseAiTurn, routerRoutes, stepMode, toolWaitHandoverConfig, type AiStepContract } from '@botstudio/shared'
 import { evaluateCondition, interpolate, lookup } from '../utils.js'
 
 // ── trigger_start ────────────────────────────────────────────────────────────

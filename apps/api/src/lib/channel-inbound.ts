@@ -1,4 +1,4 @@
-import { numbersMatch, parseChannelConfig } from '@ybot/shared'
+import { numbersMatch, parseChannelConfig } from '@botstudio/shared'
 
 export interface InboundChannel {
   id: string

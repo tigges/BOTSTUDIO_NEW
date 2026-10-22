@@ -1,16 +1,20 @@
 /**
- * YBot embeddable chat widget.
+ * BotStudio embeddable chat widget.
  *
  * Usage:
  *   <script src="https://your-server.com/api/v1/widget.js?id=CHANNEL_ID" async></script>
  *
  * OR manually:
- *   <script>window.YBotChannelId = 'CHANNEL_ID';</script>
+ *   <script>window.BotStudioChannelId = 'CHANNEL_ID';</script>
+ *
+ * Snippets made before the rename set window.YBot*; those names still work.
  *   <script src="https://your-server.com/api/v1/widget.js" async></script>
  */
 
 (function () {
   // ── Config ─────────────────────────────────────────────────────────────────
+  const globals = window as unknown as Record<string, string | undefined>
+  const setting = (name: string): string | undefined => globals[`BotStudio${name}`] || globals[`YBot${name}`]
   const script = (document.currentScript || document.querySelector('script[src*="widget.js"]')) as HTMLScriptElement | null
   const channelId = ((): string => {
     if (script) {
@@ -20,11 +24,11 @@
         if (id) return id
       } catch { /* fallthrough */ }
     }
-    return (window as unknown as Record<string, unknown>)['YBotChannelId'] as string ?? ''
+    return setting('ChannelId') ?? ''
   })()
 
   if (!channelId) {
-    console.warn('[YBot Widget] No channelId — add ?id=YOUR_CHANNEL_ID to the script src.')
+    console.warn('[BotStudio widget] No channelId — add ?id=YOUR_CHANNEL_ID to the script src.')
     return
   }
 
@@ -38,8 +42,8 @@
     return '/api/v1'
   })()
 
-  const ACCENT = (window as unknown as Record<string, string>)['YBotAccentColor'] ?? '#6366f1'
-  const TITLE  = (window as unknown as Record<string, string>)['YBotTitle']       ?? 'Chat with us'
+  const ACCENT = setting('AccentColor') ?? '#6366f1'
+  const TITLE  = setting('Title')       ?? 'Chat with us'
 
   // ── State ──────────────────────────────────────────────────────────────────
   interface Msg { role: 'user' | 'bot'; text: string; streaming?: boolean }
@@ -277,6 +281,9 @@
     }
     if (open) setTimeout(() => textarea.focus(), 50)
   }
+
+  const api = { open: () => togglePanel(true), close: () => togglePanel(false), toggle: () => togglePanel() }
+  Object.assign(window, { BotStudioWidget: api, YBotWidget: api })
 
   bubble.addEventListener('click', () => togglePanel())
   sendBtn.addEventListener('click', sendMessage)

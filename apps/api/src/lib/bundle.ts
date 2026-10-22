@@ -10,7 +10,7 @@
  * guests hear; publishing stays a separate, gated step.
  */
 
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import YAML from 'yaml'
 import { z } from 'zod'
 import {
@@ -26,8 +26,8 @@ import {
   type GuardrailRule,
   type PrivacySettings,
   type ToolDraft,
-} from '@ybot/shared'
-import { hideSecrets } from '@ybot/db'
+} from '@botstudio/shared'
+import { hideSecrets } from '@botstudio/db'
 import { newestByFlow } from './entry-flow.js'
 
 export const BUNDLE_FORMAT = 'botstudio.bundle'

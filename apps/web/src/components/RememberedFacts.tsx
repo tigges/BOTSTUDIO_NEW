@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Brain, Loader2, RefreshCw, X } from 'lucide-react'
-import { Button, cn } from '@ybot/ui'
+import { Button, cn } from '@botstudio/ui'
 import type { MemoryFact } from '../lib/api'
 import { useForgetMemory } from '../lib/hooks'
 

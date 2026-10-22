@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { inspectFlowGraph, repairFlowGraph, starterFlows } from '@ybot/shared'
+import { inspectFlowGraph, repairFlowGraph, starterFlows } from '@botstudio/shared'
 
 test('a welcome with a loose start and untied lines can be repaired', () => {
   const graph = {

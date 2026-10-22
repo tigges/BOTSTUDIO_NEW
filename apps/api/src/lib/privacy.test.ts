@@ -12,9 +12,9 @@ import {
   privacyIssues,
   readerMode,
   renderPersonalData,
-} from '@ybot/shared'
-import { PrivacyProvider, setLlmPrivacy, StreamRevealer, type LlmProvider } from '@ybot/llm'
-import { changedFields, hideSecrets, auditAction } from '@ybot/db'
+} from '@botstudio/shared'
+import { PrivacyProvider, setLlmPrivacy, StreamRevealer, type LlmProvider } from '@botstudio/llm'
+import { changedFields, hideSecrets, auditAction } from '@botstudio/db'
 import { protectText, renderDeepFor, renderFor, revealText, tokenFor } from './privacy.js'
 import { scrubSecrets } from './log-scrub.js'
 

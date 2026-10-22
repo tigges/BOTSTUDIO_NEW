@@ -1,4 +1,4 @@
-import { ANALYTICS_METRICS, METRIC_INFO, type AnalyticsMetric } from '@ybot/shared'
+import { ANALYTICS_METRICS, METRIC_INFO, type AnalyticsMetric } from '@botstudio/shared'
 
 /** Names saved before the aggregate endpoint existed. */
 const LEGACY: Record<string, AnalyticsMetric> = {

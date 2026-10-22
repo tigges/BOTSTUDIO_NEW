@@ -9,7 +9,7 @@
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { readFile } from 'node:fs/promises'
 import { resolve, dirname } from 'node:path'
 import { proposeDraftFlows, textMightStartDraft } from '../lib/draft-flows.js'
@@ -51,14 +51,15 @@ function setCors(reply: { header(k: string, v: string): void }) {
 const WIDGET_INLINE_JS = /* js */`
 (function(){
   var script=document.currentScript||document.querySelector('script[src*="widget.js"]');
+  function setting(name){var v=window['BotStudio'+name];return v!==undefined&&v!==null&&v!==''?v:window['YBot'+name];}
   var channelId='';
   if(script){try{var u=new URL(script.src);channelId=u.searchParams.get('id')||u.searchParams.get('channelId')||'';}catch(e){}}
-  if(!channelId)channelId=window.YBotChannelId||'';
-  if(!channelId){console.warn('[YBot Widget] No channelId');return;}
+  if(!channelId)channelId=setting('ChannelId')||'';
+  if(!channelId){console.warn('[BotStudio widget] No channelId');return;}
   var API_BASE='/api/v1';
   if(script){try{var u=new URL(script.src);API_BASE=u.protocol+'//'+u.host+'/api/v1';}catch(e){}}
-  var ACCENT=window.YBotAccentColor||'#6366f1';
-  var TITLE=window.YBotTitle||'Chat with us';
+  var ACCENT=setting('AccentColor')||'#6366f1';
+  var TITLE=setting('Title')||'Chat with us';
   var conversationId=null;
   var sessionId='ws_'+Date.now()+'_'+Math.random().toString(36).slice(2);
   var open=false,messages=[],loading=false;
@@ -203,7 +204,8 @@ const WIDGET_INLINE_JS = /* js */`
   }
   bubble.onclick=function(){toggle();};sendB.onclick=send;
   ta.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}};
-  window.YBotWidget={open:function(){toggle(true);},close:function(){toggle(false);},toggle:function(){toggle();}};
+  var api={open:function(){toggle(true);},close:function(){toggle(false);},toggle:function(){toggle();}};
+  window.BotStudioWidget=api;window.YBotWidget=api;
 })();`
 
 export async function widgetRoutes(app: FastifyInstance) {
@@ -270,7 +272,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     <div class="badge">Channel: ${channelId}</div>
   </div>
   <div class="arrow">👉</div>
-  <script>window.YBotTitle='${titleOverride ?? botLabel}';window.YBotBotName='${personaName}';${colorOverride ? `window.YBotAccentColor='${colorOverride}';` : ''}</script>
+  <script>window.BotStudioTitle='${titleOverride ?? botLabel}';window.BotStudioBotName='${personaName}';${colorOverride ? `window.BotStudioAccentColor='${colorOverride}';` : ''}</script>
   <script src="/api/v1/widget.js?id=${channelId}" defer></script>
 </body>
 </html>`)
@@ -392,11 +394,11 @@ export async function widgetRoutes(app: FastifyInstance) {
   </div>
   <footer>© Bella Hair Studio · <span title="${build.title}">${build.short}</span> · Powered by <a href="${origin}" style="color:inherit">BotStudio</a></footer>
   <script>
-    window.YBotChannelId='${channelId}';
-    window.YBotTitle='Chat with Bella Hair Studio';
-    window.YBotAccentColor='#8b5cf6';
-    ${personaName ? `window.YBotBotName='${personaName}';` : ''}
-    function openChat(){if(window.YBotWidget)window.YBotWidget.open();}
+    window.BotStudioChannelId='${channelId}';
+    window.BotStudioTitle='Chat with Bella Hair Studio';
+    window.BotStudioAccentColor='#8b5cf6';
+    ${personaName ? `window.BotStudioBotName='${personaName}';` : ''}
+    function openChat(){if(window.BotStudioWidget)window.BotStudioWidget.open();}
     document.addEventListener('DOMContentLoaded', function(){openChat();});
   </script>
   <script src="/api/v1/widget.js?id=${channelId}" defer></script>
@@ -442,7 +444,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     const { tenantId, botId } = { tenantId: channel.tenantId, botId: channel.botId }
 
     const messageId = typeof body.messageId === 'string' ? body.messageId.slice(0, 120) : undefined
-    if (visitor.showVisitor && !firstDelivery(channelId, messageId)) {
+    if (visitor.showVisitor && !(await firstDelivery(channelId, messageId))) {
       const stream = openEventStream(reply, { 'Access-Control-Allow-Origin': '*' })
       if (body.conversationId) stream.send({ conversationId: body.conversationId })
       stream.send({ duplicate: true })

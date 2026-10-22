@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Avatar, Badge, Button, Input, Card } from '@ybot/ui'
-import type { FlowGraph } from '@ybot/runtime'
+import { Avatar, Badge, Button, Input, Card } from '@botstudio/ui'
+import type { FlowGraph } from '@botstudio/runtime'
 import {
   SALON_WELCOME_NAME,
   START_CLUSTERS,
@@ -18,7 +18,7 @@ import {
   type StartPath,
   type StartTemplate,
   type StudioCatalog,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { useAppStore } from '../store/app'
 import { apiFetch, bots as botsApi, business as businessApi, type BusinessRead, type WebsiteScanPreview } from '../lib/api'
 import { BusinessFieldRow, takeAlternative } from '../components/BusinessFields'

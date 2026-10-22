@@ -10,8 +10,8 @@
  * Schema note: add `DocumentChunk` model to Prisma schema if not already present.
  */
 
-import { prisma } from '@ybot/db'
-import { createEmbeddingAdapter } from '@ybot/llm'
+import { prisma } from '@botstudio/db'
+import { createEmbeddingAdapter } from '@botstudio/llm'
 import { withLlmScope } from '../lib/llm-ledger.js'
 
 const embedder = createEmbeddingAdapter()
@@ -124,7 +124,7 @@ export async function ingestKnowledgeSource(jobData: {
     const crawled = await crawlWebsite(baseUrl, depth)
     pages.push(...crawled.map((p) => ({ url: p.url, text: p.text })))
   } else if (kind === 'file') {
-    // For uploaded files, content should already be in config.text or fetched from MinIO
+    // For uploaded files, content should already be in config.text
     const text = String(config['text'] ?? config['content'] ?? '')
     if (text) pages.push({ text })
   }

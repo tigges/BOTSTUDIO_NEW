@@ -4,15 +4,15 @@ import {
   MoreHorizontal, ChevronDown, Upload, Download, Star,
   Clock, MessageCircle, CheckCircle2,
 } from 'lucide-react'
-import { Avatar, Badge, Button, Input, Skeleton } from '@ybot/ui'
+import { Avatar, Badge, Button, Input, Skeleton } from '@botstudio/ui'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
-} from '@ybot/ui'
+} from '@botstudio/ui'
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuSeparator,
-} from '@ybot/ui'
-import { cn } from '@ybot/ui'
+} from '@botstudio/ui'
+import { cn } from '@botstudio/ui'
 import { useContacts, useCreateContact, useUpdateContact, useDeleteContact, useContactConversations, useCreateConversation, useCreateTicket, useChannels, useContactMemory } from '../../lib/hooks'
 import { RememberedFacts } from '../../components/RememberedFacts'
 import { useAppStore } from '../../store/app'

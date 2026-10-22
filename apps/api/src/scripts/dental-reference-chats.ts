@@ -4,8 +4,8 @@
  * the published journey says. People's replies after a handover are written here.
  */
 
-import { DEFAULT_PRIVACY, DENTAL_BLUEPRINT, type BusinessProfile, type ReturnOutcome, type StudioCatalog } from '@ybot/shared'
-import type { FlowGraph } from '@ybot/runtime'
+import { DEFAULT_PRIVACY, DENTAL_BLUEPRINT, type BusinessProfile, type ReturnOutcome, type StudioCatalog } from '@botstudio/shared'
+import type { FlowGraph } from '@botstudio/runtime'
 import { runTestTurn, type TestChatDeps, type TestChatState } from '../lib/test-chat.js'
 
 export interface ReferencePatient {

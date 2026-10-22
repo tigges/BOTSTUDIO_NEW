@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { fillNameTokens, isNameVariable, nameForSpeech } from '@ybot/shared'
+import { fillNameTokens, isNameVariable, nameForSpeech } from '@botstudio/shared'
 import { fillNameTokens as localFill, isNameVariable as localIsName, nameForSpeech as localName } from './contact-speech.js'
 
 test('runtime name speech matches the shared rules', () => {
@@ -18,5 +18,5 @@ test('runtime name speech matches the shared rules', () => {
 
 test('the flow runner does not import a workspace package', () => {
   const source = readFileSync(fileURLToPath(new URL('./utils.ts', import.meta.url)), 'utf8')
-  assert.doesNotMatch(source, /@ybot\//)
+  assert.doesNotMatch(source, /@botstudio\//)
 })

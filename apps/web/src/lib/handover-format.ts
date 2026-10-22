@@ -1,4 +1,4 @@
-import { RETURN_LABELS, type HandoverContract, type HandoverPriority } from '@ybot/shared'
+import { RETURN_LABELS, type HandoverContract, type HandoverPriority } from '@botstudio/shared'
 
 export type Tone = 'muted' | 'info' | 'warning' | 'error'
 

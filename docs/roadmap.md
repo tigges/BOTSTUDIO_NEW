@@ -71,7 +71,7 @@ CREATE POLICY tenant_isolation ON conversations
 This is additive — existing Prisma queries continue to work.
 
 #### G. Align flow runtime with public chat path
-`apps/runtime` contains a `SessionMachine` / `FlowSession` graph executor. The public widget chat (`/public/chat/:channelId`) currently executes RAG + LLM **directly**, bypassing the flow graph entirely for conversations assigned to a bot. These two paths should converge so published flows actually drive live customer chats.
+`packages/runtime` contains a `SessionMachine` / `FlowSession` graph executor. The public widget chat (`/public/chat/:channelId`) currently executes RAG + LLM **directly**, bypassing the flow graph entirely for conversations assigned to a bot. These two paths should converge so published flows actually drive live customer chats.
 
 **Fix:** `public/chat` should instantiate a `FlowSession` for the active published flow, falling back to bare RAG only when no flow is published.
 
@@ -191,7 +191,7 @@ The layout is desktop-only with a fixed 260px sidebar. Consider a collapsible si
 | # | Feature | Detail |
 |---|---------|--------|
 | 14 | **Custom analytics dashboards** | Widget builder on top of `Dashboard/Widget` models |
-| 15 | **Scheduled reports** | `report-generate` queue slot exists; needs email delivery |
+| 15 | **Scheduled reports** | Not started: needs a report job and email delivery |
 | 16 | **LLM cost metering** | Per-conversation token usage → billing line item |
 | 17 | **Flow A/B testing** | Publish two flow variants; route traffic; compare CSAT |
 | 18 | **Bot version diff & rollback** | `FlowVersion` history exists; no diff UI |
@@ -233,6 +233,6 @@ Currently **zero tests**. Recommended initial targets:
 2. `apps/api/src/routes/auth.ts` — login/register happy path + duplicate email + wrong password
 3. `apps/api/src/routes/public-chat.ts` — widget chat SSE response shape
 4. `apps/api/src/routes/channels.ts` — tenant isolation (tenant A cannot read tenant B channels)
-5. `apps/runtime` — flow graph executor smoke tests
+5. `packages/runtime` — flow graph executor smoke tests
 
 Suggested stack: **Vitest** (already installed) + **@fastify/test-helpers** + **MSW** for LLM provider mocking.

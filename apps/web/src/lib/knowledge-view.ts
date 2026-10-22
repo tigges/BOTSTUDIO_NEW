@@ -1,4 +1,4 @@
-import type { QualityLevel } from '@ybot/shared'
+import type { QualityLevel } from '@botstudio/shared'
 
 export interface TextPart {
   text: string

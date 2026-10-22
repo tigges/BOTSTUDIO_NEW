@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { SessionMachine, type FlowGraph } from '@ybot/runtime'
-import type { ExecutionServices, Session } from '@ybot/runtime'
+import { SessionMachine, type FlowGraph } from '@botstudio/runtime'
+import type { ExecutionServices, Session } from '@botstudio/runtime'
 import {
   SALON_WELCOME_NAME,
   flowCatalog,
@@ -11,7 +11,7 @@ import {
   spokenLines,
   welcomeDoors,
   welcomeGreeting,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { environmentsNeedingGraph } from './bella-salon-sync.js'
 
 function session(text: string, name = 'Ada', start = 'start'): Session {

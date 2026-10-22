@@ -1,7 +1,7 @@
 import React from 'react'
 import { Download } from 'lucide-react'
-import { Badge, Button, Card, CardHeader, CardTitle, Skeleton } from '@ybot/ui'
-import { denominatorLine, formatMetric, type AnalyticsMetric } from '@ybot/shared'
+import { Badge, Button, Card, CardHeader, CardTitle, Skeleton } from '@botstudio/ui'
+import { denominatorLine, formatMetric, type AnalyticsMetric } from '@botstudio/shared'
 import {
   Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'

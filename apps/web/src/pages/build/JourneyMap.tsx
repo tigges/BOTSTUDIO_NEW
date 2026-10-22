@@ -1,8 +1,8 @@
 import React from 'react'
 import { Link } from '@tanstack/react-router'
-import type { JourneyChapter, JourneyLayout, JourneyMark, JourneyMarks } from '@ybot/shared'
-import { Button } from '@ybot/ui'
-import { cn } from '@ybot/ui'
+import type { JourneyChapter, JourneyLayout, JourneyMark, JourneyMarks } from '@botstudio/shared'
+import { Button } from '@botstudio/ui'
+import { cn } from '@botstudio/ui'
 
 export type JourneyLens = 'design' | 'traffic' | 'health'
 

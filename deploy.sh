@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# deploy.sh — First-time install & update script for YBot on AVIORI (Synology)
+# deploy.sh — First-time install & update script for BotStudio on AVIORI (Synology)
 #
 # Prerequisites (run once):
 #   1. Install Docker from Synology Package Center
@@ -23,7 +23,7 @@ FIRST_RUN=false
 
 # ── Colour helpers ─────────────────────────────────────────────────────────
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
-info()  { echo -e "${GREEN}[ybot]${NC} $*"; }
+info()  { echo -e "${GREEN}[botstudio]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[warn]${NC} $*"; }
 error() { echo -e "${RED}[error]${NC} $*" >&2; exit 1; }
 
@@ -37,7 +37,6 @@ if $FIRST_RUN; then
   mkdir -p \
     /volume1/docker/ybot/pgdata \
     /volume1/docker/ybot/valkey \
-    /volume1/docker/ybot/minio \
     /volume1/docker/ybot/caddy/data \
     /volume1/docker/ybot/caddy/config
 
@@ -58,10 +57,10 @@ export IMAGE_TAG
 info "Pulling images (tag: ${IMAGE_TAG}) ..."
 docker compose ${COMPOSE_FILES} --env-file "${ENV_FILE}" pull
 
-# ── Start infrastructure (postgres, valkey, minio) ──────────────────────────
+# ── Start infrastructure (postgres, valkey) ─────────────────────────────────
 info "Starting infrastructure services ..."
 docker compose ${COMPOSE_FILES} --env-file "${ENV_FILE}" \
-  up -d postgres valkey minio
+  up -d postgres valkey
 
 info "Waiting for PostgreSQL to be healthy ..."
 until docker compose ${COMPOSE_FILES} --env-file "${ENV_FILE}" \
@@ -89,7 +88,7 @@ info "Starting all services ..."
 docker compose ${COMPOSE_FILES} --env-file "${ENV_FILE}" \
   up -d --remove-orphans
 
-info "Done! YBot is running."
+info "Done! BotStudio is running."
 info "Access it at: $(grep FRONTEND_URL "${ENV_FILE}" | cut -d= -f2)"
 info ""
 info "Useful commands:"

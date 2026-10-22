@@ -1,5 +1,5 @@
-import { prisma } from '@ybot/db'
-import { draftWelcome, starterFlows } from '@ybot/shared'
+import { prisma } from '@botstudio/db'
+import { draftWelcome, starterFlows } from '@botstudio/shared'
 
 /** Draft copies of the standard flows. The welcome flow is published on the environment you pass. */
 export async function installStarterFlows(tenantId: string, botId: string, companyName: string, environmentId: string | null) {

@@ -1,4 +1,4 @@
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import {
   bakedPack,
   hairStudioCatalog,
@@ -10,7 +10,7 @@ import {
   type BotStart,
   type SiteTemplatePack,
   type StarterPackId,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { upsertStudioCatalog } from './studio-catalog.js'
 import { syncFaqKnowledge } from './faq-knowledge.js'
 

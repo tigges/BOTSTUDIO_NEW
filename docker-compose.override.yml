@@ -11,12 +11,7 @@ services:
   valkey:
     ports: ["6379:6379"]
 
-  minio:
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-
-  # In development the API runs on host via `pnpm --filter @ybot/api dev`
+  # In development the API runs on host via `pnpm --filter @botstudio/api dev`
   # Uncomment below to run API in Docker instead:
   # api:
   #   build:
@@ -25,4 +20,4 @@ services:
   #     - ./apps/api/src:/app/apps/api/src
   #   environment:
   #     NODE_ENV: development
-  #   command: pnpm --filter @ybot/api dev
+  #   command: pnpm --filter @botstudio/api dev

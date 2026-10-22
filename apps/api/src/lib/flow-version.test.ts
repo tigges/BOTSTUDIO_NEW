@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { versionForEnvironment, versionsForEnvironmentList } from '@ybot/shared'
+import { versionForEnvironment, versionsForEnvironmentList } from '@botstudio/shared'
 
 const versions = [
   { version: 14, status: 'published', environmentId: 'sandbox', graph: 'sandbox-welcome' },

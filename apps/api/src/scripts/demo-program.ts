@@ -6,11 +6,11 @@
  * marketing site only grows from real visitor chats.
  */
 
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import bcrypt from 'bcryptjs'
 import { proposeDraftFlows } from '../lib/draft-flows.js'
 import { attachDestination, extendWelcomeGraph } from '../lib/welcome-routes.js'
-import { assistantGreeting, greetingWelcomeGraph, starterFlows, withSampleOrder } from '@ybot/shared'
+import { assistantGreeting, greetingWelcomeGraph, starterFlows, withSampleOrder } from '@botstudio/shared'
 import { graphAction, publishedSource } from '../lib/copy-graphs.js'
 import { stockWelcomeKind, type StockWelcomeKind } from '../lib/stock-welcome.js'
 import { SUPPORT_USE_CASES, supportUseCaseFlows } from './starter-flows.js'

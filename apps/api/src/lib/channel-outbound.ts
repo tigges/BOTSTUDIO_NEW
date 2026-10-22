@@ -1,5 +1,5 @@
 import { sendEmail } from './email.js'
-import { parseChannelConfig, renderForChannel, splitText, CHANNEL_LIMITS, type ChannelSend, type RichMessage } from '@ybot/shared'
+import { parseChannelConfig, renderForChannel, splitText, CHANNEL_LIMITS, type ChannelSend, type RichMessage } from '@botstudio/shared'
 
 /** A bot reply as the turn produced it: the text, and the open question's choices if any. */
 export interface OutboundReply {

@@ -1,9 +1,12 @@
 import type { FastifyInstance } from 'fastify'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { requireRole } from '../middleware/auth.js'
 import * as os from 'node:os'
-import * as http from 'node:http'
-import { DEFAULT_MODELS, currentModelId, llmChain } from '@ybot/llm'
+import { DEFAULT_MODELS, currentModelId, llmChain } from '@botstudio/llm'
+import { isKnownDefault, productionSecretProblems } from '../lib/production-secrets.js'
+import { backgroundProblems, liveWorkers, processRole } from '../background.js'
+import { queueHealth } from '../queues.js'
+import { dockerRequest } from '../lib/docker.js'
 
 function llmOrder(): string {
   const links = llmChain()
@@ -11,22 +14,6 @@ function llmOrder(): string {
   return links.map((link) => `${link.label} (${link.model})`).join(' → ')
 }
 
-
-function dockerRequest(path: string): Promise<unknown> {
-  return new Promise((resolve) => {
-    const req = http.request(
-      { socketPath: '/var/run/docker.sock', path, method: 'GET' },
-      (res) => {
-        let body = ''
-        res.on('data', (chunk: Buffer) => { body += chunk.toString() })
-        res.on('end', () => { try { resolve(JSON.parse(body)) } catch { resolve(null) } })
-      },
-    )
-    req.on('error', () => resolve(null))
-    req.setTimeout(3000, () => { req.destroy(); resolve(null) })
-    req.end()
-  })
-}
 
 async function pingDb() {
   const t0 = Date.now()
@@ -141,11 +128,14 @@ export async function systemRoutes(app: FastifyInstance) {
 }
 
 async function statusHandler() {
-    const [db, redis, rawContainers] = await Promise.all([
+    const [db, redis, rawContainers, workers] = await Promise.all([
       pingDb(),
       pingRedis(),
       dockerRequest('/containers/json?all=1'),
+      liveWorkers(),
     ])
+    const role = processRole()
+    const queues = queueHealth()
 
     const containers = Array.isArray(rawContainers)
       ? (rawContainers as Array<Record<string, unknown>>).map((c) => ({
@@ -170,6 +160,15 @@ async function statusHandler() {
     return {
       data: {
         services: { database: db, redis },
+        secretProblems: process.env['NODE_ENV'] === 'production'
+          ? productionSecretProblems(process.env).map(({ key, message }) => ({ key, message }))
+          : [],
+        background: {
+          role,
+          workers,
+          dropped: queues.dropped,
+          problems: backgroundProblems({ valkeyOk: redis.ok, role, workers, dropped: queues.dropped, lastDrop: queues.lastDrop }),
+        },
         containers,
         rag: {
           sources: sources.length,
@@ -200,7 +199,7 @@ async function statusHandler() {
 
 async function configHandler() {
     const e = process.env
-    function isSet(key: string) { return !!e[key] && e[key] !== 'change-me-in-production' }
+    function isSet(key: string) { return !!e[key] && !isKnownDefault(e[key]) }
     function maskUrl(url: string | undefined) {
       if (!url) return null
       try {
@@ -219,11 +218,8 @@ async function configHandler() {
         cache: {
           REDIS_URL: { set: isSet('REDIS_URL'), label: 'Redis / Valkey', endpoint: maskUrl(e['REDIS_URL']) },
         },
-        storage: {
-          S3_ENDPOINT: { set: isSet('S3_ENDPOINT'), label: 'S3 / MinIO endpoint', endpoint: e['S3_ENDPOINT'] ?? null },
-          S3_BUCKET:   { set: isSet('S3_BUCKET'),   label: 'S3 Bucket',           value: e['S3_BUCKET'] ?? null },
-          S3_REGION:   { set: isSet('S3_REGION'),   label: 'S3 Region',           value: e['S3_REGION'] ?? null },
-        },
+        // Web builds before MinIO was dropped iterate over this group.
+        storage: {},
         llm: {
           LLM_PROVIDER:      { set: true, label: `Tried in order: ${llmOrder()}`, value: e['LLM_PROVIDER'] || null },
           GEMINI_API_KEY:    { set: isSet('GEMINI_API_KEY'),    label: 'Gemini API Key', value: isSet('GEMINI_API_KEY') ? currentModelId(e['GEMINI_MODEL'] || DEFAULT_MODELS.gemini) : null },

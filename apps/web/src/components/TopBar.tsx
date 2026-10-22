@@ -25,7 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
   Button,
-} from '@ybot/ui'
+} from '@botstudio/ui'
 import { useAppStore } from '../store/app'
 import { apiFetch } from '../lib/api'
 import { ManageBotsDialog } from './ManageBotsDialog'

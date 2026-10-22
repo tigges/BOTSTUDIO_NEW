@@ -323,7 +323,7 @@ export const DEMO_WEBHOOKS = [
     events: ['contact.created', 'conversation.created'],
     isActive: true, status: 'active', successRate: 100, lastTriggered: '45m ago',
     createdAt: '2 months ago' },
-  { id: 'wh3', url: 'https://n8n.acme.io/webhook/ybot-tickets',
+  { id: 'wh3', url: 'https://n8n.acme.io/webhook/botstudio-tickets',
     events: ['ticket.created', 'ticket.updated'],
     isActive: false, status: 'error', successRate: 54, lastTriggered: '3h ago',
     createdAt: '1 month ago' },
@@ -374,12 +374,13 @@ export const DEMO_SYSTEM_STATUS: SystemStatus = {
     redis: { ok: true, latencyMs: 1 },
   },
   containers: [
-    { id: 'a1b2c3d4e5f6', name: 'ybot-api', image: 'ybot-api:latest', state: 'running', status: 'Up 3 hours (healthy)' },
-    { id: 'b2c3d4e5f6a1', name: 'ybot-web', image: 'ybot-web:latest', state: 'running', status: 'Up 3 hours' },
-    { id: 'c3d4e5f6a1b2', name: 'ybot-caddy', image: 'caddy:2-alpine', state: 'running', status: 'Up 3 hours' },
-    { id: 'd4e5f6a1b2c3', name: 'ybot-postgres', image: 'pgvector/pgvector:pg16', state: 'running', status: 'Up 3 hours (healthy)' },
-    { id: 'e5f6a1b2c3d4', name: 'ybot-valkey', image: 'valkey/valkey:7-alpine', state: 'running', status: 'Up 3 hours (healthy)' },
-    { id: 'f6a1b2c3d4e5', name: 'ybot-minio', image: 'quay.io/minio/minio:latest', state: 'running', status: 'Up 3 hours (healthy)' },
+    { id: 'a1b2c3d4e5f6', name: 'botstudio-api', image: 'ghcr.io/tigges/botstudio-api:latest', state: 'running', status: 'Up 3 hours (healthy)' },
+    { id: 'b2c3d4e5f6a1', name: 'botstudio-web', image: 'ghcr.io/tigges/botstudio-web:latest', state: 'running', status: 'Up 3 hours' },
+    { id: 'c3d4e5f6a1b2', name: 'botstudio-caddy', image: 'caddy:2-alpine', state: 'running', status: 'Up 3 hours' },
+    { id: 'd4e5f6a1b2c3', name: 'botstudio-postgres', image: 'pgvector/pgvector:pg16', state: 'running', status: 'Up 3 hours (healthy)' },
+    { id: 'e5f6a1b2c3d4', name: 'botstudio-valkey', image: 'valkey/valkey:7-alpine', state: 'running', status: 'Up 3 hours (healthy)' },
+    { id: 'f6a1b2c3d4e5', name: 'botstudio-worker', image: 'ghcr.io/tigges/botstudio-api:latest', state: 'running', status: 'Up 3 hours' },
+    { id: 'a6b1c2d3e4f5', name: 'botstudio-docker-proxy', image: 'tecnativa/docker-socket-proxy:latest', state: 'running', status: 'Up 3 hours' },
   ],
   rag: {
     sources: 3,
@@ -413,11 +414,6 @@ export const DEMO_SYSTEM_CONFIG: SystemConfig = {
   },
   cache: {
     REDIS_URL: { set: true, label: 'Redis / Valkey', endpoint: 'redis://valkey:6379' },
-  },
-  storage: {
-    S3_ENDPOINT: { set: true, label: 'S3 / MinIO endpoint', endpoint: 'http://minio:9000' },
-    S3_BUCKET:   { set: true, label: 'S3 Bucket', value: 'ybot-uploads' },
-    S3_REGION:   { set: true, label: 'S3 Region', value: 'us-east-1' },
   },
   llm: {
     LLM_PROVIDER:      { set: true, label: 'Tried in order: Ollama (llama3.2)', value: null },

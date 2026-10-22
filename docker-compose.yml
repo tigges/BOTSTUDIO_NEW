@@ -1,10 +1,12 @@
 version: "3.9"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# YBot — Full stack Docker Compose
+# BotStudio — Full stack Docker Compose
 # Usage:
-#   Development:  docker compose up
+#   Development:  cp .env.example .env && docker compose up
 #   Production:   docker compose --env-file .env.production up -d
+# JWT_SECRET, POSTGRES_PASSWORD and REDIS_PASSWORD have no defaults: compose
+# stops with a message naming the missing one.
 # ─────────────────────────────────────────────────────────────────────────────
 
 x-restart: &restart unless-stopped
@@ -12,19 +14,50 @@ x-logging: &logging
   driver: "json-file"
   options: { max-size: "10m", max-file: "3" }
 
+# Shared by the API and the worker: both run the same image and code.
+x-api-env: &api-env
+  NODE_ENV:       ${NODE_ENV:-production}
+  PORT:           3001
+  HOST:           0.0.0.0
+  DATABASE_URL:   postgresql://${POSTGRES_USER:-ybot}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ybot}
+  REDIS_URL:      redis://:${REDIS_PASSWORD}@valkey:6379
+  JWT_SECRET:     ${JWT_SECRET:?Set JWT_SECRET in the env file (openssl rand -hex 32)}
+  # Seals Auth Profile secrets. Changing it means re-entering every secret.
+  SECRETS_KEY:    ${SECRETS_KEY:-}
+  TOOLS_ALLOW_PRIVATE_NETWORK: ${TOOLS_ALLOW_PRIVATE_NETWORK:-false}
+  # Re-apply the demo companies on every API start. Off for a customer
+  # install; run apps/api/dist/scripts/apply-demos.js once instead.
+  DEMO_SEED_ON_BOOT: ${DEMO_SEED_ON_BOOT:-false}
+  FRONTEND_URL:   ${FRONTEND_URL:-http://localhost}
+  # System Status lists containers through the read-only proxy below.
+  DOCKER_PROXY_URL: http://docker-proxy:2375
+  # LLM (provide at least one). Tried in order: Gemini, Claude, OpenAI, Groq, then Ollama.
+  # LLM_PROVIDER (gemini | claude | ollama | openai | groq) moves one to the front.
+  LLM_PROVIDER:      ${LLM_PROVIDER:-}
+  GEMINI_API_KEY:    ${GEMINI_API_KEY:-}
+  GEMINI_MODEL:      ${GEMINI_MODEL:-gemini-flash-latest}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  ANTHROPIC_MODEL:   ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+  OLLAMA_BASE_URL:   ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+  OLLAMA_MODEL:      ${OLLAMA_MODEL:-llama3.2}
+  OPENAI_API_KEY:    ${OPENAI_API_KEY:-}
+  OPENAI_MODEL:      ${OPENAI_MODEL:-gpt-4o}
+  GROQ_API_KEY:      ${GROQ_API_KEY:-}
+  GROQ_MODEL:        ${GROQ_MODEL:-llama-3.3-70b-versatile}
+
 services:
 
   # ── Infrastructure ────────────────────────────────────────────────────────
 
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: ybot-postgres
+    container_name: botstudio-postgres
     restart: *restart
     logging: *logging
     environment:
       POSTGRES_DB:       ${POSTGRES_DB:-ybot}
       POSTGRES_USER:     ${POSTGRES_USER:-ybot}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ybotSecret123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the env file}
     volumes:
       - ${PGDATA_PATH:-./data/pgdata}:/var/lib/postgresql/data
     healthcheck:
@@ -32,112 +65,103 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks: [ybot-net]
+    networks: [botstudio-net]
 
   valkey:
     image: valkey/valkey:7-alpine
-    container_name: ybot-valkey
+    container_name: botstudio-valkey
     restart: *restart
     logging: *logging
-    command: valkey-server --appendonly yes --requirepass ${REDIS_PASSWORD:-valkey123}
+    command: valkey-server --appendonly yes --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in the env file}
     volumes:
       - ${VALKEY_PATH:-./data/valkey}:/data
     healthcheck:
-      test: ["CMD", "valkey-cli", "-a", "${REDIS_PASSWORD:-valkey123}", "ping"]
+      test: ["CMD", "valkey-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks: [ybot-net]
+    networks: [botstudio-net]
 
-  minio:
-    image: quay.io/minio/minio:latest
-    container_name: ybot-minio
+  # Read-only Docker API for System Status. Only GET /containers/* is
+  # allowed (no exec, start, stop or images), so the API never holds the
+  # Docker socket. Not published outside botstudio-net.
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: botstudio-docker-proxy
     restart: *restart
     logging: *logging
     environment:
-      MINIO_ROOT_USER:     ${MINIO_ROOT_USER:-ybotadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-ybotSecret123}
+      CONTAINERS: 1
+      POST: 0
     volumes:
-      - ${MINIO_PATH:-./data/minio}:/data
-    command: server /data --console-address ":9001"
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    networks: [ybot-net]
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [botstudio-net]
 
   # ── Application ───────────────────────────────────────────────────────────
 
   api:
-    image: ybot-api:latest
+    image: botstudio-api:latest
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    container_name: ybot-api
+    container_name: botstudio-api
     restart: *restart
     logging: *logging
+    # The API finishes requests in flight after SIGTERM before it exits.
+    stop_grace_period: 20s
     depends_on:
       postgres: { condition: service_healthy }
       valkey:   { condition: service_healthy }
     environment:
-      NODE_ENV:       ${NODE_ENV:-production}
-      PORT:           3001
-      HOST:           0.0.0.0
-      DATABASE_URL:   postgresql://${POSTGRES_USER:-ybot}:${POSTGRES_PASSWORD:-ybotSecret123}@postgres:5432/${POSTGRES_DB:-ybot}
-      REDIS_URL:      redis://:${REDIS_PASSWORD:-valkey123}@valkey:6379
-      JWT_SECRET:     ${JWT_SECRET:-change-me-in-production}
-      # Seals Auth Profile secrets. Changing it means re-entering every secret.
-      SECRETS_KEY:    ${SECRETS_KEY:-}
-      TOOLS_ALLOW_PRIVATE_NETWORK: ${TOOLS_ALLOW_PRIVATE_NETWORK:-false}
-      FRONTEND_URL:   ${FRONTEND_URL:-http://localhost}
-      # LLM (provide at least one). Tried in order: Gemini, Claude, OpenAI, Groq, then Ollama.
-      # LLM_PROVIDER (gemini | claude | ollama | openai | groq) moves one to the front.
-      LLM_PROVIDER:      ${LLM_PROVIDER:-}
-      GEMINI_API_KEY:    ${GEMINI_API_KEY:-}
-      GEMINI_MODEL:      ${GEMINI_MODEL:-gemini-flash-latest}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      ANTHROPIC_MODEL:   ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
-      OLLAMA_BASE_URL:   ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      OLLAMA_MODEL:      ${OLLAMA_MODEL:-llama3.2}
-      OPENAI_API_KEY:    ${OPENAI_API_KEY:-}
-      OPENAI_MODEL:      ${OPENAI_MODEL:-gpt-4o}
-      GROQ_API_KEY:      ${GROQ_API_KEY:-}
-      GROQ_MODEL:        ${GROQ_MODEL:-llama-3.3-70b-versatile}
-      # Object storage
-      S3_ENDPOINT:    ${S3_ENDPOINT:-http://minio:9000}
-      S3_BUCKET:      ${S3_BUCKET:-ybot-uploads}
-      S3_ACCESS_KEY:  ${MINIO_ROOT_USER:-ybotadmin}
-      S3_SECRET_KEY:  ${MINIO_ROOT_PASSWORD:-ybotSecret123}
-      S3_REGION:      ${S3_REGION:-us-east-1}
+      <<: *api-env
+      # HTTP only; the worker container runs queues and sweeps. A host still on
+      # an older compose file runs everything in the API (PROCESS_ROLE=all).
+      PROCESS_ROLE: api
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:3001/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks: [ybot-net]
+    networks: [botstudio-net]
+
+  # Same image as the API, started with the worker entry point: BullMQ
+  # consumers (knowledge sync, webhook delivery, campaigns, chat analysis),
+  # the quiet-chat and memory sweeps, and a heartbeat System Status reads.
+  worker:
+    image: botstudio-api:latest
+    container_name: botstudio-worker
+    restart: *restart
+    logging: *logging
+    command: ["node", "apps/api/dist/worker.js"]
+    stop_grace_period: 20s
+    depends_on:
+      postgres: { condition: service_healthy }
+      valkey:   { condition: service_healthy }
+      api:      { condition: service_started }
+    environment:
+      <<: *api-env
+      PROCESS_ROLE: worker
+    networks: [botstudio-net]
 
   web:
-    image: ybot-web:latest
+    image: botstudio-web:latest
     build:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL:-/api/v1}
-    container_name: ybot-web
+    container_name: botstudio-web
     restart: *restart
     logging: *logging
     depends_on:
       api: { condition: service_healthy }
-    networks: [ybot-net]
+    networks: [botstudio-net]
 
   # ── Reverse proxy ─────────────────────────────────────────────────────────
 
   caddy:
     image: caddy:2-alpine
-    container_name: ybot-caddy
+    container_name: botstudio-caddy
     restart: *restart
     logging: *logging
     ports:
@@ -148,10 +172,10 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on: [api, web]
-    networks: [ybot-net]
+    networks: [botstudio-net]
 
 networks:
-  ybot-net:
+  botstudio-net:
     driver: bridge
 
 volumes:

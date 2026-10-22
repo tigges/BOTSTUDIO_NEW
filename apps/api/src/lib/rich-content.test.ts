@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { channelLimitRows, CHANNEL_LIMITS, LIMIT_CHANNELS, numberedChoice, renderForChannel, splitText } from '@ybot/shared'
+import { channelLimitRows, CHANNEL_LIMITS, LIMIT_CHANNELS, numberedChoice, renderForChannel, splitText } from '@botstudio/shared'
 
 test('splitText keeps every character and breaks at sentences, not mid-word', () => {
   const text = Array.from({ length: 40 }, (_, i) => `Sentence number ${i + 1} is here.`).join(' ')

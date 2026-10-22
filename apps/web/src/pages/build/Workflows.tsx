@@ -4,10 +4,10 @@ import {
   Zap, Clock, MessageSquare, Globe, ToggleLeft, ToggleRight,
   ChevronRight, AlertCircle, Loader2,
 } from 'lucide-react'
-import { Badge, Button } from '@ybot/ui'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@ybot/ui'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
-import { cn } from '@ybot/ui'
+import { Badge, Button } from '@botstudio/ui'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@botstudio/ui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@botstudio/ui'
+import { cn } from '@botstudio/ui'
 import { useWorkflows, useCreateWorkflow, useToggleWorkflow, useDeleteWorkflow } from '../../lib/hooks'
 import type { AutomationRule } from '../../lib/api'
 

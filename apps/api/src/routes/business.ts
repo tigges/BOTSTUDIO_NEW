@@ -12,7 +12,7 @@
  * Reading a website here is rule-based: no model call, no cost.
  */
 import type { FastifyInstance, FastifyReply } from 'fastify'
-import { prisma } from '@ybot/db'
+import { prisma } from '@botstudio/db'
 import { z } from 'zod'
 import {
   acceptChanges,
@@ -25,7 +25,7 @@ import {
   profileIssues,
   type Blueprint,
   type BusinessProfile,
-} from '@ybot/shared'
+} from '@botstudio/shared'
 import { requireRole } from '../middleware/auth.js'
 import { PublicSiteError, readPublicSite } from '../lib/public-site.js'
 import { BUSINESS_SOURCE_KIND, ensureWebsiteSource, saveBusinessProfile } from '../lib/install-blueprint.js'

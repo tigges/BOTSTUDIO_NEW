@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Tag, Plus, Trash2, ChevronRight, Search, X, CheckCircle, Save } from 'lucide-react'
-import { Button, Input, Badge, EmptyState, Skeleton } from '@ybot/ui'
-import { cn } from '@ybot/ui'
+import { Button, Input, Badge, EmptyState, Skeleton } from '@botstudio/ui'
+import { cn } from '@botstudio/ui'
 import { KnowledgeSubNav } from './subnav'
 import { useEntities, useCreateEntity, useDeleteEntity, useUpdateEntity } from '../../../lib/hooks'
 
