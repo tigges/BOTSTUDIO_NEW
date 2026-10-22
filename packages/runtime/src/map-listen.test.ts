@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { draftWebsiteChat, hairStudioPack, pageFromHtml } from '@botstudio/shared'
 import type { FlowGraph } from './engine.js'
-import { acceptedHoursOffer, hearChapter, isSmallTalk, isTopicSwitch, listenForChapter, offerOnMap, sameQuestion, shapeTurn, wantsOffer } from './map-listen.js'
+import { acceptedHoursOffer, hearChapter, isPersonDoor, isSmallTalk, isTopicSwitch, listenForChapter, looksLikeQuestion, mapTopics, offerOnMap, sameQuestion, shapeTurn, steerInstruction, wantsOffer, welcomeMissReply } from './map-listen.js'
 
 function salonChapters() {
   const pack = hairStudioPack('Yuzu', 'Bella')
@@ -141,4 +141,28 @@ test('a long which-one list becomes three short names, and hours asks one next t
 
   const plans = shapeTurn('Which plan? Free, Starter, Professional, or Enterprise.')
   assert.equal(plans, 'Which plan? Free, Starter, Professional, or Enterprise.')
+})
+
+test('the topic offer skips the person door, puts booking first, and a miss never says "didn\'t catch that"', () => {
+  const say = (name: string) => ({ name, graph: { nodes: [{ id: 's', data: { kind: 'trigger_start', label: 'Start', config: {} } }], edges: [] } as unknown as FlowGraph })
+  const jump = (id: string, flowName: string) => ({ id, data: { kind: 'execute_flow', label: flowName, config: { flowName } } })
+  const welcome = {
+    name: 'Practice welcome',
+    graph: { nodes: [jump('a', 'Dental pain or emergency'), jump('b', 'Prices and finance'), jump('c', 'Book a visit'), jump('d', 'Talk to a person')], edges: [] } as unknown as FlowGraph,
+  }
+  const chapters = [welcome, say('Dental pain or emergency'), say('Prices and finance'), say('Book a visit'), say('Talk to a person')]
+  assert.deepEqual(mapTopics(chapters), ['a booking', 'an urgent problem', 'prices'])
+  assert.equal(offerOnMap(chapters), 'I can help you with a booking, an urgent problem, or prices. What would you like?')
+  assert.equal(isPersonDoor('Talk to a person'), true)
+  assert.equal(isPersonDoor('Speak to the team'), true)
+  assert.equal(isPersonDoor('Book a visit'), false)
+  const misses = [1, 2, 3].map((n) => welcomeMissReply(chapters, n))
+  assert.equal(new Set(misses).size, 3)
+  assert.ok(misses.every((line) => !/didn't catch/i.test(line) && /a booking, an urgent problem, or prices/.test(line)))
+  assert.equal(looksLikeQuestion('again?'), false)
+  assert.equal(looksLikeQuestion('xyz'), false)
+  assert.equal(looksLikeQuestion('do you do sedation?'), true)
+  assert.equal(looksLikeQuestion('my daughter needs her braces checked soon'), true)
+  assert.match(steerInstruction(chapters), /a booking, an urgent problem, or prices/)
+  assert.match(steerInstruction(chapters), /Do not say you are passing the chat/)
 })

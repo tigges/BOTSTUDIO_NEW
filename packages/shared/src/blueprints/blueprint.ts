@@ -23,7 +23,8 @@ export interface BlueprintBundle {
   /** Words that always reach a person, ahead of any chapter. */
   alwaysHuman: string[]
   /** The hours people answer the queue, from the business's own opening hours. */
-  queueHours: { start: string; end: string; timezone: string } | null
+  /** Opening days 0 = Sunday; missing means every day. */
+  queueHours: { start: string; end: string; timezone: string; days?: number[] } | null
   /** The bot's own prompt for answers outside the chapters. */
   systemPrompt: string
 }

@@ -10,7 +10,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { SessionMachine, acceptedHoursOffer, hoursChapterName, copyJumpVariables, missingChapterLine, hearChapter, offerOnMap, isSmallTalk, isTopicSwitch, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn, basicAct, basicsReply } from '@botstudio/runtime'
+import { SessionMachine, acceptedHoursOffer, hoursChapterName, copyJumpVariables, missingChapterLine, hearChapter, offerOnMap, isSmallTalk, isTopicSwitch, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn, basicAct, basicsReply, isWelcomeName, isPersonDoor, looksLikeQuestion, steerInstruction, waitsOnRoute, welcomeMissReply } from '@botstudio/runtime'
 import type { Session, SessionVariables, FlowGraph, ToolCallResult } from '@botstudio/runtime'
 import { prisma } from '@botstudio/db'
 import { CATALOG_ENTITY, catalogFromValues, numberedChoice, type HandoverRequest, type StudioCatalog } from '@botstudio/shared'
@@ -35,6 +35,8 @@ export interface FlowRunResult {
   /** The published flow reached its end. A waiting question is still open. */
   ended?: boolean
   flowName?: string
+  /** Not handled: the guest asked something the welcome has no chapter for. The knowledge answer steers back with this. */
+  steer?: { instruction: string; fallback: string }
 }
 
 export type VersionRow = {
@@ -151,11 +153,14 @@ async function conversationBasics(
   const waiting = asRecord(fsRecord?.waitingFor)
   let reply
   if (fsRecord?.status === 'waiting_input') {
+    const asked = savedQuestion(fsRecord.waitingFor)
+    // At the welcome a hello or "what?" gets the topics, not the opening question word for word.
+    const atWelcome = isWelcomeName(active.flow.name) && asked?.trim().endsWith('?') && waitsOnRoute(graph, fsRecord.currentNodeId)
     reply = basicsReply({
       text: userText,
       graph,
       nodeId: fsRecord.currentNodeId,
-      question: savedQuestion(fsRecord.waitingFor),
+      question: atWelcome ? offerOnMap(await store.chapters()) : asked,
       waitingType: typeof waiting['type'] === 'string' ? waiting['type'] : undefined,
     })
   } else if (fsRecord?.status === 'completed') {
@@ -171,6 +176,62 @@ async function conversationBasics(
     output: { act: reply.act },
   })
   return { handled: true, messages: [reply.text], flowName: active.flow.name }
+}
+
+type TurnOutcome = NonNullable<Awaited<ReturnType<typeof runVersion>>>
+
+/**
+ * The welcome's topic route found nothing and the chart's fallback would ask again,
+ * go quiet, or hand the chat over. A chart that sends a miss to its own chapter or
+ * an AI step keeps that path.
+ */
+export function missedWelcome(outcome: Pick<TurnOutcome, 'session' | 'messages' | 'handover' | 'jumpToFlow'>): boolean {
+  if (outcome.session.variables.flow['route'] !== 'other') return false
+  if (outcome.jumpToFlow) return isPersonDoor(outcome.jumpToFlow)
+  if (outcome.session.waitingFor?.type === 'ai') return false
+  if (outcome.handover) return true
+  if (outcome.session.status === 'waiting_input') return true
+  return !outcome.messages.some((line) => line.trim())
+}
+
+/**
+ * Every bot, every chart: a miss at the welcome never hands over and never says
+ * "didn't catch that" twice. A real question goes to the knowledge answer with the
+ * topics to steer back to; anything else gets a short apology and the topics.
+ * The chat stays on the welcome question either way.
+ */
+async function welcomeMiss(
+  store: JourneyStore,
+  record: SavedSession,
+  map: Array<{ name: string; graph: FlowGraph }>,
+  userText: string,
+  contactName: string,
+  flowName: string,
+): Promise<FlowRunResult> {
+  const variables = resumeVariables(record.variables, userText, contactName)
+  const misses = (Number(variables.flow['_welcome_misses']) || 0) + 1
+  variables.flow['_welcome_misses'] = misses
+  await store.saveSession({
+    id: record.id,
+    flowId: record.flowId,
+    flowVersionId: record.flowVersionId,
+    currentNodeId: record.currentNodeId,
+    variables,
+    status: 'waiting_input',
+    waitingFor: record.waitingFor as Session['waitingFor'],
+  })
+  await store.logStep({
+    flowVersionId: record.flowVersionId,
+    nodeId: record.currentNodeId,
+    nodeKind: 'welcome_miss',
+    input: { text: userText },
+    output: { misses },
+  })
+  const fallback = welcomeMissReply(map, misses)
+  if (looksLikeQuestion(userText)) {
+    return { handled: false, messages: [], steer: { instruction: steerInstruction(map), fallback }, flowName }
+  }
+  return { handled: true, messages: [fallback], waitingFor: record.waitingFor as Session['waitingFor'], flowName }
 }
 
 /** A saved session from an older chart may not have flow, global, and contact. */
@@ -241,6 +302,12 @@ export async function runJourney(store: JourneyStore, opts: {
   const previousAsked = savedQuestion(fsRecord?.waitingFor)
   let recalled: Promise<Record<string, string>> | undefined
   const recall = () => (recalled ??= store.recall ? store.recall().catch(() => ({})) : Promise.resolve({}))
+  const atWelcome = fsRecord?.status === 'waiting_input'
+    && isWelcomeName(active.flow.name)
+    && Boolean(previousAsked?.trim().endsWith('?'))
+    && waitsOnRoute(active.graph as FlowGraph, fsRecord.currentNodeId)
+    ? { record: fsRecord, version: active }
+    : null
 
   let first
   try {
@@ -330,6 +397,34 @@ export async function runJourney(store: JourneyStore, opts: {
     const offer = silentMapReply(map, active.flow.name)
     if (offer) return { handled: true, messages: [offer], flowName: active.flow.name }
     return { handled: false, messages: [] }
+  }
+
+  if (atWelcome && active === atWelcome.version && fsRecord === atWelcome.record && missedWelcome(first)) {
+    const map = await loadChapters()
+    const heard = await hearChapter({ chapters: map, catalog, text: userText, current: active.flow.name }, llmAdapter)
+    const target = heard ? await store.chapter(heard) : null
+    const jumped = target
+      ? await runVersion(store, {
+        machine,
+        version: target,
+        fsRecord: null,
+        conversationId,
+        botId,
+        tenantId,
+        userText,
+        contactName: named.spoken,
+        seedVariables: copyJumpVariables(first.session.variables, userText, named.spoken),
+      })
+      : null
+    if (target && jumped) {
+      await logJump(store, first.session, target)
+      if (!convo.subject) await store.setSubject(target.flow.name)
+      active = target
+      fsRecord = null
+      first = jumped
+    } else {
+      return welcomeMiss(store, atWelcome.record, map, userText, named.spoken, active.flow.name)
+    }
   }
 
   let version = active

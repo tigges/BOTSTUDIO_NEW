@@ -739,12 +739,15 @@ export const DENTAL_DEMO_SCRIPTS: DemoScript[] = [
 
 // ── Bundle ───────────────────────────────────────────────────────────────────
 
+const WEEKDAY_NUMBER: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
+
 function queueHours(hours: OpeningDay[] | null): BlueprintBundle['queueHours'] {
   const open = (hours ?? []).filter((row) => !row.closed && row.open && row.close)
   if (!open.length) return null
   const start = open.map((row) => row.open!).sort()[0]!
   const end = open.map((row) => row.close!).sort().at(-1)!
-  return { start, end, timezone: 'Europe/London' }
+  const days = [...new Set(open.map((row) => WEEKDAY_NUMBER[row.day]).filter((day): day is number => day !== undefined))].sort((x, y) => x - y)
+  return { start, end, timezone: 'Europe/London', ...(days.length && days.length < 7 ? { days } : {}) }
 }
 
 export function dentalBundle(profile: BusinessProfile): BlueprintBundle {

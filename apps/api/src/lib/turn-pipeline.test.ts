@@ -201,6 +201,19 @@ test('with live support off the bot keeps the chat and says so', async () => {
   }
 })
 
+test('a question the welcome has no chapter for is answered from knowledge and steered back to the topics', async () => {
+  const steer = { instruction: 'Steer back to: a booking or prices.', fallback: "Sorry, I didn't quite follow. I can help you with a booking or prices. What would you like?" }
+  const answered = fake({ journey: { handled: false, messages: [], steer }, answer: ['We do offer sedation. Would you like a booking or prices?'] })
+  const result = await runTurnWith(answered.ports, input({ text: 'do you do sedation for nervous patients?' }))
+  assert.equal(answered.answers[0]!.instruction, steer.instruction)
+  assert.equal(result.path, 'answer')
+  assert.match(result.text, /sedation/)
+
+  const failed = fake({ journey: { handled: false, messages: [], steer }, answer: new Error('no model') })
+  const fallback = await runTurnWith(failed.ports, input({ text: 'do you do sedation for nervous patients?' }))
+  assert.equal(fallback.text, steer.fallback)
+})
+
 test('outside opening hours the bot says when the team is on chat', async () => {
   const closed = 'The team is on chat Mon-Fri 09:00-18:00 (Europe/London), so I will keep helping here for now. What do you need help with?'
   const f = fake({ liveAgents: false, noTeamLine: closed, alwaysHuman: ['refund'] })

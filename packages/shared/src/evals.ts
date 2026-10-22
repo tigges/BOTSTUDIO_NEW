@@ -50,6 +50,12 @@ export const CONVERSATION_BASICS: EvalScenario[] = [
   { id: 'basics-thanks', name: 'Takes thanks', turns: ['thanks'], checks: [{ kind: 'says', text: "You're welcome" }] },
   { id: 'basics-bot', name: 'Says it is a virtual assistant', turns: ['are you a bot?'], checks: [{ kind: 'says', text: 'virtual assistant' }, { kind: 'ends', ending: 'still_open' }] },
   { id: 'basics-repeat', name: 'Asks again when the guest is lost', turns: ['sorry?'], checks: [{ kind: 'says', text: 'Sure.' }, { kind: 'never_says', text: "didn't catch" }] },
+  {
+    id: 'basics-frustrated',
+    name: 'Stays kind and keeps helping when the guest is lost or annoyed',
+    turns: ['again?', 'stupid'],
+    checks: [{ kind: 'says', text: 'Sorry' }, { kind: 'never_says', text: "didn't catch" }, { kind: 'ends', ending: 'still_open' }],
+  },
 ]
 
 export interface EvalLine {
