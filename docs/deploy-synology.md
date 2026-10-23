@@ -54,9 +54,21 @@ Do this once. Until then the host keeps running the `ybot-*` containers on the o
 
 Expect about a minute of downtime while compose recreates the containers. Data is untouched: the volume paths and database names do not change.
 
+**The public site depends on a container the repository does not define.** app.botstudio.uk reaches Caddy through a Cloudflare Tunnel, run by `ybot-cloudflared` on the NAS. It is not in `docker-compose.yml` or `docker-compose.synology.yml`. The switch moves Caddy to a new network (`botstudio-net`), and `--remove-orphans` deletes any container of the project that the new files do not list. Unless step 0 is done, the tunnel is either deleted or left on the old network, and the public site goes down. The LAN address keeps working either way.
+
 ```bash
 ssh admin@aviori
 cd /volume1/docker/ybot          # always the same folder: it sets the compose project name
+
+# 0. Find what the host runs that the repository files do not define
+COMPOSE="sudo docker compose -f docker-compose.yml -f docker-compose.synology.yml --env-file .env.production"
+$COMPOSE config --services | sort > /tmp/services.before
+sudo docker inspect ybot-cloudflared --format \
+  'project={{index .Config.Labels "com.docker.compose.project"}} service={{index .Config.Labels "com.docker.compose.service"}} networks={{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+$COMPOSE config | sed -n '/^  cloudflared:/,/^  [a-z]/p'   # the current definition, if it is in the compose files
+#    Then check where the tunnel sends traffic: Cloudflare dashboard → Zero Trust →
+#    Networks → Tunnels → the tunnel → Public hostnames. Note the service URL
+#    (for example http://ybot-caddy:80 or http://caddy:80).
 
 # 1. Back up the current host files
 sudo cp docker-compose.yml docker-compose.yml.bak
@@ -71,6 +83,11 @@ for f in docker-compose.yml docker-compose.synology.yml Caddyfile deploy.sh; do
 done
 sudo chmod +x deploy.sh
 
+# 2b. Compare services. Anything listed with "<" except minio exists only on
+#     the host: add it to docker-compose.synology.yml before going on (see
+#     "Keeping the Cloudflare Tunnel" below).
+$COMPOSE config --services | sort | diff /tmp/services.before -
+
 # 3. Check .env.production (see "Environment variables"): JWT_SECRET,
 #    POSTGRES_PASSWORD and REDIS_PASSWORD must be set or compose refuses to start.
 #    MINIO_* and S3_* lines can be deleted.
@@ -84,17 +101,38 @@ sudo docker compose -f docker-compose.yml -f docker-compose.synology.yml \
 sudo docker compose -f docker-compose.yml -f docker-compose.synology.yml \
   --env-file .env.production up -d --remove-orphans
 
-# 5. Check: every container is botstudio-* and running
+# 5. Check: the public site answers, and every container is botstudio-* and running
+curl -sS -o /dev/null -w '%{http_code}\n' https://app.botstudio.uk/health   # 200
 sudo docker ps -a --filter name=botstudio
 sudo docker ps -a --filter name=ybot        # should list nothing
 sudo docker network prune -f                # removes the unused ybot-net
 ```
 
+### Keeping the Cloudflare Tunnel
+
+If step 0 showed `cloudflared` in the compose files, or a container with no compose project, add it to `docker-compose.synology.yml` under `services:`. Keep its image, command and environment exactly as step 0 printed them, and change only the name and network:
+
+```yaml
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: botstudio-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}   # move the token into .env.production
+    depends_on: [caddy]
+    networks: [botstudio-net]
+```
+
+If it was started by hand rather than by compose, remove it after the switch with `sudo docker rm -f ybot-cloudflared`, so two connectors do not serve the same tunnel.
+
+In the Cloudflare dashboard, the public hostname's service must be `http://caddy:80`. That compose service name works on any network. A container name like `ybot-caddy` stops resolving after the switch.
+
 `--remove-orphans` removes the old MinIO container. Its data in `/volume1/docker/ybot/minio` is left alone; nothing in BotStudio reads it, so delete it when you are sure.
 
 Then open **Settings → System Status**. The "Needs attention" banner must be absent, "Background workers" must show one worker, and the container list must show the `botstudio-*` containers.
 
-If something goes wrong, restore the `.bak` files and run step 4 again.
+If something goes wrong, restore the `.bak` files and run step 4 again. If only the public site is down, check `sudo docker logs botstudio-cloudflared` and the tunnel's service URL first.
 
 ### After the switch
 
@@ -124,6 +162,27 @@ Copy `.env.aviori` to `.env.production` and fill in these values:
 | `OPENAI_API_KEY` | LLM | Paid alternative |
 
 At least one LLM option must be configured.
+
+### Replacing the default database and Valkey passwords
+
+System Status flags `POSTGRES_PASSWORD` or `REDIS_PASSWORD` when they still hold a value published in this repository. Neither port is published outside the Docker network, but replace them anyway. Use hex values: they go into connection URLs, where `@`, `/` and `:` break parsing.
+
+```bash
+cd /volume1/docker/ybot
+COMPOSE="sudo docker compose -f docker-compose.yml -f docker-compose.synology.yml --env-file .env.production"
+
+# Valkey: the password is only read at start
+openssl rand -hex 24            # put this in .env.production as REDIS_PASSWORD
+$COMPOSE up -d valkey api worker
+
+# Postgres: the env value only applies to a new data folder, so change the user first
+NEW=$(openssl rand -hex 24); echo "$NEW"
+$COMPOSE exec postgres psql -U ybot -d ybot -c "ALTER USER ybot WITH PASSWORD '$NEW';"
+# put the printed value in .env.production as POSTGRES_PASSWORD, then:
+$COMPOSE up -d api worker
+```
+
+If the host is still on the old file names (no worker service yet), leave `worker` out of both commands.
 
 On a customer install with `DEMO_SEED_ON_BOOT=false`, load the demo companies once by hand if you want them:
 
@@ -159,7 +218,7 @@ Then set up Watchtower's GHCR login as described in `docker-compose.synology.yml
 | Service | URL |
 |---|---|
 | Console | `https://app.botstudio.uk` (LAN: `http://aviori:8080`) |
-| API health | `/api/v1/health` |
+| API health | `/health` |
 | System Status | Console → Settings → System Status (admins) |
 
 ---
