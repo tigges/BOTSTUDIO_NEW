@@ -658,7 +658,7 @@ test('a website bot greets, then asks what they need, without asking a name it n
     testTurn({ chapters, startChapter: pack.welcomeName, message, environmentLabel: 'Sandbox', state })
 
   const open = await turn('')
-  assert.equal(open.text, "Hi, I'm James at hubspot.")
+  assert.equal(open.text, "Hi, I'm James from hubspot.")
   const hi = await turn('hi', open.state)
   assert.equal(hi.text.includes("What's your name"), false)
   assert.match(hi.text, /^What do you need help with\?/)
@@ -723,6 +723,7 @@ function pipelineTurn(message: string, state: TestChatState | undefined, options
   liveAgents?: boolean
   alwaysHuman?: string[]
   answer?: TestChatDeps['answer']
+  inbox?: TestChatDeps['inbox']
 } = {}) {
   return runTestTurn({
     tenantId: 'tenant',
@@ -733,6 +734,7 @@ function pipelineTurn(message: string, state: TestChatState | undefined, options
     message,
     catalog: salonWalk().catalog,
     state,
+    inbox: Boolean(options.inbox),
   }, {
     handoverRules: async () => ({ liveAgents: options.liveAgents ?? false, alwaysHuman: options.alwaysHuman ?? [] }),
     answer: options.answer ?? (async () => {}),
@@ -740,8 +742,61 @@ function pipelineTurn(message: string, state: TestChatState | undefined, options
     catalog: async () => undefined,
     db: {},
     safety: noSafety,
+    ...(options.inbox ? { inbox: options.inbox } : {}),
   })
 }
+
+function fakeInbox() {
+  const opened: Array<{ transcript: string[]; source: string }> = []
+  const mirrored: string[] = []
+  let held = true
+  const port: TestChatDeps['inbox'] = {
+    async open(input) {
+      opened.push({ transcript: input.transcript.map((line) => `${line.role}: ${line.content}`), source: input.source })
+      return 'inbox-1'
+    },
+    async status() { return { held, status: held ? 'escalated' : 'active' } },
+    async mirror(input) { mirrored.push(`${input.role}: ${input.text}`) },
+  }
+  return { port, opened, mirrored, handBack: () => { held = false } }
+}
+
+test('a test chat handed to the team becomes an Inbox chat, mirrors later lines, and resumes when handed back', async () => {
+  const inbox = fakeInbox()
+  const options = { liveAgents: true, alwaysHuman: ['complaint'], inbox: inbox.port }
+  const open = await pipelineTurn('', undefined, options)
+  const asked = await pipelineTurn('I want to make a complaint', open.state, options)
+  assert.equal(asked.path, 'handover')
+  assert.equal(asked.state.inboxChatId, 'inbox-1')
+  assert.equal(inbox.opened.length, 1)
+  assert.equal(inbox.opened[0]!.source, 'always_human')
+  assert.ok(inbox.opened[0]!.transcript.includes('user: I want to make a complaint'))
+  assert.ok(inbox.mirrored.some((line) => line.startsWith('assistant: ')))
+
+  const waiting = await pipelineTurn('hello? anyone there?', asked.state, options)
+  assert.equal(waiting.path, 'held')
+  assert.ok(inbox.mirrored.includes('user: hello? anyone there?'))
+
+  inbox.handBack()
+  const back = await pipelineTurn('hi', waiting.state, options)
+  assert.notEqual(back.path, 'held')
+  assert.equal(back.state.status, 'active')
+  assert.ok(back.text.length > 0)
+})
+
+test('without the inbox flag a handover stays in the test chat, as evals need', async () => {
+  const inbox = fakeInbox()
+  const asked = await runTestTurn({
+    tenantId: 'tenant', botId: 'bot', chapters: salonWalk().chapters, startChapter: 'Salon welcome', environmentLabel: 'Sandbox',
+    message: 'complaint', catalog: salonWalk().catalog,
+  }, {
+    handoverRules: async () => ({ liveAgents: true, alwaysHuman: ['complaint'] }),
+    answer: async () => {}, llm: async () => quietModel() as never, catalog: async () => undefined, db: {}, safety: noSafety, inbox: inbox.port,
+  })
+  assert.equal(asked.path, 'handover')
+  assert.equal(inbox.opened.length, 0)
+  assert.equal(asked.state.inboxChatId ?? null, null)
+})
 
 test('an always-human word hands the test chat to a person when the team is on, and the bot then stays quiet', async () => {
   const open = await pipelineTurn('', undefined, { liveAgents: true, alwaysHuman: ['complaint'] })
@@ -881,7 +936,7 @@ test('a second question is left for the next turn', () => {
   assert.equal((kept.match(/\?/g) ?? []).length, 1)
   assert.match(kept, /What day works best for you\?/)
   assert.equal(kept.includes('stylist'), false)
-  assert.equal(keepFirstQuestion("Hi, I'm Bella at Bella Hair Studio."), "Hi, I'm Bella at Bella Hair Studio.")
+  assert.equal(keepFirstQuestion("Hi, I'm Bella from Bella Hair Studio."), "Hi, I'm Bella from Bella Hair Studio.")
   assert.equal(keepFirstQuestion('Have you been to us before?'), 'Have you been to us before?')
 })
 

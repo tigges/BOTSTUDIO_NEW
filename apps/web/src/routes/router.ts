@@ -168,7 +168,7 @@ const trainingRoute = createRoute({ getParentRoute: () => appRoute, path: '/buil
 const botSettingsRoute = createRoute({ getParentRoute: () => appRoute, path: '/build/settings', component: BotSettingsPage })
 
 // ── Inbox ─────────────────────────────────────────────────────────────────────
-const chatsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/chats', component: ChatsPage })
+const chatsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/chats', validateSearch: (search: Record<string, unknown>): { chat?: string } => (typeof search['chat'] === 'string' && search['chat'] ? { chat: search['chat'] } : {}), component: ChatsPage })
 const tasksRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/tasks', component: TasksPage })
 const ticketsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/tickets', beforeLoad: () => { throw redirect({ to: '/inbox/tasks' }) }, component: () => null })
 const contactsRoute = createRoute({ getParentRoute: () => appRoute, path: '/inbox/contacts', component: ContactsPage })

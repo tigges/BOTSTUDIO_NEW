@@ -4,6 +4,6 @@ export type { Session, SessionVariables, NodeContext, NodeResult, ExecutionServi
 export { interpolate, evaluateCondition } from './utils.js'
 export { copyJumpVariables, missingChapterLine } from './handoff.js'
 export { matchCatalog, pickCatalog } from './catalog-lookup.js'
-export { listenForChapter, hearChapter, chapterRoutes, colourWantsBooking, wantsOffer, isTopicSwitch, offerOnMap, isSmallTalk, acceptedHoursOffer, hoursChapterName, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn } from './map-listen.js'
+export { listenForChapter, hearChapter, chapterRoutes, colourWantsBooking, wantsOffer, isTopicSwitch, offerOnMap, mapTopics, isPersonDoor, welcomeMissReply, looksLikeQuestion, steerInstruction, isWelcomeName, isSmallTalk, acceptedHoursOffer, hoursChapterName, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn } from './map-listen.js'
 export { matchTopic, pickTopic, listenables } from './topic-route.js'
-export { basicAct, basicsReply, type BasicAct, type BasicReply } from './conversation-basics.js'
+export { basicAct, basicsReply, waitsOnRoute, type BasicAct, type BasicReply } from './conversation-basics.js'

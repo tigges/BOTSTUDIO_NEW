@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { Clock, Save, ToggleLeft, ToggleRight, Loader2, Users, Zap, MessageSquare, Hand } from 'lucide-react'
+import { Clock, ToggleLeft, ToggleRight, Loader2, Users, Zap, MessageSquare, Hand, Headset } from 'lucide-react'
 import { Button, Card } from '@botstudio/ui'
 import { PlannedBadge } from '../../components/PlannedFeature'
-import { useCannedReplies, useCreateCannedReply, useDeleteCannedReply, useInboxConfig, useSaveInboxConfig } from '../../lib/hooks'
+import { useCannedReplies, useCreateCannedReply, useDeleteCannedReply, useInboxConfig, useLiveSupport, useSaveInboxConfig } from '../../lib/hooks'
+import { TIMEZONES, WEEK, liveSupportLabel, savedDays, savedLiveSupport, toggleDay } from '../../lib/live-support-format'
 import { useAppStore } from '../../store/app'
 import { InboxTabs } from './InboxTabs'
 
@@ -26,7 +27,7 @@ function ToggleRow({ label, description, value, onChange }: ToggleRowProps) {
         <p className="text-sm font-medium text-[var(--text-primary)]">{label}</p>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">{description}</p>
       </div>
-      <button onClick={() => onChange(!value)} className="shrink-0">
+      <button type="button" role="switch" aria-checked={value} aria-label={label} onClick={() => onChange(!value)} className="shrink-0">
         {value ? <ToggleRight size={24} className="text-[var(--accent)]" /> : <ToggleLeft size={24} className="text-[var(--text-muted)]" />}
       </button>
     </div>
@@ -109,10 +110,13 @@ export function InboxSettingsPage() {
   const displayName = useAppStore((s) => s.user?.displayName?.trim() || s.user?.email || 'you')
   const { data: savedConfig, isLoading } = useInboxConfig()
   const saveConfig = useSaveInboxConfig()
+  const { data: liveNow } = useLiveSupport()
   const [settings, setSettings] = useState(DEFAULTS)
   const [slaHours, setSlaHours] = useState({ first_response: '1', resolution: '24' })
+  const [liveSupport, setLiveSupport] = useState(false)
   const [limitQueue, setLimitQueue] = useState(false)
   const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '18:00', timezone: 'Europe/London' })
+  const [days, setDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6])
   const [awayMessage, setAwayMessage] = useState(DEFAULT_AWAY)
   const [alwaysHuman, setAlwaysHuman] = useState('')
   const [saved, setSaved] = useState(false)
@@ -122,6 +126,8 @@ export function InboxSettingsPage() {
     const cfg = savedConfig as Record<string, unknown>
     if (cfg['toggles']) setSettings({ ...DEFAULTS, ...(cfg['toggles'] as typeof DEFAULTS) })
     if (cfg['sla']) setSlaHours({ ...slaHours, ...(cfg['sla'] as typeof slaHours) })
+    setLiveSupport(savedLiveSupport(cfg))
+    setDays(savedDays(cfg))
     if (cfg['workingHours']) {
       const hours = cfg['workingHours'] as { enabled?: boolean; start?: string; end?: string; timezone?: string; awayMessage?: string }
       const hasWindow = Boolean(hours.start && hours.end)
@@ -146,8 +152,9 @@ export function InboxSettingsPage() {
       toggles: settings,
       sla: slaHours,
       workingHours: limitQueue
-        ? { enabled: true, ...workingHours, awayMessage }
-        : { enabled: false, awayMessage },
+        ? { enabled: true, ...workingHours, days, awayMessage }
+        : { enabled: false, ...workingHours, days, awayMessage },
+      liveSupport: { enabled: liveSupport },
       alwaysHuman: alwaysHumanWords(alwaysHuman),
     })
     setSaved(true)
@@ -213,30 +220,67 @@ export function InboxSettingsPage() {
             </Card>
           </section>
 
-          {/* Working hours */}
+          {/* Live support */}
           <section>
             <div className="flex items-center gap-2 mb-3">
-              <Clock size={15} className="text-[var(--accent)]" />
-              <h2 className="text-sm font-semibold text-[var(--text-primary)]">Working Hours</h2>
+              <Headset size={15} className="text-[var(--accent)]" />
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">Live support</h2>
+              {liveNow && (
+                <span className="ml-auto text-[11px] text-[var(--text-muted)]" title={liveSupportLabel(liveNow).detail}>
+                  Now: {liveSupportLabel(liveNow).short}
+                </span>
+              )}
             </div>
             <Card>
-              <p className="text-xs text-[var(--text-muted)] mb-3">The bot answers 24/7. Turn this on when the queue should follow office hours. The bot keeps answering outside that window.</p>
+              <p className="text-xs text-[var(--text-muted)] mb-3">
+                The bot answers around the clock. Live support decides whether a chat the bot hands over reaches a person here in Chats.
+                Turn it off when nobody is on reception, or to run the bot on its own.
+              </p>
               <ToggleRow
-                label="Limit the queue to working hours"
-                description="People and the queue clock use this window. Leave it off for a round-the-clock queue."
-                value={limitQueue}
-                onChange={setLimitQueue}
+                label="Hand chats to the team"
+                description="Off: the bot keeps every chat and never promises a person. The same switch sits at the top of the Inbox."
+                value={liveSupport}
+                onChange={setLiveSupport}
               />
-              {limitQueue && (
+              {liveSupport && (
+                <ToggleRow
+                  label="Only during opening hours"
+                  description="Outside these hours the bot keeps the chat and tells the guest when the team is on. Off: the team takes chats at any time."
+                  value={limitQueue}
+                  onChange={setLimitQueue}
+                />
+              )}
+              {liveSupport && limitQueue && (
               <>
+              <div className="mt-4">
+                <p className="text-xs font-medium text-[var(--text-muted)] mb-1.5">Open on</p>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Opening days">
+                  {WEEK.map(({ day, label }) => (
+                    <button
+                      key={day}
+                      type="button"
+                      aria-pressed={days.includes(day)}
+                      onClick={() => setDays((current) => toggleDay(current, day))}
+                      className={
+                        'rounded-[var(--radius)] border px-2.5 py-1 text-xs font-medium transition-colors ' +
+                        (days.includes(day)
+                          ? 'border-[var(--accent)] bg-[var(--accent-muted)] text-[var(--accent)]'
+                          : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]')
+                      }
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="grid grid-cols-3 gap-4 mt-4">
                 <div>
-                  <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Start time</label>
+                  <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Opens</label>
                   <input type="time" value={workingHours.start} onChange={(e) => setWorkingHours((p) => ({ ...p, start: e.target.value }))}
                     className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">End time</label>
+                  <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Closes</label>
                   <input type="time" value={workingHours.end} onChange={(e) => setWorkingHours((p) => ({ ...p, end: e.target.value }))}
                     className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none" />
                 </div>
@@ -244,9 +288,7 @@ export function InboxSettingsPage() {
                   <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Timezone</label>
                   <select value={workingHours.timezone} onChange={(e) => setWorkingHours((p) => ({ ...p, timezone: e.target.value }))}
                     className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
-                    <option>Europe/London</option><option>Europe/Paris</option>
-                    <option>America/New_York</option><option>America/Los_Angeles</option>
-                    <option>Asia/Dubai</option><option>Asia/Singapore</option>
+                    {[...new Set([workingHours.timezone, ...TIMEZONES])].map((zone) => <option key={zone}>{zone}</option>)}
                   </select>
                 </div>
               </div>
@@ -273,7 +315,7 @@ export function InboxSettingsPage() {
             <Card>
               <p className="text-xs text-[var(--text-muted)] mb-3">
                 When a guest writes one of these words or phrases, the chat goes to the team before any journey runs.
-                This needs working hours turned on. Without them nobody is on chat, so the bot says so and keeps helping.
+                This needs live support on. While it is off, or outside opening hours, the bot says so and keeps helping.
               </p>
               <label htmlFor="always-human" className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">One word or phrase per line</label>
               <textarea
@@ -284,8 +326,8 @@ export function InboxSettingsPage() {
                 placeholder={'complaint\nspeak to a manager\nrefund'}
                 className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
               />
-              {!limitQueue && alwaysHumanWords(alwaysHuman).length > 0 && (
-                <p className="text-[11px] text-[var(--warning,#fbbf24)] mt-1">Working hours are off, so these words do not hand over yet. Turn on “Limit the queue to working hours” above.</p>
+              {!liveSupport && alwaysHumanWords(alwaysHuman).length > 0 && (
+                <p className="text-[11px] text-[var(--warning,#fbbf24)] mt-1">Live support is off, so these words do not hand over yet. Turn on “Hand chats to the team” above.</p>
               )}
             </Card>
           </section>

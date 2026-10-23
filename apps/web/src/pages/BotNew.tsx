@@ -91,7 +91,7 @@ export function BotNewPage() {
     companyName: company,
     personaName: voice || null,
     scanDoors: scan?.doors,
-    scanGreeting: path === 'website' ? (scan?.greeting ?? `Hi, I'm ${voice || 'Bella'} at ${company}. What's your name?`) : undefined,
+    scanGreeting: path === 'website' ? (scan?.greeting ?? `Hi, I'm ${voice || 'Bella'} from ${company}. What's your name?`) : undefined,
     sample,
   })
   const walkStart = (start ?? (path === 'website' || path === 'sample' || path === 'blank' ? path : null)) as BotStart | null

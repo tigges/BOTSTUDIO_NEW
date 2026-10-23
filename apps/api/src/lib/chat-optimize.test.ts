@@ -55,7 +55,7 @@ test('ok after Want the hours is a finding, and apply moves yes onto Salon hours
     },
   }
   const lines = [
-    { role: 'assistant' as const, content: "Hi, I'm Bella at Yuzu. What's your name?", chapter: 'Salon welcome' },
+    { role: 'assistant' as const, content: "Hi, I'm Bella from Yuzu. What's your name?", chapter: 'Salon welcome' },
     { role: 'user' as const, content: 'where are you' },
     { role: 'assistant' as const, content: 'Yuzu is at 14 Rosewood Lane.\n\nWant the hours?', chapter: 'Location' },
     { role: 'user' as const, content: 'ok' },
@@ -95,7 +95,7 @@ test('ok after Want the hours is a finding, and apply moves yes onto Salon hours
 test('a greeting that asks for a name twice keeps one ask', () => {
   const findings = findingsFromChat({
     lines: [
-      { role: 'assistant', content: "Hi, I'm James at Hubspot. What's your name?", chapter: 'Welcome' },
+      { role: 'assistant', content: "Hi, I'm James from Hubspot. What's your name?", chapter: 'Welcome' },
       { role: 'user', content: 'Toto' },
       { role: 'assistant', content: "What's your name?", chapter: 'Welcome' },
     ],
@@ -103,7 +103,7 @@ test('a greeting that asks for a name twice keeps one ask', () => {
       name: 'Welcome',
       graph: {
         nodes: [
-          { id: 'greet', data: { kind: 'ask_question', config: { question: "Hi, I'm James at Hubspot. What's your name?", variable: 'greeting_reply' } } },
+          { id: 'greet', data: { kind: 'ask_question', config: { question: "Hi, I'm James from Hubspot. What's your name?", variable: 'greeting_reply' } } },
           { id: 'name', data: { kind: 'ask_question', config: { question: "What's your name?", variable: 'guest_name' } } },
         ],
         edges: [{ id: 'e', source: 'greet', target: 'name' }],
@@ -121,7 +121,7 @@ test('a greeting that asks for a name twice keeps one ask', () => {
       name: 'Welcome',
       graph: {
         nodes: [
-          { id: 'greet', data: { kind: 'ask_question', config: { question: "Hi, I'm James at Hubspot. What's your name?", variable: 'greeting_reply' } } },
+          { id: 'greet', data: { kind: 'ask_question', config: { question: "Hi, I'm James from Hubspot. What's your name?", variable: 'greeting_reply' } } },
           { id: 'name', data: { kind: 'ask_question', config: { question: "What's your name?", variable: 'guest_name' } } },
         ],
         edges: [{ id: 'e', source: 'greet', target: 'name' }],
@@ -132,7 +132,7 @@ test('a greeting that asks for a name twice keeps one ask', () => {
   const greet = applied.chapters[0]!.graph.nodes.find((node) => node.id === 'greet')
   const keep = applied.chapters[0]!.graph.nodes.find((node) => node.id === 'name')
   assert.equal(/What's your name/.test(String(greet?.data.config['question'] ?? '')), false)
-  assert.match(String(greet?.data.config['question'] ?? ''), /James at Hubspot/)
+  assert.match(String(greet?.data.config['question'] ?? ''), /James from Hubspot/)
   assert.equal(keep?.data.config['question'], "What's your name?")
 })
 
@@ -140,7 +140,7 @@ test('a hair welcome that asks for a name once is not a double-ask', () => {
   const pack = hairStudioPack('Yuzu', 'Bella')
   const findings = findingsFromChat({
     lines: [
-      { role: 'assistant', content: "Hi, I'm Bella at Yuzu. What's your name?", chapter: 'Salon welcome' },
+      { role: 'assistant', content: "Hi, I'm Bella from Yuzu. What's your name?", chapter: 'Salon welcome' },
       { role: 'user', content: 'where are you' },
       { role: 'assistant', content: 'Yuzu is at 14 Rosewood Lane.\n\nWant the hours?', chapter: 'Location' },
     ],

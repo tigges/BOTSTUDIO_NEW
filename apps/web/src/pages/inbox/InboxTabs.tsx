@@ -2,6 +2,7 @@ import React from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { Settings2 } from 'lucide-react'
 import { cn } from '@botstudio/ui'
+import { LiveSupportSwitch } from './LiveSupportSwitch'
 
 const TABS = [
   { label: 'Chats', path: '/inbox/chats' },
@@ -34,10 +35,11 @@ export function InboxTabs({ actions }: { actions?: React.ReactNode }) {
         })}
       </nav>
       <div className="ml-auto flex items-center gap-1">
+        <LiveSupportSwitch />
         {actions}
         <Link
           to="/inbox/settings"
-          title="Inbox settings: assignment, reply times, working hours, saved replies"
+          title="Inbox settings: live support, opening hours, reply times, saved replies"
           aria-label="Inbox settings"
           className={cn(
             'flex h-7 w-7 items-center justify-center rounded-[var(--radius)] transition-colors',

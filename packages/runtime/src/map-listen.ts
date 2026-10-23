@@ -118,6 +118,7 @@ function shortName(name: string): string {
   const trimmed = name.replace(/^salon\s+/i, '').trim()
   if (/book/i.test(trimmed)) return 'a booking'
   if (/price|service/i.test(trimmed)) return 'prices'
+  if (/emergenc|\bpain\b|urgent/i.test(trimmed)) return 'an urgent problem'
   if (/hour/i.test(trimmed)) return 'hours'
   if (/location|where|address/i.test(trimmed)) return 'where we are'
   return trimmed.toLowerCase()
@@ -125,20 +126,66 @@ function shortName(name: string): string {
 
 const CORE_DOORS = ['Services and prices', 'Salon hours', 'Book an appointment', 'Location']
 
-/** A next offer from the map, instead of asking the same question again. */
-export function offerOnMap(chapters: Array<{ name: string; graph: FlowGraph }>, current?: string): string {
+/** A chapter that only hands the chat to a person. The bot offers its own topics; asking for a person always works. */
+export function isPersonDoor(name: string): boolean {
+  return /\b(talk|speak|chat) (to|with)\b|\b(a person|human|someone|an agent|the team|reception(ist)?|staff)\b/i.test(name)
+}
+
+/** Up to three topics the bot can take a guest into, booking first, in the welcome's order. */
+export function mapTopics(chapters: Array<{ name: string; graph: FlowGraph }>, current?: string): string[] {
   const doors = doorsFromWelcome(chapters)
   const names = (doors.length > 0 ? doors : chapters.map((chapter) => chapter.name))
-    .filter((name) => !isWelcomeName(name) && name !== current)
+    .filter((name) => !isWelcomeName(name) && name !== current && !isPersonDoor(name))
   const ranked = [
-    ...CORE_DOORS.filter((name) => names.includes(name)),
-    ...names.filter((name) => !CORE_DOORS.includes(name)),
+    ...names.filter((name) => /book/i.test(name)),
+    ...CORE_DOORS.filter((name) => names.includes(name) && !/book/i.test(name)),
+    ...names.filter((name) => !CORE_DOORS.includes(name) && !/book/i.test(name)),
   ]
-  const shown = ranked.slice(0, 3).map(shortName)
+  return [...new Set(ranked.slice(0, 3).map(shortName))]
+}
+
+function topicList(shown: string[]): string {
+  if (shown.length === 1) return shown[0]!
+  const rest = [...shown]
+  const last = rest.pop()
+  return `${rest.join(', ')}, or ${last}`
+}
+
+/** A next offer from the map, instead of asking the same question again. */
+export function offerOnMap(chapters: Array<{ name: string; graph: FlowGraph }>, current?: string): string {
+  const shown = mapTopics(chapters, current)
   if (shown.length === 0) return 'Tell me a little more about what you need.'
-  if (shown.length === 1) return `I can help with ${shown[0]}. What would you like?`
-  const last = shown.pop()
-  return `I can help with ${shown.join(', ')}, or ${last}. What would you like?`
+  return `I can help you with ${topicList(shown)}. What would you like?`
+}
+
+/**
+ * The welcome did not recognise the answer. Every bot does the same here: no "didn't catch that"
+ * twice and no handover, just a short apology and the topics, worded a little differently each time.
+ */
+export function welcomeMissReply(chapters: Array<{ name: string; graph: FlowGraph }>, misses: number): string {
+  const shown = mapTopics(chapters)
+  if (shown.length === 0) return 'Sorry, I didn\'t quite follow. Could you tell me a little more about what you need?'
+  const list = topicList(shown)
+  if (misses <= 1) return `Sorry, I didn't quite follow. I can help you with ${list}. What would you like?`
+  if (misses === 2) return `I may be missing what you mean. The things I can help with here are ${list}. Which is closest?`
+  return `I can help you with ${list}, or you can ask me a question in your own words.`
+}
+
+/** A real question or a sentence, worth answering from the knowledge base rather than re-offering topics. */
+export function looksLikeQuestion(text: string): boolean {
+  const words = text.trim().split(/\s+/).filter((word) => /[a-z0-9]/i.test(word))
+  if (words.length >= 5) return true
+  return words.length >= 3 && /\?\s*$/.test(text.trim())
+}
+
+/** What the knowledge answer is told when the guest asked something the journey has no chapter for. */
+export function steerInstruction(chapters: Array<{ name: string; graph: FlowGraph }>): string {
+  const shown = mapTopics(chapters)
+  const topics = shown.length ? ` The topics you can take them through are ${topicList(shown)}.` : ''
+  return 'The guest asked something outside the guided topics. Answer briefly and only from the knowledge base. '
+    + 'If the knowledge base does not cover it, say so in one sentence without guessing.'
+    + topics
+    + ' End with one short question that offers those topics. Do not say you are passing the chat to anyone.'
 }
 
 /** A reply may explain and then ask once. A second question is the next turn. */

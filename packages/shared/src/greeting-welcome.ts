@@ -5,9 +5,18 @@
  * A first message that is already a request is greeted and handed to that flow.
  */
 
-export function assistantGreeting(companyName: string): string {
+/** The opening question every welcome ends on, unless its chart asks something it needs first. */
+export const OPENING_QUESTION = 'What can I help you with today?'
+
+/** "Hi, I'm Nova from Harbour Dental." The one shape every generated greeting uses. */
+export function introLine(persona: string | null | undefined, companyName: string): string {
   const company = companyName.trim() || 'the team'
-  return `Hi, I'm the assistant at ${company}.`
+  const who = persona?.trim() || 'the assistant'
+  return `Hi, I'm ${who} from ${company}.`
+}
+
+export function assistantGreeting(companyName: string): string {
+  return introLine(null, companyName)
 }
 
 export interface GreetingRoute {

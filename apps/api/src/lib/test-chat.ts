@@ -5,7 +5,9 @@
  * hours, the journey, the name turn, the knowledge answer) with the bot's own
  * model, handover rules and knowledge. Only storage differs: the chat, its
  * session and its outcome stay in a state object the caller hands back on the
- * next turn, so a test never reaches the Inbox, analytics or the guest list.
+ * next turn, so a test stays out of analytics and the guest list. The one
+ * exception is a handover the team can take: with `inbox` set, that chat becomes
+ * a Sandbox chat in the Inbox (test-chat-inbox.ts). Evals never set it.
  * Model calls are recorded in the ledger as the test environment.
  */
 
@@ -21,6 +23,7 @@ import { planNameTurn, type VisitorName } from './visitor-name.js'
 import type { ChatOutcome } from './chat-outcome.js'
 import { findTool } from './tools-store.js'
 import { runTool } from './tool-runner.js'
+import { liveTestInbox, type TestInboxPort } from './test-chat-inbox.js'
 
 export const TEST_CHAT_ID = 'test-chat'
 const TEST_GUEST_ID = 'test-guest'
@@ -46,6 +49,8 @@ export interface TestChatState {
   subject: string | null
   handover: HandoverContract | null
   ticket: { subject: string; description: string } | null
+  /** The Sandbox chat in the Inbox once the test chat was handed to the team. */
+  inboxChatId?: string | null
 }
 
 export interface TestTurnInput {
@@ -61,6 +66,8 @@ export interface TestTurnInput {
   onChunk?: (chunk: string) => void
   /** Ledger source for the model calls. Eval runs are recorded as 'eval'. */
   ledgerSource?: LlmSource
+  /** A handover the team can take opens a Sandbox chat in the Inbox. Only the test panels set this. */
+  inbox?: boolean
 }
 
 export interface TestTurn {
@@ -97,6 +104,7 @@ export interface TestChatDeps {
   /** Bot settings: hand over when a tool is slower than this, as live chats do. */
   toolWaitSeconds?: (botId: string) => Promise<number | null>
   toolName?: (botId: string, toolId: string) => Promise<string | null>
+  inbox: TestInboxPort
 }
 
 async function runTestTool(tenantId: string, botId: string, toolId: string, args: Record<string, unknown>): Promise<ToolCallResult & { name: string }> {
@@ -117,6 +125,7 @@ const liveDeps: TestChatDeps = {
   safety: turnSafety,
   toolWaitSeconds: botToolWaitSeconds,
   toolName: botToolName,
+  inbox: liveTestInbox,
 }
 
 const calls = new WeakMap<TestChatDeps, TestToolCall[]>()
@@ -136,6 +145,7 @@ export function newTestState(): TestChatState {
     subject: null,
     handover: null,
     ticket: null,
+    inboxChatId: null,
   }
 }
 
@@ -240,12 +250,27 @@ export function testJourneyStore(input: TestTurnInput, state: TestChatState, dep
 
 function testPorts(input: TestTurnInput, state: TestChatState, deps: TestChatDeps): TurnPorts {
   const store = testJourneyStore(input, state, deps)
+  const mirror = async (role: TestLine['role'], text: string) => {
+    if (!state.inboxChatId) return
+    await deps.inbox.mirror({ tenantId: input.tenantId, conversationId: state.inboxChatId, role, text })
+      .catch((err) => console.warn('[test chat] inbox mirror failed:', err instanceof Error ? err.message : err))
+  }
   return {
     safety: deps.safety,
     async saveInbound(turn) {
       remember(state, { role: 'user', content: turn.text })
+      await mirror('user', turn.text)
     },
-    held: async () => state.status === 'escalated',
+    async held() {
+      if (!state.inboxChatId) return state.status === 'escalated'
+      const chat = await deps.inbox.status(state.inboxChatId).catch(() => null)
+      if (!chat) {
+        state.inboxChatId = null
+        return state.status === 'escalated'
+      }
+      if (!chat.held && state.status === 'escalated') state.status = chat.status === 'active' ? 'active' : 'resolved'
+      return chat.held
+    },
     handoverRules: deps.handoverRules,
     async handOver(_turn, request, source) {
       const guestLines = state.transcript.filter((line) => line.role === 'user').map((line) => line.content)
@@ -257,6 +282,18 @@ function testPorts(input: TestTurnInput, state: TestChatState, deps: TestChatDep
       }
       state.status = 'escalated'
       state.outcome = 'escalated'
+      if (!input.inbox || !input.botId) return
+      state.inboxChatId = await deps.inbox.open({
+        tenantId: input.tenantId,
+        botId: input.botId,
+        transcript: state.transcript,
+        request,
+        source,
+        subject: state.subject,
+      }).catch((err) => {
+        console.warn('[test chat] could not open the Inbox chat:', err instanceof Error ? err.message : err)
+        return null
+      })
     },
     async noTeam() {
       state.outcome ??= 'contained_unresolved'
@@ -276,6 +313,7 @@ function testPorts(input: TestTurnInput, state: TestChatState, deps: TestChatDep
     answer: deps.answer,
     async saveOutbound(_turn, text) {
       remember(state, { role: 'assistant', content: text })
+      await mirror('assistant', text)
     },
     saveContactName: store.saveContactName,
     warn: (message, err) => console.warn(`[test chat] ${message}:`, err instanceof Error ? err.message : err),
@@ -292,7 +330,7 @@ export async function runTestTurn(input: TestTurnInput, overrides: Partial<TestC
   const deps = { ...liveDeps, ...overrides }
   const tools: TestToolCall[] = []
   calls.set(deps, tools)
-  const state: TestChatState = structuredClone(input.state ?? newTestState())
+  const state: TestChatState = { ...newTestState(), ...structuredClone(input.state ?? newTestState()) }
   const ports = testPorts(input, state, deps)
   const message = input.message.trim()
   const scope = { source: input.ledgerSource ?? 'runtime', tenantId: input.tenantId, botId: input.botId, environment: 'test' }

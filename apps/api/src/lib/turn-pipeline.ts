@@ -141,7 +141,7 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
     const said = lines.filter((line) => line.trim())
     if (!rules.liveAgents) {
       await ports.noTeam(input.conversationId)
-      return reply(keepWithBot(said).join('\n\n'), { ended: false, path: source === 'journey' ? 'journey' : 'none' }, false)
+      return reply(keepWithBot(said, rules.noTeamLine).join('\n\n'), { ended: false, path: source === 'journey' ? 'journey' : 'none' }, false)
     }
     await ports.handOver(input, request, source)
     return reply(said.length ? said.join('\n\n') : HANDOVER_LINE, { ended: false, path: 'handover' }, false)
@@ -176,8 +176,10 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
     if (word) return handOver(alwaysHumanRequest(word), 'always_human', [])
   }
 
+  let steer: FlowRunResult['steer']
   try {
     const journey = await ports.runJourney(input)
+    steer = journey.steer
     if (journey.handover) return handOver(journey.handover, 'journey', journey.messages)
     if (journey.handled) {
       const text = journey.messages.filter((line) => line.trim()).join('\n\n')
@@ -196,6 +198,7 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
 
   const hold = holdsReplies(safety.rules) || readerMode(safety.privacy, 'end_user') !== 'original'
   let sources: KnowledgeSourceRef[] = []
+  const failed = steer?.fallback ?? ANSWER_FAILED
   const answerOnce = async (instruction?: string): Promise<string> => {
     let streamed = ''
     sources = []
@@ -217,20 +220,20 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
     } catch (err) {
       ports.warn('answer failed', err)
       if (!streamed) {
-        if (!hold) emit(ANSWER_FAILED)
-        streamed = ANSWER_FAILED
+        if (!hold) emit(failed)
+        streamed = failed
       }
     }
     if (!streamed.trim()) {
-      if (!hold) emit(ANSWER_FAILED)
-      streamed = ANSWER_FAILED
+      if (!hold) emit(failed)
+      streamed = failed
     }
-    if (streamed === ANSWER_FAILED) sources = []
+    if (streamed === failed) sources = []
     return streamed
   }
 
   const finish = (streamed: string) => finishBotLines([streamed], named.contact, named.spoken, { conversationId: input.conversationId })
-  const streamed = await answerOnce()
+  const streamed = await answerOnce(steer?.instruction)
   let finished = finish(streamed)
   let text = finished.lines.filter((line) => line.trim()).join('\n\n')
   let hits: GuardrailHit[] = []
@@ -242,7 +245,7 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
   } else {
     let decision = evaluateGuardrails(text, 'output', safety.rules, safety.privacy.custom)
     if (decision.outcome === 'reask') {
-      const again = await answerOnce(`Your previous answer broke the rule "${decision.rule!.name}". Answer again without it.`)
+      const again = await answerOnce([steer?.instruction, `Your previous answer broke the rule "${decision.rule!.name}". Answer again without it.`].filter(Boolean).join('\n\n'))
       finished = finish(again)
       text = finished.lines.filter((line) => line.trim()).join('\n\n')
       const second = evaluateGuardrails(text, 'output', safety.rules, safety.privacy.custom)

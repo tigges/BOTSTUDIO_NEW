@@ -14,11 +14,13 @@ BotStudio is a hybrid agent workforce platform: AI agents and human agents work 
 - Business constraints (require / limit / block before an action) and content guardrails (block / warn / redact / escalate / reask) are two different rule types and never share one list.
 - The welcome has two fields: greeting and first question. Lint when they say the same thing. Per-channel overrides are optional; the default greeting is required.
 - Startup lookups are read-only and non-blocking; a failed lookup never breaks the greeting.
+- Conversation rules apply to every bot, whatever its chart (`packages/runtime` basics and `welcomeMiss` in `flow-runner.ts`); charts never model them. The opening is "Hi, I'm {persona} from {company}. What can I help you with today?". At the welcome question a hello, "what can you do?" or "again?" gets the topics ("I can help you with A, B, or C. What would you like?"), never the same question word for word. A welcome miss never hands over and never says "didn't catch that": a real question goes to the knowledge answer steered back to the topics, anything else gets a short apology and the topics. An annoyed guest gets an apology, not a handover. Asking for a person, the always-human list and a chart's own handover step still hand over.
 - A project-wide "always route these words to a human" list exists and beats any automatic routing.
 - Validation runs continuously; publishing with errors is blocked. Published versions are immutable; rollback is one click; defaults never change under a live flow.
 
 ## Hand to human
 - Handoff to a human is never modelled as a handoff to another bot.
+- One live-support switch per bot (Inbox header and Inbox settings) decides whether a handover reaches a person: off, on around the clock, or on during opening days and hours. When nobody can take the chat the bot keeps it, says so (and when the team is back), and never promises a person.
 - The handoff payload always carries: reason, priority (low / medium / high / critical), tags, a summary, named variables, routing (queue, skills, numeric priority) and the return outcome contract (resolved / needs bot / needs follow-up).
 - The full transcript travels by default. "Summary only" is an explicit opt-in.
 - The conversation is the task: no separate task object for a live conversation. Approvals and data-entry tasks are a secondary Tasks tab, not the primary Inbox.
@@ -42,6 +44,7 @@ BotStudio is a hybrid agent workforce platform: AI agents and human agents work 
 - Credential and secret scrubbing in logs is always on and cannot be disabled.
 - One active guardrail policy per project. New rules default to Warn, not Block.
 - RBAC is enforced at the API; the UI only hides. Every mutation writes an audit row with before/after.
+- A workspace ADMIN is a customer's admin (anyone can register one). Host health, server config and anything that spans workspaces need `requirePlatformAdmin` (`PLATFORM_ADMIN_EMAILS`), not `requireRole('ADMIN')`.
 
 ## Analytics
 - Outcome is a six-state enum (contained_resolved, contained_partial, contained_unresolved, escalated, abandoned, plus contained as a roll-up) shown as three buckets. Escalation rate is not the inverse of containment; never compute one from the other.

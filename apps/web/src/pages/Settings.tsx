@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Card, Button, Input, Badge, Avatar } from '@botstudio/ui'
 import { useAppStore } from '../store/app'
-import { useSystemConfig, useSystemStatus } from '../lib/hooks'
+import { usePlatformAdmin, useSystemConfig, useSystemStatus } from '../lib/hooks'
 import type { ConfigEntry } from '../lib/api'
 import { bots as botsApi } from '../lib/api'
 import {
@@ -378,6 +378,7 @@ type Tab = 'profile' | 'password' | 'secrets' | 'bot-identity'
 
 export function SettingsPage() {
   const { user } = useAppStore()
+  const platformAdmin = usePlatformAdmin()
   const [tab, setTab] = useState<Tab>('profile')
   const [displayName, setDisplayName] = useState(user?.displayName ?? '')
   const [saved, setSaved] = useState(false)
@@ -399,7 +400,7 @@ export function SettingsPage() {
     { id: 'profile',      label: 'Profile',              icon: User },
     { id: 'bot-identity', label: 'Bot Identity',         icon: Sparkles },
     { id: 'password',     label: 'Password',             icon: Lock },
-    { id: 'secrets',      label: 'Secrets & Connections', icon: Key },
+    ...(platformAdmin ? [{ id: 'secrets' as const, label: 'Secrets & Connections', icon: Key }] : []),
   ]
 
   return (
@@ -455,7 +456,7 @@ export function SettingsPage() {
 
         {tab === 'password' && <PasswordTab />}
 
-        {tab === 'secrets' && <SecretsTab />}
+        {tab === 'secrets' && platformAdmin && <SecretsTab />}
         {tab === 'bot-identity' && <BotIdentityTab />}
       </div>
     </div>

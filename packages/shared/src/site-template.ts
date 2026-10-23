@@ -4,7 +4,7 @@
  * Website import reads pages. Optimizations can still save a parked starter from a site.
  */
 
-import { assistantGreeting, greetingWelcomeGraph } from './greeting-welcome.js'
+import { assistantGreeting, greetingWelcomeGraph, introLine } from './greeting-welcome.js'
 import { supportUseCaseFlows, type StarterFlow } from './flow-templates.js'
 import type { ScannedPage } from './website-scan.js'
 import { extractPlanTiers, planChoices, planSummary } from './plan-tiers.js'
@@ -672,8 +672,8 @@ export function draftClusteredTemplate(input: {
   const persona = input.personaName?.trim()
   const greeting = persona
     ? clusterId === 'hair'
-      ? `Hi, I'm ${persona} at ${company}. What's your name?`
-      : `Hi, I'm ${persona} at ${company}.`
+      ? `${introLine(persona, company)} What's your name?`
+      : introLine(persona, company)
     : assistantGreeting(company)
   const pricingPages = working.filter((page) => isPricingPage(page) && !isMissingPage(page))
   const telcoShop = working.some((page) => PLAN_COPY.test(`${page.url} ${page.title} ${page.text.slice(0, 800)}`))
@@ -797,8 +797,8 @@ export function learnedSpecFromJobs(input: {
   const persona = input.personaName?.trim()
   const greeting = persona
     ? clusterId === 'hair'
-      ? `Hi, I'm ${persona} at ${company}. What's your name?`
-      : `Hi, I'm ${persona} at ${company}.`
+      ? `${introLine(persona, company)} What's your name?`
+      : introLine(persona, company)
     : assistantGreeting(company)
   const used = new Set<string>()
   const topics: SiteTopic[] = []
@@ -849,9 +849,9 @@ export function packFromLearned(spec: LearnedTemplateSpec, companyName: string, 
   const voice = personaName?.trim()
   const greeting = voice
     ? /what's your name/i.test(spec.greeting)
-      ? `Hi, I'm ${voice} at ${companyLabel(companyName)}. What's your name?`
-      : `Hi, I'm ${voice} at ${companyLabel(companyName)}.`
-    : spec.greeting.replace(/\bat .+\./, `at ${companyLabel(companyName)}.`)
+      ? `${introLine(voice, companyLabel(companyName))} What's your name?`
+      : introLine(voice, companyLabel(companyName))
+    : spec.greeting.replace(/\b(?:at|from) .+\./, `from ${companyLabel(companyName)}.`)
   return siteTemplatePack({
     id: 'learned',
     tag: spec.packTag,

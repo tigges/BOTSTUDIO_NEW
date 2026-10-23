@@ -2,25 +2,28 @@ import React from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Search, CornerDownLeft } from 'lucide-react'
 import { useAppStore } from '../store/app'
-import { useFlows } from '../lib/hooks'
-import { NAV_GROUPS } from './nav-config'
+import { useFlows, usePlatformAdmin } from '../lib/hooks'
+import { visibleNavGroups, type NavGroup } from './nav-config'
 import { COMMAND_GROUPS, isPaletteShortcut, paletteCommands, rankCommands, type PaletteCommand } from '../lib/command-palette'
 
 const BUILD_ROLES = ['DEVELOPER', 'SUPERVISOR', 'ADMIN']
 
-const PAGES = NAV_GROUPS.flatMap((group) =>
-  group.items.flatMap((item) =>
-    item.subItems?.length
-      ? item.subItems.map((sub) => ({ id: sub.id, label: sub.label === item.label ? item.label : `${item.label} · ${sub.label}`, path: sub.path, section: group.label }))
-      : [{ id: item.id, label: item.label, path: item.path, section: group.label }],
-  ),
-)
+function pagesOf(groups: NavGroup[]) {
+  return groups.flatMap((group) =>
+    group.items.flatMap((item) =>
+      item.subItems?.length
+        ? item.subItems.map((sub) => ({ id: sub.id, label: sub.label === item.label ? item.label : `${item.label} · ${sub.label}`, path: sub.path, section: group.label }))
+        : [{ id: item.id, label: item.label, path: item.path, section: group.label }],
+    ),
+  )
+}
 
 
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const navigate = useNavigate()
   const { bots, selectedBotId, selectedEnv, selectBot, setEnv, user } = useAppStore()
   const { data: flows = [] } = useFlows()
+  const platformAdmin = usePlatformAdmin()
   const [query, setQuery] = React.useState('')
   const [active, setActive] = React.useState(0)
   const listRef = React.useRef<HTMLDivElement>(null)
@@ -42,13 +45,13 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   }, [open])
 
   const commands = React.useMemo(() => paletteCommands({
-    pages: PAGES,
+    pages: pagesOf(visibleNavGroups(platformAdmin)),
     bots: bots.map((bot) => ({ id: bot.id, name: bot.name })),
     selectedBotId,
     flows: flows.map((flow) => ({ id: flow.id, name: flow.name })),
     selectedEnv,
     canBuild: BUILD_ROLES.includes(user?.role ?? ''),
-  }), [bots, selectedBotId, flows, selectedEnv, user?.role])
+  }), [bots, selectedBotId, flows, selectedEnv, user?.role, platformAdmin])
 
   const results = React.useMemo(() => rankCommands(query, commands), [query, commands])
 

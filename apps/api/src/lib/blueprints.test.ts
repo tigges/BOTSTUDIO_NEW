@@ -44,7 +44,7 @@ test('the welcome greets, then asks one different question, and its router has a
   const nodes = welcome.graph.nodes as Array<{ id: string; data: { kind: string; config: Record<string, unknown> } }>
   const greeting = String(nodes.find((node) => node.id === 'hello')!.data.config['text'])
   const question = String(nodes.find((node) => node.id === 'ask')!.data.config['question'])
-  assert.equal(greeting, "Hi, I'm Nova at Harbour Dental.")
+  assert.equal(greeting, "Hi, I'm Nova from Harbour Dental.")
   assert.notEqual(greeting.toLowerCase(), question.toLowerCase())
   assert.equal((question.match(/\?/g) ?? []).length, 1)
   const edges = welcome.graph.edges as Array<{ source: string; sourceHandle?: string }>
@@ -95,8 +95,8 @@ test('the sample compiles to catalog facts, Knowledge documents, guardrails and 
   assert.ok(bundle.documents.every((doc) => doc.title.startsWith('Harbour Dental: ')))
   assert.deepEqual(guardrailIssues(bundle.guardrails.rules), [])
   assert.deepEqual(evalIssues(bundle.evals.scenarios), [])
-  assert.equal(bundle.evals.scenarios.length, 23)
-  assert.deepEqual(bundle.queueHours, { start: '08:00', end: '18:00', timezone: 'Europe/London' })
+  assert.equal(bundle.evals.scenarios.length, 24)
+  assert.deepEqual(bundle.queueHours, { start: '08:00', end: '18:00', timezone: 'Europe/London', days: [1, 2, 3, 4, 5, 6] })
   assert.deepEqual(profileIssues(bp.fields, sample), [])
 })
 
@@ -295,6 +295,34 @@ test('conversation basics: a hello mid-booking keeps the booking question, thank
     {
       id: 'bot-then-book', name: 'Asks if it is a bot, then books', turns: ['are you a bot?', 'I want to book'],
       checks: [{ kind: 'says', text: 'virtual assistant' }, { kind: 'reaches_chapter', chapter: 'Book a visit' }],
+    },
+  ]), [])
+})
+
+test('the welcome talks like a person: a hello gets the topics, misses never hand over, a topic opens its chapter', async () => {
+  assert.deepEqual(await failedScenarios(sample, [
+    {
+      id: 'screenshot', name: 'hi, again?, stupid', turns: ['hi', 'again?', 'stupid'],
+      checks: [
+        { kind: 'says', text: 'Hi! I can help you with a booking, an urgent problem, or prices. What would you like?' },
+        { kind: 'says', text: "Sorry, I haven't been much help so far." },
+        { kind: 'never_says', text: "didn't catch" },
+        { kind: 'never_says', text: 'passing this chat' },
+        { kind: 'ends', ending: 'still_open' },
+      ],
+    },
+    {
+      id: 'nonsense', name: 'Two unclear answers, then a topic', turns: ['blue', 'xyz', 'prices please'],
+      checks: [
+        { kind: 'says', text: "Sorry, I didn't quite follow. I can help you with" },
+        { kind: 'says', text: 'Which is closest?' },
+        { kind: 'reaches_chapter', chapter: DENTAL_CHAPTERS.prices },
+        { kind: 'never_says', text: 'passing this chat' },
+      ],
+    },
+    {
+      id: 'person', name: 'Asking for a person still reaches the team', turns: ['can I speak to a person?'],
+      checks: [{ kind: 'reaches_chapter', chapter: DENTAL_CHAPTERS.talk }],
     },
   ]), [])
 })

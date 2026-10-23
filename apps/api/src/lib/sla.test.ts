@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { isWithinWorkingHours, parseInboxPolicy, slaLabel, type InboxPolicy } from './sla.js'
+import { hoursText, isWithinWorkingHours, liveSupportNow, parseInboxPolicy, slaLabel, type InboxPolicy } from './sla.js'
 
 const policy: InboxPolicy = parseInboxPolicy({
   sla: { first_response: '1', resolution: '24' },
@@ -33,6 +33,43 @@ test('supports an overnight window', () => {
   const overnight = { ...policy.workingHours, start: '22:00', end: '06:00' }
   assert.equal(isWithinWorkingHours(overnight, new Date('2026-09-22T22:30:00Z')), true)
   assert.equal(isWithinWorkingHours(overnight, new Date('2026-09-22T12:00:00Z')), false)
+})
+
+test('opening days follow the clock in the team time zone', () => {
+  const weekdays = parseInboxPolicy({ workingHours: { start: '09:00', end: '18:00', timezone: 'Europe/London', days: [1, 2, 3, 4, 5] } }).workingHours
+  assert.deepEqual(weekdays.days, [1, 2, 3, 4, 5])
+  assert.equal(isWithinWorkingHours(weekdays, new Date('2026-09-25T10:00:00Z')), true)
+  assert.equal(isWithinWorkingHours(weekdays, new Date('2026-09-26T10:00:00Z')), false)
+  const sydney = parseInboxPolicy({ workingHours: { start: '09:00', end: '17:00', timezone: 'Australia/Sydney', days: [1] } }).workingHours
+  assert.equal(isWithinWorkingHours(sydney, new Date('2026-09-20T23:30:00Z')), true)
+})
+
+test('an overnight window belongs to the day it opened', () => {
+  const fridayNights = parseInboxPolicy({ workingHours: { start: '22:00', end: '06:00', timezone: 'UTC', days: [5] } }).workingHours
+  assert.equal(isWithinWorkingHours(fridayNights, new Date('2026-09-25T23:00:00Z')), true)
+  assert.equal(isWithinWorkingHours(fridayNights, new Date('2026-09-26T03:00:00Z')), true)
+  assert.equal(isWithinWorkingHours(fridayNights, new Date('2026-09-26T23:00:00Z')), false)
+})
+
+test('the live-support switch beats the schedule', () => {
+  const hours = { start: '09:00', end: '18:00', timezone: 'Europe/London', days: [1, 2, 3, 4, 5] }
+  const legacy = parseInboxPolicy({ workingHours: hours })
+  assert.equal(legacy.liveSupport.enabled, true)
+  assert.deepEqual(liveSupportNow(legacy, new Date('2026-09-22T10:00:00Z')), { available: true, state: 'open', hours: 'Mon-Fri 09:00-18:00 (Europe/London)' })
+  assert.equal(liveSupportNow(legacy, new Date('2026-09-22T19:30:00Z')).state, 'closed')
+  const off = parseInboxPolicy({ workingHours: hours, liveSupport: { enabled: false } })
+  assert.deepEqual(liveSupportNow(off, new Date('2026-09-22T10:00:00Z')), { available: false, state: 'off', hours: null })
+  const always = parseInboxPolicy({ workingHours: { ...hours, enabled: false }, liveSupport: { enabled: true } })
+  assert.deepEqual(liveSupportNow(always, new Date('2026-09-26T03:00:00Z')), { available: true, state: 'open', hours: null })
+  assert.equal(parseInboxPolicy({}).liveSupport.enabled, false)
+})
+
+test('opening days read as short runs', () => {
+  const base = parseInboxPolicy({ workingHours: { start: '09:00', end: '17:30', timezone: 'UTC' } }).workingHours
+  assert.equal(hoursText(base), 'Every day 09:00-17:30 (UTC)')
+  assert.equal(hoursText({ ...base, days: [1, 2, 3, 4, 5, 6] }), 'Mon-Sat 09:00-17:30 (UTC)')
+  assert.equal(hoursText({ ...base, days: [0, 6] }), 'Sat, Sun 09:00-17:30 (UTC)')
+  assert.equal(hoursText({ ...base, days: [1, 3, 5] }), 'Mon, Wed, Fri 09:00-17:30 (UTC)')
 })
 
 test('shows time left until the first reply', () => {

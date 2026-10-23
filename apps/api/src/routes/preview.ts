@@ -12,6 +12,10 @@
  * POST /api/v1/preview/journey               Journey Test while a new bot is still a draft
  *   Body: { chapters, startChapter, message, environmentLabel, state?, catalog? }
  *
+ * A handover the team can take turns the test chat into a Sandbox chat in the Inbox
+ * (state.inboxChatId). The panel polls the person's replies:
+ * GET  /api/v1/bots/:botId/preview/inbox-chat/:conversationId?after=ISO
+ *
  * GET  /api/v1/bots/:botId/preview/knowledge-stats
  */
 
@@ -24,6 +28,7 @@ import type { StudioCatalog } from '@botstudio/shared'
 import { savedJourney } from '../lib/flow-runner.js'
 import { openEventStream } from '../lib/event-stream.js'
 import { runTestTurn, withWorkingCopy, type TestChatDeps, type TestChatState } from '../lib/test-chat.js'
+import { testInboxReplies } from '../lib/test-chat-inbox.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -68,7 +73,17 @@ const stateSchema = z.object({
   subject: z.string().nullable(),
   handover: z.record(z.unknown()).nullable(),
   ticket: z.object({ subject: z.string(), description: z.string() }).nullable(),
+  inboxChatId: z.string().max(64).nullable().optional(),
 })
+
+/** The Inbox chat a test state points at must be this bot's, or the state forgets it. */
+async function ownInboxChat(tenantId: string, botId: string | undefined, state: TestChatState | undefined): Promise<TestChatState | undefined> {
+  if (!state?.inboxChatId) return state
+  const chat = botId
+    ? await prisma.conversation.findFirst({ where: { id: state.inboxChatId, tenantId, botId }, select: { id: true } })
+    : null
+  return chat ? state : { ...state, inboxChatId: null }
+}
 
 const catalogSchema = z.object({
   facts: z.array(z.object({
@@ -116,7 +131,8 @@ async function journeyTurn(request: FastifyRequest, reply: FastifyReply, botId: 
       environmentLabel: body.data.environmentLabel,
       message: body.data.message,
       catalog: body.data.catalog as StudioCatalog | undefined,
-      state: body.data.state as TestChatState | undefined,
+      state: await ownInboxChat(tenantId, botId, body.data.state as TestChatState | undefined),
+      inbox: Boolean(botId),
     }, botId ? {} : DRAFT_DEPS)
     return { data: turn }
   } catch (err) {
@@ -165,7 +181,8 @@ export async function previewRoutes(app: FastifyInstance) {
         environmentLabel: 'Sandbox',
         message,
         opening,
-        state: state as TestChatState | undefined,
+        state: await ownInboxChat(tenantId, botId, state as TestChatState | undefined),
+        inbox: true,
         onChunk: (text) => send('chunk', { text }),
       })
       send('done', { fullText: turn.text, state: turn.state, path: turn.path, ended: turn.ended, chapter: turn.chapter, tools: turn.tools })
@@ -182,6 +199,14 @@ export async function previewRoutes(app: FastifyInstance) {
     const bot = await prisma.bot.findFirst({ where: { id: request.params.botId, tenantId }, select: { id: true } })
     if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
     return journeyTurn(request, reply, bot.id)
+  })
+
+  app.get<{ Params: { botId: string; conversationId: string }; Querystring: { after?: string } }>('/:botId/preview/inbox-chat/:conversationId', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const after = request.query.after ? new Date(request.query.after) : null
+    const result = await testInboxReplies(tenantId, request.params.botId, request.params.conversationId, after && !Number.isNaN(after.getTime()) ? after : null)
+    if (!result) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'This test chat is no longer in the Inbox.' } })
+    return { data: result }
   })
 
   /**

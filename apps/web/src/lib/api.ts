@@ -321,6 +321,24 @@ export const knowledge = {
   },
 }
 
+// ── Live support ──────────────────────────────────────────────────────────────
+export interface LiveSupport {
+  enabled: boolean
+  followHours: boolean
+  state: 'off' | 'closed' | 'open'
+  available: boolean
+  hours: string | null
+  schedule: { start: string; end: string; timezone: string; days: number[] }
+}
+
+export type LiveSupportChange = Partial<Pick<LiveSupport, 'enabled' | 'followHours'> & LiveSupport['schedule']>
+
+export const liveSupport = {
+  get: (botId: string) => apiFetch<{ data: LiveSupport }>(`/bots/${botId}/live-support`),
+  update: (botId: string, change: LiveSupportChange) =>
+    apiFetch<{ data: LiveSupport }>(`/bots/${botId}/live-support`, { method: 'PATCH', body: JSON.stringify(change) }),
+}
+
 // ── Conversations ─────────────────────────────────────────────────────────────
 export const conversations = {
   list: (params?: Record<string, string>) => apiFetch<{ data: Conversation[]; meta?: { testRunChats: number } }>(`/conversations?${new URLSearchParams(params ?? {})}`),
@@ -599,6 +617,9 @@ export const preview = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  /** The team's replies in the Sandbox chat a test handover opened, newer than `after`. */
+  inboxChat: (botId: string, conversationId: string, after?: string) =>
+    apiFetch<{ data: TestInboxChat }>(`/bots/${botId}/preview/inbox-chat/${conversationId}${after ? `?after=${encodeURIComponent(after)}` : ''}`),
   /** Returns the raw fetch Response so the caller can consume the SSE stream. */
   chatStream: (botId: string, body: {
     message: string
@@ -625,7 +646,15 @@ export interface TestChatState {
   status: 'active' | 'resolved' | 'escalated'
   outcome: string | null
   handover: Partial<HandoverContract> | null
+  /** The Sandbox chat in the Inbox once the test was handed to the team. */
+  inboxChatId?: string | null
   [key: string]: unknown
+}
+
+export interface TestInboxChat {
+  held: boolean
+  status: string
+  replies: Array<{ id: string; text: string; at: string }>
 }
 
 export type TestChatPath = 'journey' | 'name' | 'answer' | 'none' | 'held' | 'handover'
@@ -659,6 +688,7 @@ export function buildWsUrl(token: string): string {
 
 export const system = {
   version: () => apiFetch<{ data: AppBuildInfo }>('/system/version'),
+  access: () => apiFetch<{ data: { platformAdmin: boolean } }>('/system/access'),
   status: () => apiFetch<{ data: SystemStatus }>('/system/status'),
   config: () => apiFetch<{ data: SystemConfig }>('/system/config'),
 }
@@ -960,7 +990,7 @@ export interface Intent { id: string; name: string; description?: string; uttera
 export interface Entity { id: string; name: string; kind: string; values: object[] }
 export interface Faq { id: string; question: string; answer: string; tags: string[] }
 export interface KnowledgeSource { id: string; name: string; kind: string; config: Record<string, unknown>; lastSyncAt?: string; documents: Array<{ id: string; status: string }> }
-export interface Conversation { id: string; status: string; assignedTo?: string; contact?: Contact; channel?: { id: string; name: string; kind: string }; messages: Message[]; labels: Array<{ label: Label }>; updatedAt: string; sla?: string | null; outcome?: string | null; llm?: ConversationLlmCost | null; handover?: Partial<HandoverContract> | null; /** Set on chats a scheduled test run opened. */ testRunId?: string | null }
+export interface Conversation { id: string; status: string; subject?: string | null; assignedTo?: string; contact?: Contact; channel?: { id: string; name: string; kind: string }; messages: Message[]; labels: Array<{ label: Label }>; updatedAt: string; sla?: string | null; outcome?: string | null; llm?: ConversationLlmCost | null; handover?: Partial<HandoverContract> | null; /** Set on chats a scheduled test run opened. */ testRunId?: string | null }
 /** Model calls made for one chat. costUsd is null when a model had no known price. */
 export interface ConversationLlmCost { costUsd: number | null; calls: number }
 export interface ToolNote { id: string; name: string; runId?: string; ok: boolean; args?: Record<string, unknown>; output?: unknown; error?: string | null }

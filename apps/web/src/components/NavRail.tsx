@@ -2,10 +2,10 @@ import React, { useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { ChevronLeft, ChevronRight, Bot } from 'lucide-react'
 import { cn } from '@botstudio/ui'
-import { NAV_GROUPS } from './nav-config'
+import { visibleNavGroups } from './nav-config'
 import { navItemActive } from '../lib/build-nav'
 import { shortVersion, fullVersion } from '../lib/version'
-import { useBuildInfo } from '../lib/hooks'
+import { useBuildInfo, usePlatformAdmin } from '../lib/hooks'
 
 interface NavRailProps {
   collapsed?: boolean
@@ -16,6 +16,7 @@ interface NavRailProps {
 export function NavRail({ collapsed = false, onToggleCollapse }: NavRailProps) {
   const { pathname } = useLocation()
   const build = useBuildInfo()
+  const groups = visibleNavGroups(usePlatformAdmin())
 
   return (
     <nav
@@ -39,7 +40,7 @@ export function NavRail({ collapsed = false, onToggleCollapse }: NavRailProps) {
 
       {/* Nav items */}
       <div className="flex-1 overflow-y-auto py-2 space-y-0.5 px-2">
-        {NAV_GROUPS.map((group, gi) => (
+        {groups.map((group, gi) => (
           <div key={gi} className="mt-2">
             {group.label && !collapsed && (
               <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">

@@ -7,7 +7,7 @@ import { matchTopic } from './topic-route.js'
  * They are answered once here, before the chart, so no chart has to model them and none
  * replies "Sorry, I didn't catch that" to a "hi".
  */
-export type BasicAct = 'greeting' | 'how_are_you' | 'thanks' | 'goodbye' | 'bot_question' | 'help' | 'repeat'
+export type BasicAct = 'greeting' | 'how_are_you' | 'thanks' | 'goodbye' | 'bot_question' | 'help' | 'repeat' | 'frustrated'
 
 const ACTS: Array<[BasicAct, RegExp]> = [
   ['how_are_you', /^(?:(?:hi|hello|hey|hiya)\s+)?(?:how are you(?: doing| today)?|how's it going|how are things|you ok|are you ok|how do you do)$/],
@@ -16,7 +16,8 @@ const ACTS: Array<[BasicAct, RegExp]> = [
   ['goodbye', /^(?:bye|goodbye|bye bye|see you|see ya|cya|take care|that's all|that is all|that's everything|have a good day|have a nice day)$/],
   ['bot_question', /^(?:are you (?:a |an )?(?:bot|robot|real|human|person|ai|computer|machine|real person)|am i (?:talking|speaking|chatting) (?:to|with) (?:a |an )?(?:bot|robot|real person|person|human|ai)|is this (?:a |an )?(?:bot|robot|real person|human|ai))$/],
   ['help', /^(?:help|help me|can you help|can you help me|what can you do|what do you do|what can you help with|what can i ask|options|menu|what are my options|what are the options)$/],
-  ['repeat', /^(?:sorry|what|pardon|huh|come again|say that again|can you repeat that|repeat that|repeat|i don't understand|i dont understand|i didn't understand|i didnt understand|i'm confused|im confused|what do you mean)$/],
+  ['repeat', /^(?:sorry|what|pardon|huh|again|come again|come|say that again|say that|can you repeat that|repeat that|repeat|i don't understand|i dont understand|i didn't understand|i didnt understand|i'm confused|im confused|what do you mean|what was that)$/],
+  ['frustrated', /^(?:(?:this is|that is|that's|thats|you are|you're|youre|so|how|what a|such a|this bot is|the bot is)\s+)?(?:so |really |very |completely |totally )?(?:stupid|useless|rubbish|terrible|awful|annoying|ridiculous|pointless|hopeless|dumb|idiot|idiotic|not helpful|unhelpful|not helping|not working|broken|a waste of time|waste of time|wtf|ffs|omg|ugh|argh|for god's sake|this is not working|you're not helping|youre not helping|you are not helping|you don't understand|you dont understand)$/],
 ]
 
 /** The message is only a conversational move, with nothing else asked. */
@@ -40,6 +41,11 @@ function routeNodesAfter(graph: FlowGraph, nodeId: string): GraphNode[] {
     .filter((edge) => edge.source === nodeId)
     .map((edge) => byId.get(edge.target))
     .filter((node): node is GraphNode => node?.data.kind === 'route_topic')
+}
+
+/** The question at this node is answered by a topic route: a miss there leaves the chart's own path. */
+export function waitsOnRoute(graph: FlowGraph, nodeId: string): boolean {
+  return routeNodesAfter(graph, nodeId).length > 0
 }
 
 /** The chart already has a route for these words ("thanks" closing an offer), so it answers, not the basics. */
@@ -92,8 +98,10 @@ export function basicsReply(input: {
     case 'bot_question':
       return { act, keepWaiting: true, text: then("I'm a virtual assistant, not a person. If you'd rather talk to someone on the team, just say so.") }
     case 'help':
-      return { act, keepWaiting: true, text: then('Happy to help.') }
+      return { act, keepWaiting: true, text: then(question && /^I can help/i.test(question) ? 'Sure.' : 'Happy to help.') }
     case 'repeat':
       return { act, keepWaiting: true, text: question ? `Sure. ${question}` : 'Sorry, let me try again. What can I help with?' }
+    case 'frustrated':
+      return { act, keepWaiting: true, text: then("Sorry, I haven't been much help so far.") }
   }
 }

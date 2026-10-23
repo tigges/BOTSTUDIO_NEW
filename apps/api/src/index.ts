@@ -35,6 +35,7 @@ import { runWithAuditContext } from '@botstudio/db'
 import { installConsoleScrubbing, scrubbingLoggerOptions } from './lib/log-scrub.js'
 import { installLlmPrivacy } from './lib/privacy.js'
 import { safetyRoutes } from './routes/safety.js'
+import { liveSupportRoutes } from './routes/live-support.js'
 import { evalsRoutes } from './routes/evals.js'
 import { releasesRoutes } from './routes/releases.js'
 import { bundleRoutes } from './routes/bundle.js'
@@ -148,6 +149,7 @@ await app.register(toolsRoutes, { prefix: '/api/v1/bots' })
 await app.register(authProfilesRoutes, { prefix: '/api/v1/auth-profiles' })
 await app.register(dashboardsRoutes, { prefix: '/api/v1/bots' })
 await app.register(safetyRoutes, { prefix: '/api/v1/bots' })
+await app.register(liveSupportRoutes, { prefix: '/api/v1/bots' })
 await app.register(evalsRoutes, { prefix: '/api/v1/bots' })
 await app.register(releasesRoutes, { prefix: '/api/v1/bots' })
 await app.register(bundleRoutes, { prefix: '/api/v1/bots' })

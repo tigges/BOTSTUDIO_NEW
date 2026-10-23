@@ -55,3 +55,15 @@ test('a question whose answer the guest already gave is not asked again', () => 
   assert.equal(choiceAlreadyHeard(choices, "I'm new here"), undefined)
   assert.equal(choiceAlreadyHeard(undefined, 'I need a check-up'), undefined)
 })
+
+test('"again?" asks for the question once more, and an annoyed guest gets an apology and the question', () => {
+  assert.equal(basicAct('again?'), 'repeat')
+  assert.equal(basicAct('say that again'), 'repeat')
+  assert.equal(basicAct('stupid'), 'frustrated')
+  assert.equal(basicAct("this is useless"), 'frustrated')
+  assert.equal(basicAct("you're not helping"), 'frustrated')
+  assert.equal(basicAct('my tooth is broken'), undefined)
+  const offer = 'I can help you with a booking or prices. What would you like?'
+  assert.equal(basicsReply({ text: 'stupid', graph: welcome, nodeId: 'ask', question: offer })!.text, `Sorry, I haven't been much help so far. ${offer}`)
+  assert.equal(basicsReply({ text: 'what can you do?', graph: welcome, nodeId: 'ask', question: offer })!.text, `Sure. ${offer}`)
+})

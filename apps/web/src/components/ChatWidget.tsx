@@ -3,16 +3,19 @@
  *
  * Streams responses from POST /api/v1/bots/:botId/preview/chat (SSE). The server
  * runs the live turn pipeline over the chart on screen and hands back the chat's
- * state, which goes back with the next message. No Conversation records are made.
+ * state, which goes back with the next message. Only a handover the team can take
+ * becomes a Sandbox chat in the Inbox; the team's replies are polled back in here.
  */
 
 import React, { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, Sparkles, Database, X, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { Send, Loader2, Sparkles, Database, X, RotateCcw, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import { Button, Avatar } from '@botstudio/ui'
 import { cn } from '@botstudio/ui'
 import { ChatText } from './ChatText'
 import { preview, type TestChatPath, type TestChatState, type TestToolCall } from '../lib/api'
-import { joinNotes, testChatNote, testToolNote } from '../lib/test-chat-format'
+import { joinNotes, teamReturnNote, testChatNote, testToolNote } from '../lib/test-chat-format'
+import { useTeamReplies } from '../lib/use-team-replies'
 import { useAppStore } from '../store/app'
 
 const isDemoMode = () => import.meta.env.VITE_DEMO_MODE === 'true'
@@ -34,6 +37,8 @@ interface ChatMessage {
   ragChunks?: number
   /** What happened beyond the bot's words (a handover, an outcome). */
   note?: boolean
+  /** Said by a person in the Inbox after a handover. */
+  team?: boolean
 }
 
 export interface PreviewGraph {
@@ -76,6 +81,7 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, onClose, classNa
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const stateRef = useRef<TestChatState | undefined>(undefined)
+  const [inboxChatId, setInboxChatId] = useState<string | null>(null)
   const graphRef = useRef(flowGraph)
   graphRef.current = flowGraph
   const token = useAppStore((s: { token: string | null }) => s.token)
@@ -183,6 +189,7 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, onClose, classNa
             const data = JSON.parse(line.slice(6)) as { text?: string; fullText?: string; ragChunks?: number; message?: string; state?: TestChatState; path?: TestChatPath; tools?: TestToolCall[] }
             if (data.state && data.path) {
               stateRef.current = data.state
+              setInboxChatId(data.state.inboxChatId ?? null)
               note = joinNotes(testToolNote(data.tools), testChatNote(before, data.state, data.path))
             }
             if (data.text !== undefined) {
@@ -219,6 +226,11 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, onClose, classNa
     }
   }
 
+  useTeamReplies(botId, inboxChatId, {
+    onReply: (reply) => setMessages((prev) => [...prev, { id: `t_${reply.id}`, role: 'assistant', content: reply.text, team: true }]),
+    onReturn: (status) => setMessages((prev) => [...prev, { id: `r_${Date.now()}`, role: 'assistant', content: teamReturnNote(status), note: true }]),
+  })
+
   const deliverRef = useRef(deliver)
   deliverRef.current = deliver
 
@@ -239,6 +251,7 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, onClose, classNa
     abortRef.current?.abort()
     stateRef.current = undefined
     busyRef.current = false
+    setInboxChatId(null)
     setLoading(false)
     setInput('')
     if (followsChart && !isDemoMode()) {
@@ -316,7 +329,7 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, onClose, classNa
         ) : (
           <div key={msg.id} className={cn('flex gap-2', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
             {msg.role === 'assistant' && (
-              <Avatar name={botName} src={avatarUrl} size="xs" className="shrink-0 mt-1" />
+              <Avatar name={msg.team ? 'Team' : botName} src={msg.team ? null : avatarUrl} size="xs" className="shrink-0 mt-1" />
             )}
             <div className="max-w-[85%]">
               <div
@@ -326,7 +339,9 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, onClose, classNa
                     ? 'rounded-tr-sm bg-[var(--accent)] text-white'
                     : 'rounded-tl-sm bg-[var(--bg-overlay)] text-[var(--text-primary)] border border-[var(--border)]'
                 )}
+                data-testid={msg.team ? 'test-bot-team-line' : undefined}
               >
+                {msg.team && <span className="mb-0.5 block text-[10px] font-medium text-[var(--text-muted)]">Team</span>}
                 {msg.content ? <ChatText text={msg.content} /> : (msg.streaming && (
                   <span className="flex items-center gap-1.5 text-[var(--text-muted)]">
                     <Loader2 size={12} className="animate-spin" />
@@ -352,6 +367,15 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, onClose, classNa
         <div ref={messagesEndRef} />
       </div>
 
+      {inboxChatId && (
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-[var(--border)] px-4 py-2 text-[11px] text-[var(--text-muted)]" data-testid="test-bot-inbox">
+          <span>In the Inbox as a Sandbox chat</span>
+          <Link to="/inbox/chats" search={{ chat: inboxChatId }} target="_blank" className="inline-flex items-center gap-1 font-medium text-[var(--accent)]">
+            Open chat <ExternalLink size={11} />
+          </Link>
+        </div>
+      )}
+
       {/* Input */}
       <div className="px-3 py-3 border-t border-[var(--border)] shrink-0">
         <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-base)] px-3 py-2 focus-within:border-[var(--accent)] transition-colors">
@@ -375,7 +399,7 @@ export function ChatWidget({ botId, botName = 'Bot', avatarUrl, onClose, classNa
           </Button>
         </div>
         <p className="mt-1.5 text-center text-[10px] text-[var(--text-muted)]">
-          {followsChart ? 'Runs like a live chat from this chart; nothing reaches the Inbox.' : 'Runs like a live chat; nothing reaches the Inbox.'}
+          {followsChart ? 'Runs like a live chat from this chart; only a handover reaches the Inbox.' : 'Runs like a live chat; only a handover reaches the Inbox.'}
         </p>
       </div>
     </div>

@@ -64,7 +64,7 @@ test('yuzu.hair becomes Bella at Yuzu with four doors and no invented cancellati
   const page = pageFromHtml('https://yuzu.hair/', YUZU)
   const draft = draftWebsiteChat({ pages: [page], companyName: 'Yuzu', personaName: 'Bella' })
   assert.equal(draft.clusterId, 'hair')
-  assert.equal(draft.greeting, "Hi, I'm Bella at Yuzu. What's your name?")
+  assert.equal(draft.greeting, "Hi, I'm Bella from Yuzu. What's your name?")
   assert.deepEqual(draft.doors.map((door) => door.title), ['Where we are', 'Hours', 'Services', 'Book'])
   assert.equal(draft.doors.every((door) => door.found), true)
   assert.match(draft.doors[0]!.answer, /5 Dickens Yard, Longfield Avenue, Ealing, W5 2TD/)
@@ -145,7 +145,7 @@ test('a page with no facts still has four doors and does not invent an address',
   const page = pageFromHtml('https://example.com/', '<title>Example</title><p>Welcome to the studio. We love hair.</p>')
   const draft = draftWebsiteChat({ pages: [page], companyName: 'Example', personaName: '' })
   assert.equal(draft.clusterId, 'hair')
-  assert.equal(draft.greeting, "Hi, I'm Bella at Example. What's your name?")
+  assert.equal(draft.greeting, "Hi, I'm Bella from Example. What's your name?")
   assert.equal(draft.doors.every((door) => door.found), false)
   assert.match(draft.doors[0]!.answer, /did not state an address/)
   assert.equal(draft.doors[0]!.answer.includes('Rosewood'), false)
@@ -186,7 +186,7 @@ test('botstudio.uk is a software map, not an empty salon from the Hair & Spa sam
   assert.match(page.text, /website widget/)
   const draft = draftWebsiteChat({ pages: [page], companyName: 'Acme 2', personaName: 'James' })
   assert.equal(draft.clusterId, 'software')
-  assert.equal(draft.greeting, "Hi, I'm James at Acme 2.")
+  assert.equal(draft.greeting, "Hi, I'm James from Acme 2.")
   assert.equal(/What's your name/.test(draft.greeting), false)
   assert.equal(draft.doors.some((door) => door.flowName === 'Location' || door.flowName === 'Salon hours'), false)
   assert.ok(draft.doors.some((door) => /product|what we do/i.test(`${door.title} ${door.flowName}`)))
@@ -538,7 +538,7 @@ test('a news homepage does not mint boxing, golf, or article-id rooms', () => {
   assert.ok(draft.doors.some((door) => /what we do/i.test(door.flowName)))
   assert.ok(draft.doors.some((door) => door.flowName === 'Talk to a person'))
   assert.ok(draft.doors.some((door) => /contact/i.test(door.flowName)))
-  assert.equal(draft.greeting, "Hi, I'm Beeb at BBC.")
+  assert.equal(draft.greeting, "Hi, I'm Beeb from BBC.")
 })
 
 test('a sport hub of fight copy and a homepage of disclaimers do not become rooms', () => {
@@ -722,7 +722,7 @@ test('a CRM homepage does not turn nav chrome into answers, and reads product pa
     companyName: 'Hubspot',
     personaName: 'James',
   })
-  assert.equal(draft.greeting, "Hi, I'm James at Hubspot.")
+  assert.equal(draft.greeting, "Hi, I'm James from Hubspot.")
   assert.equal(/What's your name/.test(draft.greeting), false)
   const welcome = JSON.stringify(draft.flows.find((flow) => /welcome/i.test(flow.name))?.graph ?? {})
   assert.equal(/What's your name/.test(welcome), false)
@@ -774,7 +774,7 @@ test('a JS pricing URL does not pick product-card prices off a marketing page', 
 test('a CRM pricing page becomes plan doors and an email follow-up, not a salon map', async () => {
   const page = pageFromHtml('https://www.hubspot.com/pricing', HUBSPOT_PRICING)
   const draft = draftWebsiteChat({ pages: [page], companyName: 'test', personaName: '' })
-  assert.match(draft.greeting, /Maya at test/)
+  assert.match(draft.greeting, /Maya from test/)
   assert.equal(/Bella/.test(draft.greeting), false)
   assert.equal(draft.doors.some((door) => door.flowName === 'Location' || door.flowName === 'Salon hours'), false)
   const plans = draft.doors.find((door) => /plan|pricing/i.test(door.flowName) || /plan/i.test(door.title))
@@ -832,7 +832,7 @@ test('a telco homepage of investor copy does not stamp a software blueprint', ()
     </body></html>`,
   )
   const draft = draftWebsiteChat({ pages: [home, investors], companyName: 'Vodafone', personaName: 'Voda' })
-  assert.equal(draft.greeting, "Hi, I'm Voda at Vodafone.")
+  assert.equal(draft.greeting, "Hi, I'm Voda from Vodafone.")
   assert.equal(draft.doors.some((door) => /accounts|payments|safety|onboarding|api|status/i.test(door.flowName)), false)
   assert.equal(/ordinary shares|computershare|code of conduct|in-depth reports/i.test(draft.doors.map((door) => door.answer).join('\n')), false)
   assert.ok(draft.doors.some((door) => /connect everyone/i.test(door.answer)))
