@@ -1,6 +1,7 @@
 /** Browser storage keys. Builds before the rename used the ybot-* names. */
 export const APP_STORAGE_KEY = 'botstudio-app'
 export const THEME_STORAGE_KEY = 'botstudio-theme'
+export const INBOX_SOUND_KEY = 'botstudio-inbox-sound'
 
 const LEGACY_KEYS: Record<string, string> = {
   'ybot-app': APP_STORAGE_KEY,

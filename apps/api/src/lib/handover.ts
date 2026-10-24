@@ -15,6 +15,7 @@ import {
   type ReturnOutcome,
 } from '@botstudio/shared'
 import { dispatchWebhookEvent } from '../queues.js'
+import { broadcastToTenant } from '../ws.js'
 import { triggerRules } from './automation-engine.js'
 import { noTeamLine } from './chat-outcome.js'
 import { sendChannelReply } from './channel-outbound.js'
@@ -109,10 +110,12 @@ export async function handOverChat(opts: {
     at: (opts.now ?? new Date()).toISOString(),
     source: opts.source,
   }
-  await prisma.conversation.update({
+  const chat = await prisma.conversation.update({
     where: { id: opts.conversationId },
     data: { status: 'escalated', outcome: 'escalated', handover: contract as object, updatedAt: new Date() },
-  }).catch(() => {})
+    select: { id: true, botId: true, status: true, assignedTo: true, testRunId: true },
+  }).catch(() => null)
+  if (chat) broadcastToTenant(opts.tenantId, { event: 'conversation.updated', data: { ...chat, priority: contract.priority } })
   triggerRules('conversation.escalated', {
     tenantId: opts.tenantId,
     botId: opts.botId,

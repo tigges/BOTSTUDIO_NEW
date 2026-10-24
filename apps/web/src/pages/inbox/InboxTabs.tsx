@@ -1,7 +1,8 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
-import { Settings2 } from 'lucide-react'
+import { Bell, BellOff, Settings2 } from 'lucide-react'
 import { cn } from '@botstudio/ui'
+import { handoverSoundOn, setHandoverSound } from '../../lib/handover-alert'
 import { LiveSupportSwitch } from './LiveSupportSwitch'
 
 const TABS = [
@@ -9,6 +10,24 @@ const TABS = [
   { label: 'Tasks', path: '/inbox/tasks' },
   { label: 'Contacts', path: '/inbox/contacts' },
 ] as const
+
+/** The tone when a chat is handed to a person, on or off for this browser. */
+function HandoverSoundSwitch() {
+  const [on, setOn] = useState(handoverSoundOn)
+  const label = on ? 'Sound on when a chat is handed to a person. Click to mute.' : 'Sound off for handed-over chats. Click to turn it on.'
+  return (
+    <button
+      type="button"
+      onClick={() => { setHandoverSound(!on); setOn(!on) }}
+      title={label}
+      aria-label={label}
+      aria-pressed={on}
+      className="flex h-7 w-7 items-center justify-center rounded-[var(--radius)] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+    >
+      {on ? <Bell size={14} /> : <BellOff size={14} />}
+    </button>
+  )
+}
 
 /** One Inbox: live chats first, then follow-up tasks and the people behind them. Settings sit behind the gear. */
 export function InboxTabs({ actions }: { actions?: React.ReactNode }) {
@@ -36,6 +55,7 @@ export function InboxTabs({ actions }: { actions?: React.ReactNode }) {
       </nav>
       <div className="ml-auto flex items-center gap-1">
         <LiveSupportSwitch />
+        <HandoverSoundSwitch />
         {actions}
         <Link
           to="/inbox/settings"
