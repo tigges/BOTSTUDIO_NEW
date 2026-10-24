@@ -306,7 +306,7 @@ function extractAddress(text: string): string | null {
   const compact = rawPostcode.toUpperCase().replace(/\s+/g, '')
   const postcode = compact.replace(/^(.+?)(\d[A-Z]{2})$/, '$1 $2')
   const tail = text.slice(Math.max(0, match.index - 140), match.index)
-  const streets = [...tail.matchAll(/\d+\s+[A-Za-z0-9][^.]{2,100}/g)]
+  const streets = [...tail.matchAll(/\b\d{1,4}[A-Za-z]?\s+[A-Za-z][^.]{2,100}/g)]
   const street = (streets[streets.length - 1]?.[0] ?? '')
     .replace(/\s+/g, ' ')
     .replace(/[,\s]+$/g, '')
@@ -318,6 +318,10 @@ function extractAddress(text: string): string | null {
 const DAY = 'monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tues?|wed|thurs?|fri|sat|sun'
 const DAY_RANGE = `(?:${DAY})(?:\\s*(?:to|–|—|-|and|&)\\s*(?:${DAY}))*`
 const CLOCK = '\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?'
+/** "Monday 8am", "Monday: 8am", "Monday : 8 am". */
+const DAY_GAP = '(?:\\s*:\\s*|\\s+)'
+/** Where a site lists its hours: "Opening hours", "Working Hours", "Surgery times", "We are open". */
+const HOURS_MARK = /\b(?:(?:opening|working|surgery|practice|clinic|office|business|studio|salon)\s+(?:hours|times)|open(?:ing)?\s+times|open)\b/gi
 
 function titleDays(value: string): string {
   const small = new Set(['to', 'and', 'or'])
@@ -333,13 +337,13 @@ function tidyTime(value: string): string {
 
 function parseHoursSlice(slice: string): string | null {
   const ranges: string[] = []
-  const rangeRe = new RegExp(`\\b(${DAY_RANGE})\\s+(${CLOCK})\\s*(?:to|–|—|-)\\s*(${CLOCK})`, 'gi')
+  const rangeRe = new RegExp(`\\b(${DAY_RANGE})${DAY_GAP}(${CLOCK})\\s*(?:to|–|—|-)\\s*(${CLOCK})`, 'gi')
   for (const match of slice.matchAll(rangeRe)) {
     const line = `${titleDays(match[1] ?? '')} ${tidyTime(match[2] ?? '')} to ${tidyTime(match[3] ?? '')}`
     if (!ranges.includes(line)) ranges.push(line)
   }
   const closed: string[] = []
-  const closedRe = new RegExp(`\\b(${DAY_RANGE})\\s+(?:are\\s+)?closed\\b`, 'gi')
+  const closedRe = new RegExp(`\\b(${DAY_RANGE})${DAY_GAP}(?:are\\s+)?closed\\b`, 'gi')
   for (const match of slice.matchAll(closedRe)) {
     const line = `${titleDays(match[1] ?? '')} closed`
     if (!closed.includes(line)) closed.push(line)
@@ -349,7 +353,7 @@ function parseHoursSlice(slice: string): string | null {
 }
 
 function extractHours(text: string): string | null {
-  const marks = [...text.matchAll(/\b(?:opening hours|open)\b/gi)]
+  const marks = [...text.matchAll(HOURS_MARK)]
   for (const mark of marks) {
     const parsed = parseHoursSlice(text.slice(mark.index ?? 0, (mark.index ?? 0) + 320))
     if (parsed) return parsed
@@ -1101,6 +1105,8 @@ export function websiteChatFromLearnedSpec(input: {
     .filter((topic) => topic.flowName !== 'Talk to a person' && !/did not state this/i.test(topic.answer))
     .slice(0, 20)
     .map((topic) => ({ label: topic.choice, text: clip(topic.answer, 180) }))
+  const hours = extractHours(pages.map((page) => page.text).join('\n'))
+  if (hours && !facts.some((fact) => /\bhours?\b|\bopen/i.test(`${fact.label} ${fact.text}`))) facts.unshift({ label: 'Hours', text: hours })
   const first = pages[0]
   return {
     url: first?.url ?? '',
