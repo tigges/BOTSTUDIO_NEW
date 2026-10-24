@@ -959,3 +959,34 @@ test('a menu that leaves list items open does not hide the rest of the page', ()
   assert.match(page.text, /Existing patient exam \| £45/)
   assert.doesNotMatch(page.text, /Preventative/)
 })
+
+const WORKING_HOURS_FOOTER = `<h6>Working Hours</h6>
+<ul>
+<li><span>Monday : 8 am - 6 pm</span></li>
+<li><span>Tuesday - Thursday : 8 am - 5 pm</span></li>
+<li><span>Friday : 8 am - 4 pm</span></li>
+<li><span>Saturday : 8 am - 1 pm</span></li>
+<li><span>Sunday : Closed</span></li>
+</ul>`
+
+test('hours under a "Working Hours" footer, written "Monday : 8 am - 6 pm", reach the map', () => {
+  const salon = pageFromHtml('https://studio.example/', `<html><head><title>Studio Nine hair salon</title></head><body>
+<p>Studio Nine is a hair salon. Our stylists cut, colour and style hair. Book a haircut online.</p>
+<p>6 Drayton Green Road, West Ealing, London W13 8RY</p>${WORKING_HOURS_FOOTER}</body></html>`)
+  const draft = draftWebsiteChat({ pages: [salon], companyName: 'Studio Nine' })
+  const hours = draft.doors.find((door) => door.title === 'Hours')!
+  assert.equal(hours.found, true)
+  assert.equal(hours.blurb, 'Monday 8am to 6pm. Tuesday to Thursday 8am to 5pm. Friday 8am to 4pm. Saturday 8am to 1pm. Sunday closed.')
+
+  const phoneFirst = pageFromHtml('https://studio.example/', `<html><head><title>Studio Nine hair salon</title></head><body>
+<p>Studio Nine is a hair salon. Our stylists cut, colour and style hair.</p>
+<p>+44 (020) 85672235 6 Drayton Green Road, West Ealing, London, W13 8RY</p>
+<p>020 8567 2235 6 Drayton Green Road</p></body></html>`)
+  const where = draftWebsiteChat({ pages: [phoneFirst], companyName: 'Studio Nine' }).doors.find((door) => door.title === 'Where we are')!
+  assert.equal(where.blurb, '6 Drayton Green Road, West Ealing, London, W13 8RY')
+
+  const practice = pageFromHtml('https://practice.example/', `<html><head><title>The Ealing Dental Practice</title></head><body>
+<p>For over 40 years, The Ealing Dental Practice has been a trusted cornerstone of our community.</p>${WORKING_HOURS_FOOTER}</body></html>`)
+  const other = draftWebsiteChat({ pages: [practice], companyName: 'Ealing Dental' })
+  assert.deepEqual(other.facts[0], { label: 'Hours', text: hours.blurb })
+})

@@ -15,6 +15,8 @@ import type { StarterFlow } from './flow-templates.js'
 import { draftClusteredTemplate, isOpaqueStem, isStoryLeafPath, packFromLearned, suggestCluster, type ClusterId, type LearnedTemplateSpec } from './site-template.js'
 import { identityFor } from './start-catalog.js'
 import { introLine } from './greeting-welcome.js'
+import { hoursFromStructuredData, hoursMentionedIn, hoursSentence, pickWeek } from './opening-hours.js'
+import type { OpeningDay } from './blueprints/business.js'
 
 export interface ScannedLink {
   href: string
@@ -28,6 +30,8 @@ export interface ScannedPage {
   links: ScannedLink[]
   /** The page's own summary from its meta description, when it has one. */
   description?: string
+  /** Opening hours the page declares for search engines (schema.org), when it does. */
+  hours?: OpeningDay[]
 }
 
 export interface ScanDoor {
@@ -182,7 +186,8 @@ export function pageFromHtml(url: string, html: string): ScannedPage {
     links.push({ href: raw, text })
   }
   const description = metaDescription(html)
-  return description ? { url, title, text: pageText(html), links, description } : { url, title, text: pageText(html), links }
+  const hours = hoursFromStructuredData(html)
+  return { url, title, text: pageText(html), links, ...(description ? { description } : {}), ...(hours ? { hours } : {}) }
 }
 
 function metaDescription(html: string): string {
@@ -306,7 +311,7 @@ function extractAddress(text: string): string | null {
   const compact = rawPostcode.toUpperCase().replace(/\s+/g, '')
   const postcode = compact.replace(/^(.+?)(\d[A-Z]{2})$/, '$1 $2')
   const tail = text.slice(Math.max(0, match.index - 140), match.index)
-  const streets = [...tail.matchAll(/\d+\s+[A-Za-z0-9][^.]{2,100}/g)]
+  const streets = [...tail.matchAll(/\b\d{1,4}[A-Za-z]?\s+[A-Za-z][^.]{2,100}/g)]
   const street = (streets[streets.length - 1]?.[0] ?? '')
     .replace(/\s+/g, ' ')
     .replace(/[,\s]+$/g, '')
@@ -315,46 +320,10 @@ function extractAddress(text: string): string | null {
   return `${street}, ${postcode}`
 }
 
-const DAY = 'monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tues?|wed|thurs?|fri|sat|sun'
-const DAY_RANGE = `(?:${DAY})(?:\\s*(?:to|–|—|-|and|&)\\s*(?:${DAY}))*`
-const CLOCK = '\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?'
-
-function titleDays(value: string): string {
-  const small = new Set(['to', 'and', 'or'])
-  const words = value.replace(/&/g, ' and ').replace(/[–—-]/g, ' to ').toLowerCase().split(/\s+/).filter(Boolean)
-  return words.map((word, index) => (
-    small.has(word) && index > 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)
-  )).join(' ')
-}
-
-function tidyTime(value: string): string {
-  return value.replace(/\s+/g, '').replace(/(\d)(am|pm)/i, (_, hour: string, mer: string) => `${hour}${mer.toLowerCase()}`)
-}
-
-function parseHoursSlice(slice: string): string | null {
-  const ranges: string[] = []
-  const rangeRe = new RegExp(`\\b(${DAY_RANGE})\\s+(${CLOCK})\\s*(?:to|–|—|-)\\s*(${CLOCK})`, 'gi')
-  for (const match of slice.matchAll(rangeRe)) {
-    const line = `${titleDays(match[1] ?? '')} ${tidyTime(match[2] ?? '')} to ${tidyTime(match[3] ?? '')}`
-    if (!ranges.includes(line)) ranges.push(line)
-  }
-  const closed: string[] = []
-  const closedRe = new RegExp(`\\b(${DAY_RANGE})\\s+(?:are\\s+)?closed\\b`, 'gi')
-  for (const match of slice.matchAll(closedRe)) {
-    const line = `${titleDays(match[1] ?? '')} closed`
-    if (!closed.includes(line)) closed.push(line)
-  }
-  if (ranges.length === 0) return null
-  return [...ranges, ...closed].join('. ').replace(/\.$/, '') + '.'
-}
-
-function extractHours(text: string): string | null {
-  const marks = [...text.matchAll(/\b(?:opening hours|open)\b/gi)]
-  for (const mark of marks) {
-    const parsed = parseHoursSlice(text.slice(mark.index ?? 0, (mark.index ?? 0) + 320))
-    if (parsed) return parsed
-  }
-  return null
+/** The week the pages state, as one line the bot can say. Any common layout; see opening-hours.ts. */
+function extractHours(pages: ScannedPage[]): string | null {
+  const picked = pickWeek(pages)
+  return picked ? hoursSentence(picked.best.hours) || null : null
 }
 
 function extractPatch(text: string): string | null {
@@ -1101,6 +1070,8 @@ export function websiteChatFromLearnedSpec(input: {
     .filter((topic) => topic.flowName !== 'Talk to a person' && !/did not state this/i.test(topic.answer))
     .slice(0, 20)
     .map((topic) => ({ label: topic.choice, text: clip(topic.answer, 180) }))
+  const hours = extractHours(pages)
+  if (hours && !facts.some((fact) => /hours|open/i.test(fact.label) && hoursMentionedIn(fact.text).length > 0)) facts.unshift({ label: 'Hours', text: hours })
   const first = pages[0]
   return {
     url: first?.url ?? '',
@@ -1168,7 +1139,7 @@ export function draftWebsiteChat(input: {
   const company = companyLabel(input.companyName)
   const persona = input.personaName?.trim() || 'Bella'
   const address = extractAddress(text)
-  const hours = extractHours(text)
+  const hours = extractHours(pages)
   const patch = extractPatch(text)
   const offers = extractOffers(text)
   const singleOffer = offers.length === 1 ? offers[0] : extractOffer(text)

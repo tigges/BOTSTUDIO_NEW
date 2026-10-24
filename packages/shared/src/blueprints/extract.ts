@@ -5,7 +5,8 @@
  */
 
 import type { ScannedPage } from '../website-scan.js'
-import { WEEKDAYS, WEEKDAY_NAMES, formatWeeklyHours, type BusinessField, type OpeningDay, type PlanItem, type PriceItem, type TopicItem, type Weekday } from './business.js'
+import { pickWeek } from '../opening-hours.js'
+import { WEEKDAYS, WEEKDAY_NAMES, formatWeeklyHours, type BusinessField, type OpeningDay, type PlanItem, type PriceItem, type TopicItem } from './business.js'
 
 export interface VocabularyTerm {
   name: string
@@ -134,98 +135,13 @@ function commas(text: string): number {
 
 // ── Opening hours ────────────────────────────────────────────────────────────
 
-const DAY_WORDS: Array<[Weekday, RegExp]> = [
-  ['mon', /^mon(day)?$/i], ['tue', /^tue(s|sday)?$/i], ['wed', /^wed(nesday)?$/i], ['thu', /^thu(r|rs|rsday)?$/i],
-  ['fri', /^fri(day)?$/i], ['sat', /^sat(urday)?$/i], ['sun', /^sun(day)?$/i],
-]
+export { hoursFromLine, hoursMentionedIn } from '../opening-hours.js'
 
-function dayOf(word: string): Weekday | undefined {
-  return DAY_WORDS.find(([, pattern]) => pattern.test(word.replace(/\.$/, '')))?.[0]
-}
-
-function time24(raw: string): string | undefined {
-  const match = raw.trim().toLowerCase().match(/^(\d{1,2})(?:[.:](\d{2}))?\s*(am|pm|noon)?$/)
-  if (!match) return undefined
-  let hour = Number(match[1])
-  const minute = Number(match[2] ?? '0')
-  const half = match[3]
-  if (half === 'pm' && hour < 12) hour += 12
-  if (half === 'am' && hour === 12) hour = 0
-  if (hour > 23 || minute > 59) return undefined
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
-}
-
-const DAY_LINE = /^(mon|tue|wed|thu|fri|sat|sun)[a-z.]*(?:\s*(?:-|–|—|to)\s*(mon|tue|wed|thu|fri|sat|sun)[a-z.]*)?\s*:?\s*(.*)$/i
-const TIME_RANGE = /(\d{1,2}(?:[.:]\d{2})?\s*(?:am|pm)?)\s*(?:-|–|—|to|until)\s*(\d{1,2}(?:[.:]\d{2})?\s*(?:am|pm)?)/i
-
-/** "Tuesday - Thursday : 8 am - 5 pm" becomes three days at 08:00 to 17:00. */
-export function hoursFromLine(line: string): OpeningDay[] {
-  const match = line.match(DAY_LINE)
-  if (!match) return []
-  const first = dayOf(match[1]!)
-  const last = match[2] ? dayOf(match[2]) : first
-  if (!first || !last) return []
-  const from = WEEKDAYS.indexOf(first)
-  const to = WEEKDAYS.indexOf(last)
-  if (to < from) return []
-  const rest = match[3] ?? ''
-  const days = WEEKDAYS.slice(from, to + 1)
-  if (/closed/i.test(rest)) return days.map((day) => ({ day, closed: true }))
-  const range = rest.match(TIME_RANGE)
-  if (!range) return []
-  let open = time24(range[1]!)
-  let close = time24(range[2]!)
-  if (!open || !close) return []
-  // "8 - 5" with no am/pm: an afternoon close.
-  if (!/am|pm/i.test(range[2]!) && close < open) close = `${String(Number(close.slice(0, 2)) + 12).padStart(2, '0')}${close.slice(2)}`
-  if (!/am|pm/i.test(range[1]!) && Number(open.slice(0, 2)) < 6) open = `${String(Number(open.slice(0, 2)) + 12).padStart(2, '0')}${open.slice(2)}`
-  return days.map((day) => ({ day, open, close }))
-}
-
-const DAY_SPAN = /\b(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?(?:\s*(?:-|–|—|to)\s*(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?)?\s*:?\s*(?:closed|\d{1,2}(?:[.:]\d{2})?\s*(?:am|pm)?\s*(?:-|–|—|to|until)\s*\d{1,2}(?:[.:]\d{2})?\s*(?:am|pm)?)/gi
-
-/** Day-and-time statements anywhere in flowing text, e.g. a crawled page with no line breaks. */
-export function hoursMentionedIn(text: string): Array<{ hours: OpeningDay[]; quote: string }> {
-  return [...text.matchAll(DAY_SPAN)].flatMap((match) => {
-    const hours = hoursFromLine(match[0].trim())
-    return hours.length ? [{ hours, quote: match[0].trim() }] : []
-  })
-}
-
-function hoursKey(hours: OpeningDay[]): string {
-  return WEEKDAYS.map((day) => {
-    const row = hours.find((item) => item.day === day)
-    return row ? (row.closed ? 'x' : `${row.open}-${row.close}`) : '?'
-  }).join(',')
-}
-
-/** Every run of day lines on every page. The most repeated week wins; a different week is a conflict to check. */
+/** Every week of day lines on every page. The most repeated week wins; a different week is a conflict to check. */
 export function readHours(pages: ScannedPage[]): BusinessField {
-  const weeks = new Map<string, { hours: OpeningDay[]; count: number; page: ScannedPage }>()
-  for (const page of pages) {
-    let block: OpeningDay[] = []
-    const flush = () => {
-      if (block.length >= 4) {
-        const byDay = new Map(block.map((row) => [row.day, row]))
-        const hours = WEEKDAYS.flatMap((day) => byDay.get(day) ? [byDay.get(day)!] : [])
-        const key = hoursKey(hours)
-        const row = weeks.get(key) ?? { hours, count: 0, page }
-        row.count += 1
-        weeks.set(key, row)
-      }
-      block = []
-    }
-    for (const line of linesOf(page)) {
-      const days = hoursFromLine(line)
-      if (days.length) block.push(...days)
-      else flush()
-    }
-    flush()
-  }
-  const ranking = [...weeks.values()].sort((a, b) => b.count - a.count)
-  const best = ranking[0]
-  if (!best) return MISSING
-  const other = ranking[1]
+  const picked = pickWeek(pages)
+  if (!picked) return MISSING
+  const { best, other } = picked
   if (!other) return found(best.hours, best.page)
   const differing = WEEKDAYS.filter((day) => {
     const a = best.hours.find((row) => row.day === day)
