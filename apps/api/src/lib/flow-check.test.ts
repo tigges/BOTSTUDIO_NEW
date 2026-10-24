@@ -31,6 +31,26 @@ test('a welcome with a loose start and untied lines can be repaired', () => {
   assert.equal(after.some((issue) => issue.level === 'block' || issue.level === 'repair'), false)
 })
 
+test('a note an import left for the author blocks publishing until someone writes the line', () => {
+  const graph = {
+    nodes: [
+      { id: 'start', data: { kind: 'trigger_start', label: 'Start', config: {} } },
+      { id: 'say', data: { kind: 'send_message', label: 'Support answer', config: { text: 'The pages did not state this for support. Edit the line to match Acme Support Bot.' } } },
+      { id: 'end', data: { kind: 'end_flow', label: 'End', config: {} } },
+    ],
+    edges: [
+      { id: 'a', source: 'start', target: 'say' },
+      { id: 'b', source: 'say', target: 'end' },
+    ],
+  }
+  const issue = inspectFlowGraph(graph).find((item) => item.code === 'placeholder-line')
+  assert.equal(issue?.level, 'block')
+  assert.equal(issue?.nodeId, 'say')
+  assert.match(issue?.message ?? '', /^Support answer still holds a note for you/)
+  graph.nodes[1]!.data.config.text = 'I can help with orders, deliveries and returns.'
+  assert.equal(inspectFlowGraph(graph).some((item) => item.code === 'placeholder-line'), false)
+})
+
 test('yes and no are restored from true and false', () => {
   const graph = {
     nodes: [

@@ -50,6 +50,13 @@ const LINEAR = new Set([
 const OPERATORS: ReadonlySet<string> = new Set(GUARD_OPERATORS)
 const AI_FIELD_NAMES: Record<AiStepField, string> = { goal: 'a goal', exitWhen: 'an exit condition', maxTurns: 'a turn limit (1 to 20)' }
 
+const AUTHOR_PLACEHOLDER = /\bthe pages did not state this\b|\bedit the line to match\b/i
+
+/** A line an import left for the author to replace, e.g. "The pages did not state this for support. Edit the line to match…". */
+export function isAuthorPlaceholder(text: string): boolean {
+  return AUTHOR_PLACEHOLDER.test(text)
+}
+
 function sentenceList(items: string[]): string {
   if (items.length <= 1) return items.join('')
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
@@ -260,6 +267,9 @@ export function inspectFlowGraph(graph: CheckGraph | null | undefined, options: 
 
     if (kind === 'send_message' && !String(config['text'] ?? '').trim()) {
       issues.push({ level: 'block', code: 'empty-message', nodeId: node.id, message: `${label} has no message for the visitor.` })
+    }
+    if ((kind === 'send_message' || kind === 'ask_question') && isAuthorPlaceholder(String(config['text'] ?? config['question'] ?? ''))) {
+      issues.push({ level: 'block', code: 'placeholder-line', nodeId: node.id, message: `${label} still holds a note for you, not a line for the visitor. Write what the bot should say here.` })
     }
     if (kind === 'ask_question' && !String(config['question'] ?? '').trim()) {
       issues.push({ level: 'block', code: 'empty-question', nodeId: node.id, message: `${label} has no question.` })
