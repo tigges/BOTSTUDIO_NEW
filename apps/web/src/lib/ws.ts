@@ -17,6 +17,9 @@ type WsEvent = {
   event: 'message.chunk'
   data: { conversationId: string; chunk: string }
 } | {
+  event: 'conversation.created' | 'conversation.updated'
+  data: { id: string; status?: string; assignedTo?: string | null; testRunId?: string | null }
+} | {
   type: 'connected'
   tenantId: string
 } | {
@@ -64,7 +67,7 @@ export function useTenantWS() {
   const token = useAppStore((s) => s.token)
 
   useEffect(() => {
-    if (!token) return
+    if (!token || import.meta.env.VITE_DEMO_MODE === 'true') return
     connectWs(token)
     const ping = setInterval(() => {
       if (globalWs?.readyState === WebSocket.OPEN) {

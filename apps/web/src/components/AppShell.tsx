@@ -1,12 +1,14 @@
 import React, { useState } from 'react'
 import { THEME_STORAGE_KEY } from '../lib/storage-keys'
-import { Outlet, useNavigate } from '@tanstack/react-router'
+import { Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import { NavRail } from './NavRail'
 import { TopBar } from './TopBar'
 import { CommandPalette } from './CommandPalette'
 import { useAppStore } from '../store/app'
 import { apiFetch } from '../lib/api'
 import type { Bot } from '../store/app'
+import { badgeText } from '../lib/handover-alert'
+import { useHandoverAlert } from '../lib/use-handover-alert'
 
 function savedDarkMode(): boolean {
   try { return localStorage.getItem(THEME_STORAGE_KEY) === 'dark' } catch { return false }
@@ -18,6 +20,8 @@ export function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const navigate = useNavigate()
   const { bots, setBots, setBotsLoading, setBotsError, clearAuth } = useAppStore()
+  const { pathname } = useLocation()
+  const waiting = useHandoverAlert(pathname.startsWith('/inbox/chats'))
 
   // Bootstrap: on every page refresh the bots list starts empty because it is
   // intentionally excluded from localStorage persistence.  Fetch once from the
@@ -51,6 +55,7 @@ export function AppShell() {
       <NavRail
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((c) => !c)}
+        badges={{ inbox: badgeText(waiting) }}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar

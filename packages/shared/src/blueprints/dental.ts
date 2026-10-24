@@ -15,6 +15,7 @@ import { CONVERSATION_BASICS, type EvalCheck, type EvalScenario } from '../evals
 import type { StarterFlow } from '../flow-templates.js'
 import type { GuardrailRule } from '../guardrails.js'
 import type { ScannedPage } from '../website-scan.js'
+import { topicOffer, topicsFromChapters } from '../topic-offer.js'
 import type { Blueprint, BlueprintBundle, DemoScript } from './blueprint.js'
 import {
   WEEKDAYS,
@@ -448,7 +449,7 @@ function welcomeChapter(profile: BusinessProfile, persona: string): StarterFlow 
     n('hello', 440, 120, 'send_message', 'Greeting', { text: greeting }),
     n('ask', 660, 120, 'ask_question', 'First question', { question, variable: 'request' }),
     n('route', 900, 120, 'route_topic', 'Route', { routes }),
-    n('again', 900, 520, 'ask_question', 'Offer the topics', { question: 'I can help you with a booking, tooth pain, or prices. What would you like?', variable: 'request' }),
+    n('again', 900, 520, 'ask_question', 'Offer the topics', { question: topicOffer(topicsFromChapters(doors.map((item) => item.flowName))), variable: 'request' }),
     ...jumps.nodes,
   ], [
     e('start', 'keep'),

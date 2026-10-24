@@ -838,6 +838,52 @@ test('a bot with no journey answers from knowledge with the chat so far, in the 
   ])
 })
 
+function placeholderBot(): Array<{ name: string; graph: FlowGraph }> {
+  const support = speakChapter('Support', 'The pages did not state this for support. Edit the line to match Acme Support Bot.')
+  support.graph.nodes.push({ id: 'Support-end', data: { kind: 'end_flow', label: 'End', config: {} } })
+  support.graph.edges.push({ id: 'Support-e2', source: 'Support-say', target: 'Support-end' })
+  return [
+    {
+      name: 'Welcome',
+      graph: {
+        nodes: [
+          { id: 'start', data: { kind: 'trigger_start', label: 'Start', config: {} } },
+          { id: 'ask', data: { kind: 'ask_question', label: 'Ask', config: { question: "Hi, I'm Cal from Acme. What can I help you with today?", variable: 'request' } } },
+          { id: 'route', data: { kind: 'route_topic', label: 'Route', config: { routes: [{ handle: 'support', label: 'Support', phrases: ['order', 'delivery'] }] } } },
+          { id: 'hi', data: { kind: 'send_message', label: 'Lead-in', config: { text: "Hi, I'm Cal from Acme." } } },
+          { id: 'go', data: { kind: 'execute_flow', label: 'Support', config: { flowName: 'Support' } } },
+        ],
+        edges: [
+          { id: 'e1', source: 'start', target: 'ask' },
+          { id: 'e2', source: 'ask', target: 'route' },
+          { id: 'e3', source: 'route', target: 'hi', sourceHandle: 'support' },
+          { id: 'e4', source: 'hi', target: 'go' },
+        ],
+      },
+    },
+    support,
+  ]
+}
+
+test('a chapter that only holds an import note for the author answers from knowledge instead of reading the note', async () => {
+  const chapters = placeholderBot()
+  const asked: Array<string | undefined> = []
+  const answer: TestChatDeps['answer'] = async (request) => {
+    asked.push(request.instruction)
+    request.onChunk('Orders ship within two working days; the tracking link is in your confirmation email.')
+  }
+  const open = await pipelineTurn('', undefined, { chapters })
+  const turn = await pipelineTurn('Where is my order?', open.state, { chapters, answer })
+  assert.equal(turn.path, 'answer')
+  assert.doesNotMatch(turn.text, /did not state|Edit the line/)
+  assert.match(turn.text, /Orders ship/)
+  assert.match(asked[0] ?? '', /"Support", which has no written answer yet/)
+
+  const noModel = await pipelineTurn('Where is my order?', open.state, { chapters })
+  assert.doesNotMatch(noModel.text, /did not state|Edit the line/)
+  assert.ok(noModel.text.trim())
+})
+
 test('a journey that reaches its end resolves the test chat by the bot', async () => {
   const chapter = speakChapter('Welcome', 'Thanks for chatting.')
   chapter.graph.nodes.push({ id: 'Welcome-end', data: { kind: 'end_flow', label: 'End', config: {} } })

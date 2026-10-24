@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { draftWebsiteChat, hairStudioPack, pageFromHtml } from '@botstudio/shared'
+import { DENTAL_BLUEPRINT, DENTAL_CHAPTERS, draftWebsiteChat, hairStudioPack, pageFromHtml } from '@botstudio/shared'
 import type { FlowGraph } from './engine.js'
 import { acceptedHoursOffer, hearChapter, isPersonDoor, isSmallTalk, isTopicSwitch, listenForChapter, looksLikeQuestion, mapTopics, offerOnMap, sameQuestion, shapeTurn, steerInstruction, wantsOffer, welcomeMissReply } from './map-listen.js'
 
@@ -165,4 +165,13 @@ test('the topic offer skips the person door, puts booking first, and a miss neve
   assert.equal(looksLikeQuestion('my daughter needs her braces checked soon'), true)
   assert.match(steerInstruction(chapters), /a booking, an urgent problem, or prices/)
   assert.match(steerInstruction(chapters), /Do not say you are passing the chat/)
+})
+
+test('the dental welcome\'s written topic offer is the same sentence the bot offers on its own', () => {
+  const bundle = DENTAL_BLUEPRINT.bundle(DENTAL_BLUEPRINT.sample())
+  const chapters = bundle.flows.map((flow) => ({ name: flow.name, graph: flow.graph as unknown as FlowGraph }))
+  const welcome = chapters.find((chapter) => chapter.name === DENTAL_CHAPTERS.welcome)!
+  const written = welcome.graph.nodes.find((node) => node.id === 'again')!.data.config['question']
+  assert.equal(written, offerOnMap(chapters))
+  assert.equal(written, 'I can help you with a booking, an urgent problem, or prices. What would you like?')
 })

@@ -7,6 +7,8 @@
  *               start the SLA clock, fire message rules
  *   3. held     a person holds the chat: the bot stays quiet
  *   4. guard    a guardrail that blocks, asks again or escalates answers here
+ *      follow   the bot offered a follow-up because nobody was on chat, and the guest
+ *               left an email or phone number: a task for the team, and a thank-you
  *      human    a word on the always-human list hands over before any journey runs
  *   5. journey  the published journey answers (chapters, jumps, handover, outcome)
  *   6. name     a name the guest just gave is thanked
@@ -41,14 +43,14 @@ import {
   type HandoverRequest,
 } from '@botstudio/shared'
 import { triggerRules } from './automation-engine.js'
-import { keepWithBot, markNoTeam } from './chat-outcome.js'
+import { FOLLOW_UP_HIDDEN, FOLLOW_UP_THANKS, contactDetail, followUpFrom, keepWithBot, markNoTeam, openFollowUp, type FollowUpTask } from './chat-outcome.js'
 import { runFlowIfPublished, type FlowRunResult } from './flow-runner.js'
 import { chatIsHeld, handOverChat, handoverRulesFor, HANDOVER_LINE, type HandoverRules } from './handover.js'
 import { knowledgeBlock, searchKnowledgeHits, sourcesOf, type KnowledgeSourceRef } from './knowledge-search.js'
 import { turnSafety, type TurnSafety } from './guardrails.js'
 import { conversationScope, withLlmScope } from './llm-ledger.js'
 import { agentViewFor, presentMessages } from './present-chat.js'
-import { renderFor } from './privacy.js'
+import { renderFor, revealText } from './privacy.js'
 import { onInboundCustomerMessage, onOutboundReply } from './sla.js'
 import { finishBotLines, saveContactName, takeNameTurn, type NamePlan, type VisitorName } from './visitor-name.js'
 
@@ -112,6 +114,8 @@ export interface TurnPorts {
   handoverRules(botId: string): Promise<HandoverRules>
   handOver(input: TurnInput, request: HandoverRequest, source: HandoverContract['source']): Promise<void>
   noTeam(conversationId: string): Promise<void>
+  /** Opens the task for the team to get back to a guest nobody could take. */
+  followUp(input: TurnInput, task: FollowUpTask): Promise<void>
   runJourney(input: TurnInput): Promise<FlowRunResult>
   nameTurn(conversationId: string, text: string): Promise<NamePlan & { contact: VisitorName | null }>
   history(conversationId: string, current: string): Promise<LlmMessage[]>
@@ -168,6 +172,22 @@ export async function runTurnWith(ports: TurnPorts, input: TurnInput): Promise<T
   if (guard?.outcome === 'escalate') return handOver(guardrailHandoverRequest(guard.rule!, 'input'), 'guardrail', [])
   if (guard?.outcome === 'block' || guard?.outcome === 'reask') {
     return send(toGuest(guard.line!), { ended: false, path: 'guardrail' })
+  }
+
+  if (!input.opening && input.text && contactDetail(input.text)) {
+    const task = followUpFrom(await ports.history(input.conversationId, input.text), input.text)
+    if (task) {
+      const forAgents = (text: string) => renderFor('human_agent', text, safety.privacy, input.tenantId)
+      const contact = contactDetail(input.text)!
+      const hidden = forAgents(contact) !== revealText(contact)
+      const description = [forAgents(task.description), hidden ? FOLLOW_UP_HIDDEN : ''].filter(Boolean).join('\n')
+      try {
+        await ports.followUp(input, { subject: forAgents(task.subject), description })
+        return reply(FOLLOW_UP_THANKS, { ended: false, path: 'none' }, false)
+      } catch (err) {
+        ports.warn('follow-up task failed', err)
+      }
+    }
   }
 
   if (!input.opening && input.text) {
@@ -359,6 +379,7 @@ const ports: TurnPorts = {
     await handOverChat({ conversationId: input.conversationId, tenantId: input.tenantId, botId: input.botId, request, source })
   },
   noTeam: markNoTeam,
+  followUp: (input, task) => openFollowUp(input.tenantId, input.conversationId, task),
   runJourney: (input) => runFlowIfPublished({
     conversationId: input.conversationId,
     botId: input.botId,

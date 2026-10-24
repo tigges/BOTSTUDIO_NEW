@@ -1,4 +1,4 @@
-import type { StudioCatalog } from '@botstudio/shared'
+import { isPersonDoor, isWelcomeName, topicList, topicOffer, topicsFromChapters, type StudioCatalog } from '@botstudio/shared'
 import type { FlowGraph, GraphEdge, GraphNode } from './engine.js'
 import { matchTopic, pickTopic, type TopicRoute } from './topic-route.js'
 
@@ -21,9 +21,7 @@ export function hoursChapterName(chapters: Array<{ name: string }>): string | un
   return chapters.find((chapter) => /^salon hours$/i.test(chapter.name) || /^hours$/i.test(chapter.name))?.name
 }
 
-export function isWelcomeName(name: string): boolean {
-  return /welcome/i.test(name.trim())
-}
+export { isPersonDoor, isWelcomeName }
 
 function routeList(node: GraphNode): Array<{ handle: string; phrases: string[] }> {
   if (node.data.kind !== 'route_topic') return []
@@ -114,48 +112,15 @@ function doorsFromWelcome(chapters: Array<{ name: string; graph: FlowGraph }>): 
   return names
 }
 
-function shortName(name: string): string {
-  const trimmed = name.replace(/^salon\s+/i, '').trim()
-  if (/book/i.test(trimmed)) return 'a booking'
-  if (/price|service/i.test(trimmed)) return 'prices'
-  if (/emergenc|\bpain\b|urgent/i.test(trimmed)) return 'an urgent problem'
-  if (/hour/i.test(trimmed)) return 'hours'
-  if (/location|where|address/i.test(trimmed)) return 'where we are'
-  return trimmed.toLowerCase()
-}
-
-const CORE_DOORS = ['Services and prices', 'Salon hours', 'Book an appointment', 'Location']
-
-/** A chapter that only hands the chat to a person. The bot offers its own topics; asking for a person always works. */
-export function isPersonDoor(name: string): boolean {
-  return /\b(talk|speak|chat) (to|with)\b|\b(a person|human|someone|an agent|the team|reception(ist)?|staff)\b/i.test(name)
-}
-
 /** Up to three topics the bot can take a guest into, booking first, in the welcome's order. */
 export function mapTopics(chapters: Array<{ name: string; graph: FlowGraph }>, current?: string): string[] {
   const doors = doorsFromWelcome(chapters)
-  const names = (doors.length > 0 ? doors : chapters.map((chapter) => chapter.name))
-    .filter((name) => !isWelcomeName(name) && name !== current && !isPersonDoor(name))
-  const ranked = [
-    ...names.filter((name) => /book/i.test(name)),
-    ...CORE_DOORS.filter((name) => names.includes(name) && !/book/i.test(name)),
-    ...names.filter((name) => !CORE_DOORS.includes(name) && !/book/i.test(name)),
-  ]
-  return [...new Set(ranked.slice(0, 3).map(shortName))]
-}
-
-function topicList(shown: string[]): string {
-  if (shown.length === 1) return shown[0]!
-  const rest = [...shown]
-  const last = rest.pop()
-  return `${rest.join(', ')}, or ${last}`
+  return topicsFromChapters(doors.length > 0 ? doors : chapters.map((chapter) => chapter.name), current)
 }
 
 /** A next offer from the map, instead of asking the same question again. */
 export function offerOnMap(chapters: Array<{ name: string; graph: FlowGraph }>, current?: string): string {
-  const shown = mapTopics(chapters, current)
-  if (shown.length === 0) return 'Tell me a little more about what you need.'
-  return `I can help you with ${topicList(shown)}. What would you like?`
+  return topicOffer(mapTopics(chapters, current))
 }
 
 /**

@@ -10,10 +10,12 @@ import { useBuildInfo, usePlatformAdmin } from '../lib/hooks'
 interface NavRailProps {
   collapsed?: boolean
   onToggleCollapse?: () => void
+  /** Live counts by nav item id, e.g. chats waiting for a person on the Inbox. */
+  badges?: Record<string, string | undefined>
 }
 
 
-export function NavRail({ collapsed = false, onToggleCollapse }: NavRailProps) {
+export function NavRail({ collapsed = false, onToggleCollapse, badges = {} }: NavRailProps) {
   const { pathname } = useLocation()
   const build = useBuildInfo()
   const groups = visibleNavGroups(usePlatformAdmin())
@@ -50,28 +52,37 @@ export function NavRail({ collapsed = false, onToggleCollapse }: NavRailProps) {
             {group.items.map((item) => {
               const isActive = navItemActive(item.id, item.match ?? item.path, pathname)
               const Icon = item.icon
+              const live = badges[item.id]
+              const badge = live ?? item.badge
               return (
                 <Link
                   key={item.id}
                   to={item.path}
                   className={cn(
-                    'flex h-[var(--nav-item-height)] items-center gap-2.5 rounded-[var(--radius)] px-2',
+                    'relative flex h-[var(--nav-item-height)] items-center gap-2.5 rounded-[var(--radius)] px-2',
                     'text-sm transition-colors duration-[var(--duration-fast)]',
                     isActive
                       ? 'bg-[var(--bg-selected)] text-[var(--accent)]'
                       : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]',
                     collapsed && 'justify-center px-0'
                   )}
-                  title={collapsed ? item.label : undefined}
+                  title={collapsed ? (live ? `${item.label}: ${live} waiting for a person` : item.label) : undefined}
+                  aria-label={live ? `${item.label}, ${live} waiting for a person` : undefined}
                 >
                   <Icon size={16} className="shrink-0" />
                   {!collapsed && (
                     <span className="truncate font-medium">{item.label}</span>
                   )}
-                  {!collapsed && item.badge && (
-                    <span className="ml-auto text-[10px] font-medium text-[var(--accent)] bg-[var(--accent-muted)] rounded-full px-1.5 py-0.5">
-                      {item.badge}
+                  {!collapsed && badge && (
+                    <span className={cn(
+                      'ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                      live ? 'bg-[var(--accent)] text-white' : 'bg-[var(--accent-muted)] text-[var(--accent)]',
+                    )}>
+                      {badge}
                     </span>
+                  )}
+                  {collapsed && live && (
+                    <span aria-hidden className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--accent)]" />
                   )}
                 </Link>
               )

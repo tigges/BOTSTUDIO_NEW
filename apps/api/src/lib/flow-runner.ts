@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto'
 import { SessionMachine, acceptedHoursOffer, hoursChapterName, copyJumpVariables, missingChapterLine, hearChapter, offerOnMap, isSmallTalk, isTopicSwitch, sameQuestion, questionFrom, keepFirstQuestion, shapeTurn, basicAct, basicsReply, isWelcomeName, isPersonDoor, looksLikeQuestion, steerInstruction, waitsOnRoute, welcomeMissReply } from '@botstudio/runtime'
 import type { Session, SessionVariables, FlowGraph, ToolCallResult } from '@botstudio/runtime'
 import { prisma } from '@botstudio/db'
-import { CATALOG_ENTITY, catalogFromValues, numberedChoice, type HandoverRequest, type StudioCatalog } from '@botstudio/shared'
+import { CATALOG_ENTITY, catalogFromValues, isAuthorPlaceholder, numberedChoice, type HandoverRequest, type StudioCatalog } from '@botstudio/shared'
 import { createLlmAdapter, createLlmAdapterForModel } from '@botstudio/llm'
 import { newestByFlow, pickWorkingCopy } from './entry-flow.js'
 import { runFlowTurn } from './flow-turn.js'
@@ -192,6 +192,11 @@ export function missedWelcome(outcome: Pick<TurnOutcome, 'session' | 'messages' 
   if (outcome.handover) return true
   if (outcome.session.status === 'waiting_input') return true
   return !outcome.messages.some((line) => line.trim())
+}
+
+/** The chapter only held an import's note for the author, so the knowledge base answers the guest's question instead. */
+export function placeholderSteer(chapter: string, map: Array<{ name: string; graph: FlowGraph }>): string {
+  return `The guest's question belongs to "${chapter}", which has no written answer yet. ${steerInstruction(map)}`
 }
 
 /**
@@ -429,6 +434,7 @@ export async function runJourney(store: JourneyStore, opts: {
 
   let version = active
   let outcome = first
+  let chapterLines = first.messages
   if (first.jumpToFlow) {
     const target = await store.chapter(first.jumpToFlow)
     if (!target) {
@@ -451,6 +457,7 @@ export async function runJourney(store: JourneyStore, opts: {
       })
       if (jumped) {
         version = target
+        chapterLines = jumped.messages
         outcome = { ...jumped, messages: [...first.messages, ...jumped.messages] }
         await logJump(store, first.session, target)
         if (!convo.subject) await store.setSubject(target.flow.name)
@@ -480,6 +487,7 @@ export async function runJourney(store: JourneyStore, opts: {
       })
       if (jumped) {
         version = target
+        chapterLines = jumped.messages
         outcome = { ...jumped, messages: jumped.messages }
         await logJump(store, first.session, target)
         if (!convo.subject) await store.setSubject(target.flow.name)
@@ -509,6 +517,21 @@ export async function runJourney(store: JourneyStore, opts: {
     } else {
       const map = await loadChapters()
       outcome = { ...outcome, messages: [offerOnMap(map, version.flow.name)] }
+    }
+  }
+
+  if (outcome.messages.some(isAuthorPlaceholder)) {
+    const onlyNotes = chapterLines.filter((line) => line.trim()).every(isAuthorPlaceholder)
+    outcome = { ...outcome, messages: outcome.messages.filter((line) => !isAuthorPlaceholder(line)) }
+    if (onlyNotes && !outcome.handover && outcome.session.status !== 'waiting_input') {
+      const map = await loadChapters()
+      await store.clearSession()
+      return {
+        handled: false,
+        messages: [],
+        steer: { instruction: placeholderSteer(version.flow.name, map), fallback: offerOnMap(map, version.flow.name) },
+        flowName: version.flow.name,
+      }
     }
   }
 

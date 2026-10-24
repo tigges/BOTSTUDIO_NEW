@@ -298,6 +298,9 @@ function testPorts(input: TestTurnInput, state: TestChatState, deps: TestChatDep
     async noTeam() {
       state.outcome ??= 'contained_unresolved'
     },
+    async followUp(_input, task) {
+      state.ticket = task
+    },
     runJourney: (turn) => runJourney(store, {
       conversationId: TEST_CHAT_ID,
       botId: turn.botId,

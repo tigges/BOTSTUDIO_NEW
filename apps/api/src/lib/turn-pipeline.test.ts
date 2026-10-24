@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { DEFAULT_PRIVACY, handoverFromConfig, newGuardrailRule, type GuardrailRule, type HandoverRequest, type PrivacySettings } from '@botstudio/shared'
-import { NO_TEAM_LINE } from './chat-outcome.js'
+import { FOLLOW_UP_HIDDEN, FOLLOW_UP_THANKS, NO_TEAM_LINE, type FollowUpTask } from './chat-outcome.js'
 import type { FlowRunResult } from './flow-runner.js'
 import { HANDOVER_LINE } from './handover.js'
 import { ANSWER_FAILED, NO_LINE, runTurnWith, withPerson, type AnswerRequest, type TurnInput, type TurnPorts } from './turn-pipeline.js'
@@ -11,6 +11,7 @@ interface Fake {
   log: string[]
   answers: AnswerRequest[]
   handovers: Array<{ request: HandoverRequest; source: string }>
+  followUps: FollowUpTask[]
 }
 
 function fake(overrides: {
@@ -26,10 +27,12 @@ function fake(overrides: {
   rules?: GuardrailRule[]
   privacy?: PrivacySettings
   sources?: Array<{ documentId: string; title: string; source: string }>
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>
 } = {}): Fake {
   const log: string[] = []
   const answers: AnswerRequest[] = []
   const handovers: Fake['handovers'] = []
+  const followUps: FollowUpTask[] = []
   const ports: TurnPorts = {
     async safety() { return { rules: overrides.rules ?? [], privacy: overrides.privacy ?? DEFAULT_PRIVACY } },
     async saveInbound(input) { log.push(`in:${input.text}${input.guardrails?.length ? ` [${input.guardrails.map((hit) => hit.action).join(',')}]` : ''}`) },
@@ -40,6 +43,10 @@ function fake(overrides: {
       handovers.push({ request, source })
     },
     async noTeam() { log.push('no-team') },
+    async followUp(_input, task) {
+      log.push('follow-up')
+      followUps.push(task)
+    },
     async runJourney() {
       log.push('journey')
       if (overrides.journey instanceof Error) throw overrides.journey
@@ -49,7 +56,7 @@ function fake(overrides: {
       log.push('name')
       return { spoken: overrides.spoken ?? 'there', thanks: overrides.thanks, contact: { id: 'k1', metadata: {} } }
     },
-    async history() { return [{ role: 'assistant', content: 'Earlier line' }] },
+    async history() { return overrides.history ?? [{ role: 'assistant', content: 'Earlier line' }] },
     async answer(request) {
       log.push('answer')
       answers.push(request)
@@ -63,7 +70,7 @@ function fake(overrides: {
     async saveContactName() { log.push('contact') },
     warn(message) { log.push(`warn:${message}`) },
   }
-  return { ports, log, answers, handovers }
+  return { ports, log, answers, handovers, followUps }
 }
 
 const input = (extra: Partial<TurnInput> = {}): TurnInput & { chunks: string[] } => {
@@ -215,7 +222,7 @@ test('a question the welcome has no chapter for is answered from knowledge and s
 })
 
 test('outside opening hours the bot says when the team is on chat', async () => {
-  const closed = 'The team is on chat Mon-Fri 09:00-18:00 (Europe/London), so I will keep helping here for now. What do you need help with?'
+  const closed = 'The team is on chat Mon-Fri 09:00-18:00 (Europe/London). Can I take an email or phone number so they can get back to you, or is there something I can help with now?'
   const f = fake({ liveAgents: false, noTeamLine: closed, alwaysHuman: ['refund'] })
   const result = await runTurnWith(f.ports, input({ text: 'I want a refund' }))
   assert.equal(f.handovers.length, 0)
@@ -326,4 +333,41 @@ test('a failed answer and a blocked answer carry no sources', async () => {
   const blocked = fake({ rules: [rule({ name: 'No prices', side: 'output', check: { kind: 'pattern', pattern: '£\\d+' }, action: 'block' })], answer: ['£40.'], sources: [PRICE_LIST] })
   await runTurnWith(blocked.ports, input())
   assert.ok(!blocked.log.at(-1)!.includes('<'), blocked.log.at(-1))
+})
+
+test('nobody on chat: an email or phone number after the offer opens a task for the team and thanks the guest', async () => {
+  const history = [
+    { role: 'user' as const, content: 'I was double charged and want to talk to someone' },
+    { role: 'assistant' as const, content: NO_TEAM_LINE },
+  ]
+  const f = fake({ history, liveAgents: false })
+  const result = await runTurnWith(f.ports, input({ text: 'sure, sam.patel@example.com' }))
+  assert.equal(result.text, FOLLOW_UP_THANKS)
+  assert.equal(f.log.includes('journey'), false)
+  assert.equal(f.followUps.length, 1)
+  assert.match(f.followUps[0]!.subject, /^Get back to the guest: I was double charged/)
+  assert.doesNotMatch(f.followUps[0]!.description, /sam\.patel@example\.com/)
+  assert.ok(f.followUps[0]!.description.endsWith(FOLLOW_UP_HIDDEN))
+
+  const revealed = { ...DEFAULT_PRIVACY, revealToAgents: true }
+  const shown = fake({ history, liveAgents: false, privacy: revealed })
+  await runTurnWith(shown.ports, input({ text: 'sure, sam.patel@example.com' }))
+  assert.match(shown.followUps[0]!.description, /Reach them at: sam\.patel@example\.com/)
+  assert.doesNotMatch(shown.followUps[0]!.description, /hidden/)
+
+  const phone = fake({ history, liveAgents: false, privacy: revealed })
+  await runTurnWith(phone.ports, input({ text: 'call me on 07700 900123' }))
+  assert.match(phone.followUps[0]!.description, /07700 900123/)
+})
+
+test('a contact detail without the offer, or the offer without one, is a normal turn', async () => {
+  const unasked = fake({ journey: { handled: true, messages: ['Noted.'], ended: false } })
+  await runTurnWith(unasked.ports, input({ text: 'my email is sam.patel@example.com' }))
+  assert.equal(unasked.followUps.length, 0)
+  assert.ok(unasked.log.includes('journey'))
+
+  const declined = fake({ history: [{ role: 'assistant', content: NO_TEAM_LINE }], journey: { handled: true, messages: ['Sure, here are our prices.'], ended: false } })
+  const result = await runTurnWith(declined.ports, input({ text: 'no thanks, what are your prices?' }))
+  assert.equal(declined.followUps.length, 0)
+  assert.equal(result.text, 'Sure, here are our prices.')
 })
