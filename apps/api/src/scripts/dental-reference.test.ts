@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { DENTAL_BLUEPRINT, DENTAL_CHAPTERS } from '@botstudio/shared'
 import { REFERENCE_CHATS, playReferenceChat, referenceJourney } from './dental-reference-chats.js'
-import { isFirstDentalWelcome } from './dental-reference.js'
+import { isFirstDentalWelcome, withCurrentOffer } from './dental-reference.js'
 
 const journey = referenceJourney(DENTAL_BLUEPRINT.sample())
 const ids = { tenantId: 't', botId: 'harbour-dental-ref' }
@@ -47,4 +47,22 @@ test('only the untouched first welcome is replaced on the reference bot', () => 
   assert.match(JSON.stringify(current), /Hi, I'm Nova from Harbour Dental\./)
   assert.match(JSON.stringify(current), /What can I help you with today\?/)
   assert.doesNotMatch(JSON.stringify(current), /didn't catch/)
+})
+
+test('the old "tooth pain" offer becomes the bot\'s own topic offer; an edited offer stays', () => {
+  const fresh = DENTAL_BLUEPRINT.bundle(DENTAL_BLUEPRINT.sample()).flows.find((flow) => flow.name === DENTAL_CHAPTERS.welcome)!.graph
+  const offer = (question: string) => ({
+    nodes: [
+      { id: 'hello', data: { kind: 'send_message', config: { text: 'Hi, I\'m Nova from Harbour Dental.' } } },
+      { id: 'again', data: { kind: 'ask_question', config: { question, variable: 'request' } } },
+    ],
+    edges: [{ id: 'e1', source: 'hello', target: 'again' }],
+  })
+  const upgraded = withCurrentOffer(offer('I can help you with a booking, tooth pain, or prices. What would you like?'), fresh) as ReturnType<typeof offer>
+  assert.equal(upgraded.nodes[1]!.data.config.question, 'I can help you with a booking, an urgent problem, or prices. What would you like?')
+  assert.equal(upgraded.nodes[1]!.data.config.variable, 'request')
+  assert.deepEqual(upgraded.nodes[0], offer('').nodes[0])
+  assert.equal(upgraded.edges.length, 1)
+  assert.equal(withCurrentOffer(offer('Booking, pain or prices?'), fresh), null)
+  assert.equal(withCurrentOffer(fresh, fresh), null)
 })

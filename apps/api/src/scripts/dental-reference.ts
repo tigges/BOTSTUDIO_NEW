@@ -67,13 +67,33 @@ async function ensureCurrentWelcome(tenantId: string, profile: BusinessProfile):
   const flow = await prisma.flow.findFirst({ where: { botId: DENTAL_REF_BOT_ID, name: DENTAL_CHAPTERS.welcome }, select: { id: true } })
   if (!flow) return false
   const newest = await prisma.flowVersion.findFirst({ where: { flowId: flow.id }, orderBy: { version: 'desc' }, select: { version: true, graph: true } })
-  if (!newest || !isFirstDentalWelcome(newest.graph)) return false
+  if (!newest) return false
   const fresh = DENTAL_BLUEPRINT.bundle({ ...profile, personaName: DENTAL_BLUEPRINT.persona }).flows.find((item) => item.name === DENTAL_CHAPTERS.welcome)
   if (!fresh) return false
+  const graph = isFirstDentalWelcome(newest.graph) ? fresh.graph : withCurrentOffer(newest.graph, fresh.graph)
+  if (!graph) return false
   await prisma.flowVersion.create({
-    data: { tenantId, flowId: flow.id, version: newest.version + 1, status: 'draft', graph: fresh.graph as object, variables: [] },
+    data: { tenantId, flowId: flow.id, version: newest.version + 1, status: 'draft', graph: graph as object, variables: [] },
   })
   return true
+}
+
+const OLD_OFFER_LINE = 'I can help you with a booking, tooth pain, or prices. What would you like?'
+
+/**
+ * The topic offer once named the emergency chapter "tooth pain" while the bot said "an urgent problem".
+ * Only that untouched line is swapped for the blueprint's; anything the practice edited stays.
+ */
+export function withCurrentOffer(saved: unknown, fresh: unknown): unknown | null {
+  type Graph = { nodes?: Array<{ id: string; data?: { kind?: string; config?: Record<string, unknown> } }> }
+  const old = (saved as Graph | null)?.nodes?.find((node) => node.data?.kind === 'ask_question' && node.data.config?.['question'] === OLD_OFFER_LINE)
+  const question = (fresh as Graph | null)?.nodes?.find((node) => node.id === 'again')?.data?.config?.['question']
+  if (!old || typeof question !== 'string' || question === OLD_OFFER_LINE) return null
+  const graph = saved as Required<Graph>
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) => node.id === old.id ? { ...node, data: { ...node.data, config: { ...node.data?.config, question } } } : node),
+  }
 }
 
 const FIRST_WELCOME_LINES = [
