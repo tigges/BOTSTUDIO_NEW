@@ -11,6 +11,7 @@
  */
 
 import { prisma } from '@botstudio/db'
+import { PRIVACY_TOKEN, findPersonalData } from '@botstudio/shared'
 import { liveSupportNow, parseInboxPolicy, type LiveSupportNow } from './sla.js'
 
 export const QUIET_MINUTES = 30
@@ -18,7 +19,14 @@ export const QUIET_MINUTES = 30
 export const CHAT_OUTCOMES = ['contained_resolved', 'contained_partial', 'contained_unresolved', 'escalated', 'abandoned'] as const
 export type ChatOutcome = typeof CHAT_OUTCOMES[number]
 
-export const NO_TEAM_LINE = 'The team is not on chat, so I will keep helping here. What do you need help with?'
+/** The bot's offer when nobody can take the chat. The next turn recognises it in the bot's last line. */
+export const FOLLOW_UP_ASK = 'Can I take an email or phone number so they can get back to you, or is there something I can help with now?'
+
+export const NO_TEAM_LINE = `The team is not on chat right now. ${FOLLOW_UP_ASK}`
+
+export const FOLLOW_UP_HIDDEN = 'Their contact details are hidden by this bot\'s privacy settings. An admin can turn on "Show personal data to human agents as written" under Safety.'
+
+export const FOLLOW_UP_THANKS = 'Thanks. I have passed this to the team, and they will get back to you as soon as they can. Is there anything else I can help with now?'
 
 const HANDOVER_PROMISE = /\b(?:passing|handing|hand) (?:this|the|you|your) (?:chat|conversation)\b|\b(?:someone|somebody|a person|a colleague|the team|our team|a team member|reception|our receptionist)(?: will| is going to|'ll) (?:continue|reply|respond|answer|be with you|get back to you|join)\b|\bwill pick up (?:the|this) chat\b|\bconnecting you (?:to|with)\b/i
 
@@ -30,7 +38,7 @@ export function hasLiveAgents(inboxConfig: unknown, now = new Date()): boolean {
 /** What the bot says when a chat would go to a person and nobody can take it. */
 export function noTeamLine(live: Pick<LiveSupportNow, 'state' | 'hours'>): string {
   if (live.state === 'closed' && live.hours) {
-    return `The team is on chat ${live.hours}, so I will keep helping here for now. What do you need help with?`
+    return `The team is on chat ${live.hours}. ${FOLLOW_UP_ASK}`
   }
   return NO_TEAM_LINE
 }
@@ -43,6 +51,54 @@ export function keepWithBot(lines: string[], closing = NO_TEAM_LINE): string[] {
     return left ? [left] : []
   })
   return [...kept, closing]
+}
+
+export interface FollowUpTask {
+  subject: string
+  description: string
+}
+
+const CONTACT_KINDS = new Set(['email', 'phone'])
+const CONTACT_TOKEN = /^(EMAIL|PHONE)$/
+
+/** An email or phone number in the guest's line, as written (or as the privacy token that replaced it). */
+export function contactDetail(text: string): string | null {
+  const span = findPersonalData(text).find((item) => CONTACT_KINDS.has(item.kind))
+  if (span) return span.value
+  for (const match of text.matchAll(PRIVACY_TOKEN)) {
+    if (CONTACT_TOKEN.test(match[1]!)) return match[0]
+  }
+  return null
+}
+
+/**
+ * The bot's last line offered a follow-up and the guest answered with a way to reach them:
+ * a task for the team, carrying what the guest wanted. Anything else carries on as a normal turn.
+ */
+export function followUpFrom(history: Array<{ role: string; content: string }>, text: string): FollowUpTask | null {
+  const last = history.at(-1)
+  if (last?.role !== 'assistant' || !last.content.includes(FOLLOW_UP_ASK)) return null
+  const contact = contactDetail(text)
+  if (!contact) return null
+  const asked = history.slice(0, -1).filter((line) => line.role === 'user').map((line) => line.content.trim()).filter(Boolean)
+  const wanted = asked.at(-1) ?? ''
+  const short = wanted.length > 80 ? `${wanted.slice(0, 77)}...` : wanted
+  return {
+    subject: short ? `Get back to the guest: ${short}` : 'Get back to the guest',
+    description: [
+      `Reach them at: ${contact}`,
+      wanted ? `They asked: ${wanted}` : '',
+      `They wrote: ${text.trim()}`,
+      'Nobody was on chat when they asked for a person, so the bot took their details.',
+    ].filter(Boolean).join('\n'),
+  }
+}
+
+/** The follow-up the team owes the guest, on the Tasks tab, linked to the chat. */
+export async function openFollowUp(tenantId: string, conversationId: string, task: FollowUpTask): Promise<void> {
+  await prisma.ticket.create({
+    data: { tenantId, conversationId, subject: task.subject.slice(0, 180), description: task.description.slice(0, 2000), status: 'open', priority: 'medium', tags: ['follow-up'] },
+  })
 }
 
 /**
